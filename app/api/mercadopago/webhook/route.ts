@@ -2,31 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 
-// ─────────────────────────────────────────────────────────────────────────
-// Webhook do Mercado Pago.
-// O Mercado Pago chama essa rota automaticamente sempre que o status de um
-// pedido/pagamento muda — inclusive quando um PIX é pago. Isso funciona
-// mesmo que o app do cliente ou o painel admin estejam fechados, porque
-// quem está "avisando" é o próprio Mercado Pago, não o seu app.
-//
-// Fluxo: MP chama aqui -> confirmamos que foi pago -> atualizamos o pedido
-// pra "pending" no Supabase -> o pg_cron (já configurado) assume a partir
-// daí e avança sozinho (preparing -> ready -> delivered).
-// ─────────────────────────────────────────────────────────────────────────
-
 function getSupabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceRole) {
+    console.error('[webhook] Supabase URL ou SERVICE_ROLE_KEY não configurados');
+    return null;
+  }
+  return createClient(url, serviceRole);
 }
 
-// Valida a assinatura do Mercado Pago (X-Signature), se o secret estiver
-// configurado. Isso garante que a notificação realmente veio do MP, e não
-// de alguém tentando forjar uma chamada pra essa rota.
+// Valida a assinatura do Mercado Pago (X-Signature), se MERCADO_PAGO_WEBHOOK_SECRET estiver configurado.
 function isValidSignature(req: NextRequest, dataId: string): boolean {
   const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
-  if (!secret) return true; // sem secret configurado, não valida (ver nota no final)
+  if (!secret) return true; // Se não configurado, não bloqueia (avisado no relatório)
 
   const signatureHeader = req.headers.get('x-signature') || '';
   const requestId = req.headers.get('x-request-id') || '';
@@ -47,62 +36,140 @@ function isValidSignature(req: NextRequest, dataId: string): boolean {
   return hmac === v1;
 }
 
-async function processNotification(dataId: string, type: string) {
+async function processPaymentNotification(paymentId: string) {
   const token = process.env.MERCADO_PAGO_ACCESS_TOKEN;
-  if (!token || !dataId) return;
+  if (!token || !paymentId) return;
 
-  let mpOrderId: string | null = null;
-  let isPaid = false;
+  const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
 
-  if (type === 'order') {
-    const mpRes = await fetch(`https://api.mercadopago.com/v1/orders/${dataId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!mpRes.ok) return;
-    const data = await mpRes.json();
-    const payment = data.transactions?.payments?.[0];
-    isPaid = payment?.status === 'approved' || data.status === 'processed';
-    mpOrderId = data.id;
-  } else if (type === 'payment') {
-    const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${dataId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!mpRes.ok) return;
-    const data = await mpRes.json();
-    isPaid = data.status === 'approved';
-    mpOrderId = data.order?.id || dataId;
+  if (!mpRes.ok) {
+    console.error(`[webhook] Erro ao buscar pagamento ${paymentId} no MP`);
+    return;
   }
 
-  if (!isPaid || !mpOrderId) return;
-
+  const paymentData = await mpRes.json();
   const supabase = getSupabaseAdmin();
+  if (!supabase) return;
 
-  // Encontra o pedido no seu banco pelo order_id do Mercado Pago (salvo em
-  // metadata.pix.order_id quando o PIX foi gerado) e só atualiza se ainda
-  // estiver "awaiting_payment" — evita reabrir pedidos já cancelados/prontos.
-  const { error } = await supabase
-    .from('orders')
-    .update({ status: 'pending', updated_at: new Date().toISOString() })
-    .eq('metadata->pix->>order_id', mpOrderId)
-    .eq('status', 'awaiting_payment');
+  const externalRef = paymentData.external_reference;
+  const paymentIdStr = String(paymentData.id);
 
-  if (error) {
-    console.error('[webhook] Erro ao atualizar pedido:', error.message);
+  let order: { id: string; status: string; metadata: any } | null = null;
+
+  // 1. Localiza pedido por external_reference (número do pedido ou id)
+  if (externalRef) {
+    if (/^\d+$/.test(externalRef)) {
+      const { data } = await supabase
+        .from('orders')
+        .select('id, status, metadata')
+        .eq('order_number', Number(externalRef))
+        .maybeSingle();
+      order = data;
+    }
+    if (!order) {
+      const { data } = await supabase
+        .from('orders')
+        .select('id, status, metadata')
+        .eq('id', externalRef)
+        .maybeSingle();
+      order = data;
+    }
+  }
+
+  // 2. Se não localizou por external_reference, busca no metadata do JSONB
+  if (!order) {
+    const { data: pixOrder } = await supabase
+      .from('orders')
+      .select('id, status, metadata')
+      .eq('metadata->pix->>payment_id', paymentIdStr)
+      .maybeSingle();
+    order = pixOrder;
+  }
+
+  if (!order) {
+    const { data: pixIdOrder } = await supabase
+      .from('orders')
+      .select('id, status, metadata')
+      .eq('metadata->pix->>id', paymentIdStr)
+      .maybeSingle();
+    order = pixIdOrder;
+  }
+
+  if (!order) {
+    const { data: cardOrder } = await supabase
+      .from('orders')
+      .select('id, status, metadata')
+      .eq('metadata->card->>payment_id', paymentIdStr)
+      .maybeSingle();
+    order = cardOrder;
+  }
+
+  if (!order) {
+    console.log(`[webhook] Pedido não encontrado para pagamento ${paymentIdStr}`);
+    return;
+  }
+
+  // Idempotência: nunca reprocessa se já avançou de awaiting_payment
+  if (order.status !== 'awaiting_payment') {
+    console.log(`[webhook] Pedido #${order.id} já em status: ${order.status}. Nenhuma alteração.`);
+    return;
+  }
+
+  const mpStatus = paymentData.status;
+  let nextStatus: string | null = null;
+
+  if (mpStatus === 'approved') {
+    nextStatus = 'pending';
+  } else if (
+    mpStatus === 'rejected' ||
+    mpStatus === 'cancelled' ||
+    mpStatus === 'refunded' ||
+    mpStatus === 'charged_back'
+  ) {
+    nextStatus = 'cancelled';
+  }
+
+  if (nextStatus) {
+    const { error } = await supabase
+      .from('orders')
+      .update({
+        status: nextStatus,
+        updated_at: new Date().toISOString(),
+        metadata: {
+          ...(order.metadata || {}),
+          mp_payment_id: paymentIdStr,
+          mp_payment_status: mpStatus,
+          mp_status_detail: paymentData.status_detail,
+        },
+      })
+      .eq('id', order.id);
+
+    if (error) {
+      console.error('[webhook] Erro ao atualizar status do pedido:', error.message);
+    } else {
+      console.log(`[webhook] Pedido #${order.id} atualizado para '${nextStatus}' (MP: ${mpStatus})`);
+    }
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
     const url = req.nextUrl;
-    const dataId = url.searchParams.get('data.id') || url.searchParams.get('id') || '';
-    const type = url.searchParams.get('type') || url.searchParams.get('topic') || '';
+    let dataId = url.searchParams.get('data.id') || url.searchParams.get('id') || '';
+    let type = url.searchParams.get('type') || url.searchParams.get('topic') || '';
 
-    // Mercado Pago espera uma resposta 200 rápida. Se não respondermos rápido,
-    // ele considera falha e reenvia a notificação repetidamente.
-    // Por isso: validamos o mínimo necessário e devolvemos 200 sempre,
-    // processando o resto de forma resiliente (erros ficam só no log).
+    // Se parâmetros não vierem na query string, tenta ler do body JSON
+    if (!dataId) {
+      try {
+        const body = await req.json();
+        dataId = body?.data?.id || body?.id || '';
+        type = type || body?.type || (body?.action?.startsWith('payment') ? 'payment' : '');
+      } catch {}
+    }
 
-    if (!dataId || (type !== 'order' && type !== 'payment')) {
+    if (!dataId) {
       return NextResponse.json({ received: true });
     }
 
@@ -111,18 +178,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
-    await processNotification(dataId, type);
+    // Mercado Pago pode enviar type 'payment' ou 'order'
+    if (type === 'payment' || !type) {
+      await processPaymentNotification(dataId);
+    } else if (type === 'order') {
+      const token = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+      if (token) {
+        const orderRes = await fetch(`https://api.mercadopago.com/v1/orders/${dataId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (orderRes.ok) {
+          const orderData = await orderRes.json();
+          const firstPaymentId = orderData.transactions?.payments?.[0]?.id;
+          if (firstPaymentId) {
+            await processPaymentNotification(String(firstPaymentId));
+          }
+        }
+      }
+    }
 
     return NextResponse.json({ received: true });
   } catch (err: any) {
-    console.error('[webhook] Erro inesperado:', err.message);
-    // Mesmo em erro, respondemos 200 — o erro já foi logado, e devolver
-    // erro faria o Mercado Pago reenviar a mesma notificação sem parar.
+    console.error('[webhook] Exceção:', err?.message);
     return NextResponse.json({ received: true });
   }
 }
 
-// Alguns testes do painel do Mercado Pago fazem GET pra validar a URL.
 export async function GET() {
   return NextResponse.json({ ok: true });
 }

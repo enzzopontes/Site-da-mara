@@ -23,11 +23,20 @@ export async function POST(req: NextRequest) {
     const token = process.env.MERCADO_PAGO_ACCESS_TOKEN;
 
     if (!token) {
-      return NextResponse.json({
-        success: true,
-        simulation: true,
-        customerId: `SIMULATED-CUSTOMER-${Math.random().toString(36).substring(2, 10)}`,
-      });
+      return NextResponse.json(
+        { success: false, error: 'config: MERCADO_PAGO_ACCESS_TOKEN ausente' },
+        { status: 500 }
+      );
+    }
+
+    if (!email) {
+      return NextResponse.json({ success: false, error: 'E-mail é obrigatório' }, { status: 400 });
+    }
+
+    // Busca cliente existente por e-mail antes de criar
+    const existing = await findCustomerByEmail(email, token);
+    if (existing.success && existing.customerId) {
+      return NextResponse.json({ success: true, simulation: false, customerId: existing.customerId });
     }
 
     const mpRes = await fetch('https://api.mercadopago.com/v1/customers', {
@@ -49,11 +58,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, simulation: false, customerId: data.id });
     }
 
-    // E-mail duplicado: busca o customer existente em vez de falhar.
-    if (data.cause?.some((c: any) => c.code === 101 || c.code === '101')) {
-      const existing = await findCustomerByEmail(email, token);
-      if (existing.success) {
-        return NextResponse.json({ success: true, simulation: false, customerId: existing.customerId });
+    // Se falhar por e-mail duplicado, faz busca de recuperação
+    if (
+      data.cause?.some((c: any) => c.code === 101 || c.code === '101') ||
+      data.message?.toLowerCase().includes('already exists')
+    ) {
+      const retry = await findCustomerByEmail(email, token);
+      if (retry.success && retry.customerId) {
+        return NextResponse.json({ success: true, simulation: false, customerId: retry.customerId });
       }
     }
 

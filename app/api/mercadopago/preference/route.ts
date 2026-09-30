@@ -6,11 +6,10 @@ export async function POST(req: NextRequest) {
     const token = process.env.MERCADO_PAGO_ACCESS_TOKEN;
 
     if (!token) {
-      return NextResponse.json({
-        success: true,
-        simulation: true,
-        checkoutUrl: 'https://sandbox.mercadopago.com.br/checkout/congratulations',
-      });
+      return NextResponse.json(
+        { success: false, error: 'config: MERCADO_PAGO_ACCESS_TOKEN ausente' },
+        { status: 500 }
+      );
     }
 
     const items = itemsList.map((item: any) => ({
@@ -37,7 +36,8 @@ export async function POST(req: NextRequest) {
       },
       body: JSON.stringify({
         items,
-        external_reference: orderNumber,
+        external_reference: String(orderNumber),
+        notification_url: 'https://batatatop.vercel.app/api/mercadopago/webhook',
         back_urls: {
           success: 'batatatop://pedidos',
           failure: 'batatatop://cart',

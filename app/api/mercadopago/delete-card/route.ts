@@ -6,7 +6,17 @@ export async function DELETE(req: NextRequest) {
     const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
 
     if (!accessToken) {
-      return NextResponse.json({ success: true, simulation: true });
+      return NextResponse.json(
+        { success: false, error: 'config: MERCADO_PAGO_ACCESS_TOKEN ausente' },
+        { status: 500 }
+      );
+    }
+
+    if (!customerId || !cardId) {
+      return NextResponse.json(
+        { success: false, error: 'customerId e cardId são obrigatórios' },
+        { status: 400 }
+      );
     }
 
     const mpRes = await fetch(`https://api.mercadopago.com/v1/customers/${customerId}/cards/${cardId}`, {
