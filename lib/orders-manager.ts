@@ -1,6 +1,8 @@
 import { getSupabase } from "./supabase-fix"
 import { storeStatusManager } from "./store-status-manager"
 import { validateOrder } from "./validation"
+import { ORDERS_CONFIG } from "./orders-config"
+import { assignEta, getTargetStatus, getTimeBase } from "./orders-progression"
 
 export interface Order {
   id: string
@@ -152,44 +154,67 @@ class OrdersManager {
     }
   }
 
-  async catchUpOrderProgression(order: any): Promise<any> {
-    if (order.status === "delivered" || order.status === "cancelled") {
+  async catchUpOrderProgression(order: any, allActiveOrders: any[] = []): Promise<any> {
+    if (
+      !order ||
+      order.status === "delivered" ||
+      order.status === "cancelled" ||
+      order.status === "awaiting_payment"
+    ) {
       return order
     }
 
-    const createdAtTime = new Date(order.created_at).getTime()
-    const now = Date.now()
-    const elapsed = now - createdAtTime
+    const sb = await this.supabase
 
-    const basePreparingTime = 6 * 60 * 1000 
-    const baseReadyTime = 9 * 60 * 1000 
-    
-    const timeMultiplier = 1.0 
-    const preparingTime = basePreparingTime * timeMultiplier
-    const readyTime = preparingTime + (baseReadyTime * timeMultiplier)
+    // 1. Atribui ETA se ainda não tiver sido fixado
+    if (!order.metadata?.eta_minutes) {
+      const eta = assignEta(order, allActiveOrders.length > 0 ? allActiveOrders : [order])
+      const updatedMetadata = {
+        ...(order.metadata || {}),
+        eta_minutes: eta,
+      }
 
-    let targetStatus = order.status
-    if (elapsed >= readyTime) {
-      targetStatus = "delivered"
-    } else if (elapsed >= preparingTime) {
-      targetStatus = "ready"
-    } else if (elapsed >= 1000) {
-      targetStatus = "preparing"
+      // Update condicional com merge de metadata
+      const { count } = await sb
+        .from("orders")
+        .update({
+          metadata: updatedMetadata,
+          updated_at: new Date().toISOString()
+        }, { count: 'exact' })
+        .eq("id", order.id)
+        .eq("status", order.status)
+
+      if (count === null || count > 0) {
+        order.metadata = updatedMetadata
+      }
     }
 
+    // 2. Determina novo status alvo
+    const targetStatus = getTargetStatus(order)
+
     if (targetStatus !== order.status) {
-      const sb = await this.supabase
-      await sb.from("orders").update({ 
-        status: targetStatus,
-        metadata: { 
-          ...(order.metadata || {}), 
-          statusUpdatedAt: new Date().toISOString() 
-        }
-      }).eq("id", order.id)
+      const updatedMetadata = { 
+        ...(order.metadata || {}), 
+        statusUpdatedAt: new Date().toISOString() 
+      }
+
+      // Update condicional (.eq('id').eq('status')) para evitar conflito concorrente
+      const { count } = await sb
+        .from("orders")
+        .update({ 
+          status: targetStatus,
+          metadata: updatedMetadata,
+          updated_at: new Date().toISOString()
+        }, { count: 'exact' })
+        .eq("id", order.id)
+        .eq("status", order.status)
       
-      order.status = targetStatus
-      if (targetStatus === "delivered") {
-        await storeStatusManager.decrementWaitTime()
+      if (count === null || count > 0) {
+        order.status = targetStatus
+        order.metadata = updatedMetadata
+        if (targetStatus === "delivered") {
+          await storeStatusManager.decrementWaitTime()
+        }
       }
     }
 
@@ -207,7 +232,7 @@ class OrdersManager {
       .order("created_at", { ascending: false })
     if (data) {
       for (const o of data) {
-        await this.catchUpOrderProgression(o)
+        await this.catchUpOrderProgression(o, data)
       }
     }
     return data?.map((o: any) => this.mapOrderData(o)) || []
@@ -222,7 +247,7 @@ class OrdersManager {
       .order("created_at", { ascending: false })
     if (data) {
       for (const o of data) {
-        await this.catchUpOrderProgression(o)
+        await this.catchUpOrderProgression(o, data)
       }
     }
     const updatedData = data ? data.filter((o: any) => ["pending", "preparing", "ready"].includes(o.status)) : []
@@ -238,7 +263,7 @@ class OrdersManager {
       .order("created_at", { ascending: false })
     if (data) {
       for (const o of data) {
-        await this.catchUpOrderProgression(o)
+        await this.catchUpOrderProgression(o, data)
       }
     }
     return data?.map((o: any) => this.mapOrderData(o)) || []
@@ -256,7 +281,7 @@ class OrdersManager {
       .order("created_at", { ascending: false })
     if (data) {
       for (const o of data) {
-        await this.catchUpOrderProgression(o)
+        await this.catchUpOrderProgression(o, data)
       }
     }
     return data?.map((o: any) => this.mapOrderData(o)) || []
@@ -308,58 +333,95 @@ class OrdersManager {
     await sb.from("orders").delete().eq("id", orderId)
   }
 
+  async updateOrderStatusConditionally(orderId: string, newStatus: Order["status"], expectedStatus: Order["status"]): Promise<boolean> {
+    const sb = await this.supabase;
+    const { data: existingOrder } = await sb.from("orders").select("metadata, status").eq("id", orderId).maybeSingle();
+    if (!existingOrder || existingOrder.status !== expectedStatus) {
+      return false;
+    }
+    const existingMetadata = existingOrder?.metadata || {};
+    const { count } = await sb.from("orders").update({
+      status: newStatus,
+      metadata: { ...existingMetadata, statusUpdatedAt: new Date().toISOString() },
+      updated_at: new Date().toISOString()
+    }, { count: 'exact' }).eq("id", orderId).eq("status", expectedStatus);
+
+    return count === null || count > 0;
+  }
+
   private progressionTimers: Map<string, NodeJS.Timeout[]> = new Map()
-  private readonly BASE_PREPARING_TIME = 6 * 60 * 1000 
-  private readonly BASE_READY_TIME = 9 * 60 * 1000 
 
   async startOrderProgression(orderId: string) {
     if (this.progressionTimers.has(orderId)) return;
     
     const sb = await this.supabase;
-    const { data: order } = await sb.from("orders").select("status, created_at").eq("id", orderId).single();
-    if (!order || order.status === "delivered" || order.status === "cancelled") return;
+    const { data: order } = await sb.from("orders").select("id, status, created_at, metadata").eq("id", orderId).single();
+    if (!order || order.status === "delivered" || order.status === "cancelled" || order.status === "awaiting_payment") return;
 
-    const activeOrders = await this.getActiveOrders()
-    const timeMultiplier = Math.max(1, activeOrders.length / 2)
+    const activeOrders = await this.getActiveOrders();
+    const eta = assignEta(order, activeOrders);
+    if (!order.metadata?.eta_minutes) {
+      const updatedMetadata = { ...(order.metadata || {}), eta_minutes: eta };
+      await sb.from("orders").update({
+        metadata: updatedMetadata,
+        updated_at: new Date().toISOString()
+      }, { count: 'exact' }).eq("id", orderId).eq("status", order.status);
+      order.metadata = updatedMetadata;
+    }
+
     const timers: NodeJS.Timeout[] = [];
+    const preparingDelay = ORDERS_CONFIG.PENDING_TO_PREPARING_MINUTES * 60 * 1000;
+    const readyDelay = eta * ORDERS_CONFIG.READY_FRACTION * 60 * 1000;
+    const deliveredDelay = eta * 60 * 1000;
 
-    const preparingTime = this.BASE_PREPARING_TIME * timeMultiplier
-    const readyTime = preparingTime + (this.BASE_READY_TIME * timeMultiplier)
+    const baseTimeMs = getTimeBase(order);
+    const now = Date.now();
+    const elapsed = Math.max(0, now - baseTimeMs);
 
     if (order.status === "pending") {
+      const t1 = Math.max(100, preparingDelay - elapsed);
       timers.push(setTimeout(async () => { 
-        await this.updateOrderStatus(orderId, "preparing") 
-      }, 1000));
+        await this.updateOrderStatusConditionally(orderId, "preparing", "pending");
+      }, t1));
       
+      const t2 = Math.max(100, readyDelay - elapsed);
       timers.push(setTimeout(async () => { 
-        await this.updateOrderStatus(orderId, "ready") 
-      }, preparingTime));
+        await this.updateOrderStatusConditionally(orderId, "ready", "preparing");
+      }, t2));
 
-      timers.push(setTimeout(async () => {
-        await this.updateOrderStatus(orderId, "delivered")
-        this.progressionTimers.delete(orderId)
-        await storeStatusManager.decrementWaitTime()
-      }, readyTime));
+      if (ORDERS_CONFIG.AUTO_DELIVERED) {
+        const t3 = Math.max(100, deliveredDelay - elapsed);
+        timers.push(setTimeout(async () => {
+          const ok = await this.updateOrderStatusConditionally(orderId, "delivered", "ready");
+          this.progressionTimers.delete(orderId);
+          if (ok) await storeStatusManager.decrementWaitTime();
+        }, t3));
+      }
     } else if (order.status === "preparing") {
+      const t2 = Math.max(100, readyDelay - elapsed);
       timers.push(setTimeout(async () => { 
-        await this.updateOrderStatus(orderId, "ready") 
-      }, preparingTime / 2)); // Assume metade do tempo se já estiver preparando
+        await this.updateOrderStatusConditionally(orderId, "ready", "preparing");
+      }, t2));
 
+      if (ORDERS_CONFIG.AUTO_DELIVERED) {
+        const t3 = Math.max(100, deliveredDelay - elapsed);
+        timers.push(setTimeout(async () => {
+          const ok = await this.updateOrderStatusConditionally(orderId, "delivered", "ready");
+          this.progressionTimers.delete(orderId);
+          if (ok) await storeStatusManager.decrementWaitTime();
+        }, t3));
+      }
+    } else if (order.status === "ready" && ORDERS_CONFIG.AUTO_DELIVERED) {
+      const t3 = Math.max(100, deliveredDelay - elapsed);
       timers.push(setTimeout(async () => {
-        await this.updateOrderStatus(orderId, "delivered")
-        this.progressionTimers.delete(orderId)
-        await storeStatusManager.decrementWaitTime()
-      }, readyTime / 2));
-    } else if (order.status === "ready") {
-      timers.push(setTimeout(async () => {
-        await this.updateOrderStatus(orderId, "delivered")
-        this.progressionTimers.delete(orderId)
-        await storeStatusManager.decrementWaitTime()
-      }, (this.BASE_READY_TIME * timeMultiplier) / 2));
+        const ok = await this.updateOrderStatusConditionally(orderId, "delivered", "ready");
+        this.progressionTimers.delete(orderId);
+        if (ok) await storeStatusManager.decrementWaitTime();
+      }, t3));
     }
 
     if (timers.length > 0) {
-      this.progressionTimers.set(orderId, timers)
+      this.progressionTimers.set(orderId, timers);
     }
   }
 

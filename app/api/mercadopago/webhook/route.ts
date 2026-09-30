@@ -132,17 +132,23 @@ async function processPaymentNotification(paymentId: string) {
   }
 
   if (nextStatus) {
+    const updatedMetadata: Record<string, any> = {
+      ...(order.metadata || {}),
+      mp_payment_id: paymentIdStr,
+      mp_payment_status: mpStatus,
+      mp_status_detail: paymentData.status_detail,
+    };
+
+    if (mpStatus === 'approved') {
+      updatedMetadata.paid_at = new Date().toISOString();
+    }
+
     const { error } = await supabase
       .from('orders')
       .update({
         status: nextStatus,
         updated_at: new Date().toISOString(),
-        metadata: {
-          ...(order.metadata || {}),
-          mp_payment_id: paymentIdStr,
-          mp_payment_status: mpStatus,
-          mp_status_detail: paymentData.status_detail,
-        },
+        metadata: updatedMetadata,
       })
       .eq('id', order.id);
 
