@@ -56,10 +56,8 @@ export default function AdminPedidosPage() {
       } else if (user.email && ADMIN_EMAILS.includes(user.email)) {
         setIsAdmin(true)
         loadOrders(true)
-        ordersManager.initializeActiveOrdersProgression()
         const interval = setInterval(() => {
           loadOrders()
-          ordersManager.initializeActiveOrdersProgression()
         }, 10000)
         return () => clearInterval(interval)
       } else {
@@ -133,7 +131,6 @@ export default function AdminPedidosPage() {
   }
 
   const handleStatusChange = async (orderId: string, status: Order["status"]) => {
-    ordersManager.stopOrderProgression(orderId)
     await ordersManager.updateOrderStatus(orderId, status)
     loadOrders()
   }

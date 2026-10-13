@@ -6,6 +6,7 @@ import { Home, Search, Package, User, ChevronDown, LogOut, HelpCircle, Lock, Set
 import { useAuth } from "@/lib/auth-context"
 import { useState, useEffect, useRef } from "react"
 import { storeStatusManager } from "@/lib/store-status-manager"
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 
 const ADMIN_EMAILS = ["enzzobaraldo2008@gmail.com", "maraysis9010@gmail.com"]
 
@@ -14,9 +15,30 @@ export function MobileNavbar() {
   const router = useRouter()
   const { user, signOut, loading } = useAuth()
   const [isProfileOpen, setIsProfileOpen] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const profileRef = useRef<HTMLDivElement>(null)
 
-  const isAdmin = user?.email && ADMIN_EMAILS.includes(user.email)
+  useEffect(() => {
+    if (!user) {
+      setIsAdmin(false)
+      return
+    }
+    if (user.email && ADMIN_EMAILS.includes(user.email)) {
+      setIsAdmin(true)
+      return
+    }
+    const supabase = getSupabaseBrowserClient()
+    supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single()
+      .then(({ data }: any) => {
+        if (data?.role === "admin") {
+          setIsAdmin(true)
+        }
+      })
+  }, [user])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

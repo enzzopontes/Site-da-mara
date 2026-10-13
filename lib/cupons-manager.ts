@@ -164,14 +164,9 @@ class CouponsManager {
     return { valid: true, coupon }
   }
 
-  async useCoupon(id: string): Promise<boolean> {
-    // Incrementa o uso global
-    const { data: coupon } = await this.supabase.from("coupons").select("current_uses").eq("id", id).single()
-    if (coupon) {
-      await this.supabase.from("coupons").update({ current_uses: (coupon.current_uses || 0) + 1 }).eq("id", id)
-      return true
-    }
-    return false
+  async useCoupon(_id: string): Promise<boolean> {
+    // No-op: o uso do cupom é contabilizado atomicamente pelo banco via create_order
+    return true
   }
 
   calculateDiscount(total: number, coupon: Coupon): number {

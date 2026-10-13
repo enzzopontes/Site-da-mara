@@ -1,7 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+function getSupabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceRole) return null;
+  return createClient(url, serviceRole);
+}
 
 export async function GET(req: NextRequest) {
   try {
+    const authHeader = req.headers.get('authorization') || '';
+    const userJwt = authHeader.replace(/^Bearer\s+/i, '');
+
+    if (!userJwt) {
+      return NextResponse.json({ success: false, error: 'Token de autenticação obrigatório' }, { status: 401 });
+    }
+
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return NextResponse.json({ success: false, error: 'Configuração do servidor ausente' }, { status: 500 });
+    }
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser(userJwt);
+    if (authError || !user) {
+      return NextResponse.json({ success: false, error: 'Usuário não autenticado' }, { status: 401 });
+    }
+
     const id =
       req.nextUrl.searchParams.get('id') ||
       req.nextUrl.searchParams.get('paymentId') ||
@@ -20,13 +45,30 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Consulta primeiro na API de pagamentos (/v1/payments)
+    // Consulta na API de pagamentos (/v1/payments)
     let mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${id}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
 
     if (mpRes.ok) {
       const data = await mpRes.json();
+      const externalRef = data.external_reference;
+
+      if (!externalRef) {
+        return NextResponse.json({ success: false, error: 'Pagamento sem referência de pedido' }, { status: 403 });
+      }
+
+      // Valida se o external_reference é de um pedido pertencente ao usuário logado
+      const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .select('id, user_id')
+        .eq('id', externalRef)
+        .maybeSingle();
+
+      if (orderError || !order || order.user_id !== user.id) {
+        return NextResponse.json({ success: false, error: 'Acesso não autorizado ao pedido' }, { status: 403 });
+      }
+
       return NextResponse.json({
         success: true,
         status: data.status,
@@ -37,13 +79,29 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Fallback para orders antigas (/v1/orders) caso seja um ID legado
+    // Fallback para orders legadas (/v1/orders)
     mpRes = await fetch(`https://api.mercadopago.com/v1/orders/${id}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
 
     if (mpRes.ok) {
       const data = await mpRes.json();
+      const externalRef = data.external_reference;
+
+      if (!externalRef) {
+        return NextResponse.json({ success: false, error: 'Pedido sem referência' }, { status: 403 });
+      }
+
+      const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .select('id, user_id')
+        .eq('id', externalRef)
+        .maybeSingle();
+
+      if (orderError || !order || order.user_id !== user.id) {
+        return NextResponse.json({ success: false, error: 'Acesso não autorizado ao pedido' }, { status: 403 });
+      }
+
       const payment = data.transactions?.payments?.[0];
       return NextResponse.json({
         success: true,

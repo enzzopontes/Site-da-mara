@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
-import { Package, ShoppingBag, Ticket, DollarSign, TrendingUp, Clock, ChefHat, Star, Megaphone, Image } from "lucide-react"
+import { Package, ShoppingBag, Ticket, DollarSign, TrendingUp, Clock, ChefHat, Star, Megaphone, Image, ShieldCheck } from "lucide-react"
 import { ordersManager } from "@/lib/orders-manager"
 import { BusinessHours } from "@/components/business-hours"
 import { isAdmin as checkIsAdmin } from "@/lib/supabase/admin"
@@ -298,6 +298,26 @@ export default function AdminPage() {
                   </div>
                   <Button className="w-full bg-gradient-to-r from-orange-400 to-orange-500 hover:from-orange-500 hover:to-orange-600 text-white font-bold h-12 rounded-xl shadow-lg hover:shadow-xl transition-all">
                     Acessar Promoção
+                  </Button>
+                </CardContent>
+              </Card>
+            </Link>
+
+            {/* Gerenciar Administradores */}
+            <Link href="/admin/administradores" className="group">
+              <Card className="border-none shadow-md bg-gradient-to-br from-indigo-50 to-white rounded-3xl overflow-hidden hover:shadow-xl transition-all hover:-translate-y-1 cursor-pointer h-full">
+                <CardContent className="p-8">
+                  <div className="flex items-start gap-4 mb-6">
+                    <div className="h-16 w-16 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                      <ShieldCheck className="h-8 w-8 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-2xl font-black text-gray-900 mb-1">Administradores</h3>
+                      <p className="text-gray-600 text-sm">Cadastre e remova e-mails de administradores</p>
+                    </div>
+                  </div>
+                  <Button className="w-full bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-bold h-12 rounded-xl shadow-lg hover:shadow-xl transition-all">
+                    Acessar Administradores
                   </Button>
                 </CardContent>
               </Card>

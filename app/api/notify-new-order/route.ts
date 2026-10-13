@@ -8,6 +8,8 @@ import {
   sendExpoPush,
 } from '@/lib/push-notifications';
 
+const ADMIN_EMAILS = ['enzzobaraldo2008@gmail.com', 'maraysis9010@gmail.com'];
+
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -25,13 +27,33 @@ export async function OPTIONS() {
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     },
   });
 }
 
 export async function POST(req: NextRequest) {
   try {
+    const authHeader = req.headers.get('authorization') || '';
+    const userJwt = authHeader.replace(/^Bearer\s+/i, '');
+
+    if (!userJwt) {
+      return NextResponse.json(
+        { success: false, error: 'Token de autenticação obrigatório' },
+        { status: 401, headers: { 'Access-Control-Allow-Origin': '*' } },
+      );
+    }
+
+    const supabase = getSupabaseAdmin();
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser(userJwt);
+    if (authError || !user) {
+      return NextResponse.json(
+        { success: false, error: 'Usuário não autenticado' },
+        { status: 401, headers: { 'Access-Control-Allow-Origin': '*' } },
+      );
+    }
+
     const { orderId } = await req.json();
 
     if (!orderId) {
@@ -41,11 +63,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const supabase = getSupabaseAdmin();
-
     const { data: order, error: orderError } = await supabase
       .from('orders')
-      .select('*, order_items (*)')
+      .select('id, user_id, customer_name, status, metadata, order_number, order_items (id, product_name, quantity, adicionais)')
       .eq('id', orderId)
       .single();
 
@@ -53,6 +73,51 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'Pedido nao encontrado' },
         { status: 404, headers: { 'Access-Control-Allow-Origin': '*' } },
+      );
+    }
+
+    // Dono do pedido OU admin pelos e-mails mestres ou profile.role
+    let isAdmin = ADMIN_EMAILS.includes(user.email || '');
+    if (!isAdmin) {
+      const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+      if (prof?.role === 'admin') {
+        isAdmin = true;
+      }
+    }
+    const isOwner = order.user_id === user.id;
+
+    if (!isAdmin && !isOwner) {
+      return NextResponse.json(
+        { success: false, error: 'Acesso negado: você não é dono nem admin deste pedido' },
+        { status: 403, headers: { 'Access-Control-Allow-Origin': '*' } },
+      );
+    }
+
+    // Pedido DEVE estar em status 'pending' e NÃO online (pedidos online geram push no webhook)
+    const isPaymentOnline =
+      order.metadata?.payment_online === true ||
+      !!order.metadata?.paid_at ||
+      !!order.metadata?.mp_payment_id;
+
+    if (order.status !== 'pending' || isPaymentOnline) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Pedido não elegível para notificação manual (deve ter status "pending" e pagamento offline)',
+        },
+        { status: 409, headers: { 'Access-Control-Allow-Origin': '*' } },
+      );
+    }
+
+    // Trava anti-repetição: se já foi notificado, responder 200 sem enviar de novo
+    if (order.metadata?.admin_push_sent) {
+      return NextResponse.json(
+        {
+          success: true,
+          message: 'Notificação já enviada anteriormente',
+          skipped: true,
+        },
+        { status: 200, headers: { 'Access-Control-Allow-Origin': '*' } },
       );
     }
 
@@ -71,9 +136,40 @@ export async function POST(req: NextRequest) {
       ...new Set((tokens || []).map((t) => t.expo_push_token).filter(Boolean)),
     ] as string[];
 
-    const content = buildNewOrderPushContent(order, order.order_items || []);
-    const messages = buildExpoPushMessages(uniqueTokens, content);
-    const pushResult = await sendExpoPush(messages);
+    // Marcar como notificado via rpc merge_order_metadata ANTES do envio para travar concorrência
+    await supabase.rpc('merge_order_metadata', {
+      order_id: order.id,
+      patch: {
+        admin_push_sent: true,
+        admin_push_sent_at: new Date().toISOString(),
+      },
+    });
+
+    let messages: any[] = [];
+    let pushResult: any = null;
+
+    try {
+      const content = buildNewOrderPushContent(order, order.order_items || []);
+      messages = buildExpoPushMessages(uniqueTokens, content);
+      pushResult = await sendExpoPush(messages);
+
+      if (!pushResult.ok) {
+        throw new Error('Falha retornada pelo serviço Expo Push');
+      }
+    } catch (pushErr: any) {
+      // Se o envio falhar, regrava admin_push_sent = false
+      await supabase.rpc('merge_order_metadata', {
+        order_id: order.id,
+        patch: {
+          admin_push_sent: false,
+          admin_push_failed_at: new Date().toISOString(),
+        },
+      });
+      return NextResponse.json(
+        { success: false, error: 'Falha no envio de push: ' + (pushErr?.message || 'erro desconhecido') },
+        { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } },
+      );
+    }
 
     return NextResponse.json(
       {

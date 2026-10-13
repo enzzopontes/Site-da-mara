@@ -18,10 +18,11 @@ import { couponsManager, type Coupon } from "@/lib/cupons-manager"
 import { storeStatusManager } from "@/lib/store-status-manager"
 import { addressesManager, type Address } from "@/lib/addresses-manager"
 import { ordersManager } from "@/lib/orders-manager"
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 
 export default function CheckoutPage() {
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
   const { items, getTotalPrice, clearCart } = useCart()
 
   // Estados
@@ -99,6 +100,14 @@ export default function CheckoutPage() {
     }
     loadData()
   }, [user])
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login")
+    }
+  }, [user, loading, router])
+
+  if (loading) return null
 
   const handleApplyCoupon = async () => {
     if (!couponCode.trim()) {
@@ -179,6 +188,11 @@ export default function CheckoutPage() {
   }
 
   const handleFinalizarPedido = async () => {
+    if (!user) {
+      router.push("/login")
+      return
+    }
+
     if (nome.trim().length < 3) {
       alert("Por favor, insira seu nome completo.")
       return
@@ -221,54 +235,43 @@ export default function CheckoutPage() {
     setIsSubmitting(true)
     try {
       const orderData = {
-        user_id: user?.id || null,
         customerName: nome,
         customerPhone: telefone,
         customerAddress: deliveryType === "pickup" ? "Retirada no Local" : enderecoString,
         customerNeighborhood: deliveryType === "pickup" ? "" : (useNewAddress ? bairro : (addresses.find(a => a.id === selectedAddressId)?.neighborhood || "")),
         customerComplement: deliveryType === "pickup" ? "" : (useNewAddress ? complemento : (addresses.find(a => a.id === selectedAddressId)?.complement || "")),
         paymentMethod: formaPagamento,
-        totalAmount: getFinalTotal(),
-        discountAmount: getDiscountAmount(),
         couponCode: appliedCoupon?.code || null,
+        wantsCutlery: precisaTalheres === "sim",
         notes: `${observacoes}${precisaTalheres ? `\nPrecisa de colher: ${precisaTalheres === "sim" ? "SIM" : "NÃO"}` : ""}${formaPagamento === "dinheiro" && troco ? `\nTroco para: R$ ${troco}` : ""}`,
         deliveryType: deliveryType,
+        metadata: { source: 'site' },
         items: items.map(item => ({
-          product_id: item.id.split("-")[0],
-          product_name: item.name,
-          product_price: item.price,
+          product_id: item.id.slice(0, 36),
           quantity: item.quantity,
           adicionais: item.adicionais || [],
-          pastaType: item.pastaType || null // Incluindo o tipo de macarrão
+          pastaType: item.pastaType || null
         }))
       }
 
        // ─── Salva o pedido no banco ───────────────────────────────────────
       const createdOrder = await ordersManager.createOrder(orderData)
+
+      // ─── Dispara push notification para admins no app (Bearer token) ───
+      getSupabaseBrowserClient().auth.getSession().then((sessionRes: any) => {
+        const token = sessionRes?.data?.session?.access_token;
+        if (token && createdOrder?.id) {
+          fetch("/api/notify-new-order", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ orderId: createdOrder.id }),
+          }).catch((err: any) => console.error("[NotifyNewOrder] falha silenciosa:", err));
+        }
+      }).catch((err: any) => console.error("[NotifyNewOrder] erro ao obter sessão:", err));
  
-      // ─── Notifica a irmã automaticamente via WhatsApp ─────────────────
-      // "fire and forget": se falhar, o pedido do cliente NÃO é afetado
-      fetch("/api/notify-order", {
-        method: "POST",
-        keepalive: true,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderNumber: createdOrder.orderNumber,
-          customerName: nome,
-          customerPhone: telefone,
-          address:
-            deliveryType === "delivery"
-              ? enderecoString
-              : "Retirada no local – R. Carlos Roberto Crepaldi, 120",
-          total: getFinalTotal(),
-          discountAmount: getDiscountAmount(),
-          items: orderData.items,
-          paymentMethod: formaPagamento,
-          notes: `${observacoes}${precisaTalheres ? `\nColher: ${precisaTalheres === "sim" ? "SIM" : "NÃO"}` : ""}${formaPagamento === "dinheiro" && troco ? `\nTroco para: R$ ${troco}` : ""}`,
-          deliveryType,
-        }),
-      }).catch((err) => console.error("[NotifyOrder] falha silenciosa:", err))
-      // ──────────────────────────────────────────────────────────────────
       
       // Gerar mensagem do WhatsApp
       let message = "*NOVO PEDIDO - batata top*\n"

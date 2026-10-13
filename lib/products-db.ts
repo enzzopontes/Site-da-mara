@@ -454,39 +454,33 @@ class ProductsManager {
     try {
       const supabase = await getSupabase()
       
-      // Busca TODOS os itens vendidos para um ranking real de todo o período
-      // Isso evita erros caso order_items não tenha a coluna created_at
       const { data, error } = await supabase
-        .from("order_items")
-        .select("product_name, quantity")
+        .rpc("get_product_ranking", { p_limit: 50 })
       
       const products = await this.getProducts()
       const availableProducts = products.filter(p => p.available)
-      const availableProductNames = availableProducts.map(p => p.name)
 
       if (error || !data || data.length === 0) {
         const fallbackProduct = availableProducts[0] || products[0]
         return { product: fallbackProduct, totalOrders: 35, customerPhotos: [] }
       }
 
-      // Agrupa por nome e soma quantidades, apenas para produtos disponíveis
-      const counts: Record<string, number> = {}
-      data.forEach(item => {
-        if (availableProductNames.includes(item.product_name)) {
-          counts[item.product_name] = (counts[item.product_name] || 0) + (item.quantity || 1)
-        }
-      })
+      let topProduct: Product | undefined
+      let totalOrders = 0
 
-      const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1])
-      
-      if (sorted.length === 0) {
-        const fallbackProduct = availableProducts[0] || products[0]
-        return { product: fallbackProduct, totalOrders: 35, customerPhotos: [] }
+      for (const item of data) {
+        const p = availableProducts.find(prod => prod.id === item.product_id)
+        if (p) {
+          topProduct = p
+          totalOrders = Number(item.total_quantity || 0)
+          break
+        }
       }
 
-      const topProductName = sorted[0][0]
-      const totalOrders = sorted[0][1]
-      const topProduct = availableProducts.find(p => p.name === topProductName) || availableProducts[0]
+      if (!topProduct) {
+        topProduct = availableProducts[0] || products[0]
+        totalOrders = 35
+      }
       
       // Buscamos o total de clientes para garantir que pedidos >= clientes
       const totalCustomers = await this.getTotalCustomers()
@@ -527,15 +521,11 @@ class ProductsManager {
   async getTotalCustomers(): Promise<number> {
     try {
       const supabase = await getSupabase()
-      // Contamos clientes únicos pelo telefone
-      const { data, error } = await supabase
-        .from("orders")
-        .select("customer_phone")
-      
-      if (error || !data) return 30 // Base mínima de clientes felizes
-      
-      const uniquePhones = new Set(data.map(o => o.customer_phone))
-      return Math.max(30, uniquePhones.size)
+      const { data, error } = await supabase.rpc("get_total_customers")
+      if (error || data === null || data === undefined || typeof Number(data) !== "number" || isNaN(Number(data))) {
+        return 30
+      }
+      return Number(data)
     } catch {
       return 30
     }
@@ -545,11 +535,8 @@ class ProductsManager {
     try {
       const supabase = await getSupabase()
       
-      // Busca TODOS os itens vendidos para o ranking real de todo o período
-      // Evita o erro de coluna inexistente (created_at) no Supabase
       const { data, error } = await supabase
-        .from("order_items")
-        .select("product_name, quantity")
+        .rpc("get_product_ranking", { p_limit: 100 })
       
       // Filtra apenas produtos que pertencem à categoria solicitada e estão disponíveis
       const products = await this.getProducts()
@@ -560,22 +547,17 @@ class ProductsManager {
         return categoryProductNames
       }
 
-      const counts: Record<string, number> = {}
-      // Inicializa com 0 para todos os produtos da categoria disponíveis
-      categoryProductNames.forEach(name => {
-        counts[name] = 0
-      })
-
-      data.forEach(item => {
-        if (categoryProductNames.includes(item.product_name)) {
-          counts[item.product_name] = (counts[item.product_name] || 0) + (item.quantity || 1)
+      const countsById: Record<string, number> = {}
+      data.forEach((item: any) => {
+        if (item.product_id) {
+          countsById[item.product_id] = Number(item.total_quantity || 0)
         }
       })
 
       // Ordena por quantidade vendida
-      const sorted = Object.entries(counts)
-        .sort((a, b) => b[1] - a[1])
-        .map(entry => entry[0])
+      const sorted = [...categoryProducts]
+        .sort((a, b) => (countsById[b.id] || 0) - (countsById[a.id] || 0))
+        .map(p => p.name)
       
       return sorted
     } catch {

@@ -25,6 +25,7 @@ import {
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { OrderSummary } from "@/components/order-summary"
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 
 const ADMIN_EMAILS = ["enzzobaraldo2008@gmail.com", "maraysis9010@gmail.com"]
 
@@ -43,12 +44,35 @@ export default function PerfilPage() {
     cep: "",
   })
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
     if (!loading && !user) {
       router.push("/login")
     }
   }, [user, loading, router])
+
+  useEffect(() => {
+    if (!user) {
+      setIsAdmin(false)
+      return
+    }
+    if (user.email && ADMIN_EMAILS.includes(user.email)) {
+      setIsAdmin(true)
+      return
+    }
+    const supabase = getSupabaseBrowserClient()
+    supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single()
+      .then(({ data }: any) => {
+        if (data?.role === "admin") {
+          setIsAdmin(true)
+        }
+      })
+  }, [user])
 
   useEffect(() => {
     if (user) {
@@ -152,8 +176,6 @@ export default function PerfilPage() {
   }
 
   if (!user) return null
-
-  const isAdmin = user.email && ADMIN_EMAILS.includes(user.email)
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">

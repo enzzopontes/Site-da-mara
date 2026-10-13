@@ -58,7 +58,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
       const existingItemIndex = prev.findIndex(
         (item) =>
-          item.id.split('-')[0] === newItem.id.split('-')[0] &&
+          item.id.slice(0, 36) === newItem.id.slice(0, 36) &&
           item.category === newItem.category &&
           item.pastaType === newItem.pastaType && // Comparar também o tipo de macarrão
           JSON.stringify(sortAdicionais(item.adicionais)) === JSON.stringify(sortAdicionais(newItem.adicionais))
@@ -74,7 +74,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       }
 
       // Gerar um ID único para cada combinação de produto + adicionais + tipo de macarrão
-      return [...prev, { ...newItem, id: `${newItem.id.split('-')[0]}-${Date.now()}` }]
+      return [...prev, { ...newItem, id: `${newItem.id.slice(0, 36)}-${Date.now()}` }]
     })
   }
 

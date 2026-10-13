@@ -12,7 +12,7 @@ import { StoreStatusBadge } from "@/components/store-status-badge"
 import { AddressModal } from "@/components/address-modal"
 import { addressesManager } from "@/lib/addresses-manager"
 import { storeStatusManager } from "@/lib/store-status-manager"
-import { isAdminUser } from "@/lib/supabase/admin"
+import { isAdminUser, isAdmin as checkIsAdmin } from "@/lib/supabase/admin"
 
 interface HeaderProps {
   variant?: "default" | "simple"
@@ -34,7 +34,21 @@ export function Header({ variant = "default" }: HeaderProps) {
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0)
   const totalPrice = getTotalPrice()
-  const isAdmin = isAdminUser(user)
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  useEffect(() => {
+    if (!user) {
+      setIsAdmin(false)
+      return
+    }
+    if (isAdminUser(user)) {
+      setIsAdmin(true)
+      return
+    }
+    checkIsAdmin(user.id).then((res) => {
+      if (res) setIsAdmin(true)
+    })
+  }, [user])
 
   const loadDefaultAddress = async () => {
     if (user) {
