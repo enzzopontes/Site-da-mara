@@ -115,10 +115,15 @@ class CouponsManager {
       return { valid: false, message: "Cupons não podem ser usados durante promoções ativas" }
     }
 
+    const normalizedCode = (code || "").trim().toUpperCase()
+    if (!normalizedCode) {
+      return { valid: false, message: "Código de cupom inválido" }
+    }
+
     const { data, error } = await this.supabase
       .from("coupons")
       .select("*")
-      .ilike("code", code)
+      .eq("code", normalizedCode)
       .eq("active", true)
       .single()
 

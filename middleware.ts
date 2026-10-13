@@ -1,14 +1,49 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 import { isAdminUser } from "./lib/supabase/admin"
+import { checkRateLimit } from "./lib/rate-limit"
 
 export default async function proxy(request: NextRequest) {
+  const url = request.nextUrl.clone()
+
+  // 0. Rate Limiting por IP (Proteção contra força bruta, scraping e DDoS)
+  const forwardedFor = request.headers.get("x-forwarded-for")
+  const clientIp = forwardedFor ? forwardedFor.split(",")[0].trim() : (request.headers.get("x-real-ip") || "127.0.0.1")
+
+  // Rate limit para APIs (60 req/min, 180/min para webhook do MP)
+  if (url.pathname.startsWith("/api/")) {
+    const isWebhook = url.pathname.startsWith("/api/mercadopago/webhook")
+    const limit = isWebhook ? 180 : 60
+    const rl = checkRateLimit(`api:${clientIp}`, limit, 60 * 1000)
+
+    if (!rl.success) {
+      return NextResponse.json(
+        { error: "Limite de requisições excedido. Aguarde um minuto e tente novamente." },
+        { status: 429, headers: { "Retry-After": "60" } }
+      )
+    }
+  }
+
+  // Rate limit para rotas sensíveis de login e cadastro (25 req/min por IP)
+  if (url.pathname.startsWith("/login") || url.pathname.startsWith("/cadastro") || url.pathname.startsWith("/auth/")) {
+    const rl = checkRateLimit(`auth:${clientIp}`, 25, 60 * 1000)
+    if (!rl.success) {
+      return new NextResponse(
+        "Muitas tentativas de acesso. Por favor, aguarde um minuto e tente novamente.",
+        {
+          status: 429,
+          headers: { "Content-Type": "text/plain; charset=utf-8", "Retry-After": "60" },
+        }
+      )
+    }
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   // If Supabase is not configured, allow all requests except admin routes
   if (!supabaseUrl || !supabaseKey) {
-    if (request.nextUrl.pathname.startsWith("/admin")) {
+    if (url.pathname.startsWith("/admin")) {
       const redirectUrl = new URL("/setup-required", request.url)
       return NextResponse.redirect(redirectUrl)
     }
@@ -37,8 +72,6 @@ export default async function proxy(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-
-  const url = request.nextUrl.clone()
 
   // 1. Proteção de Rotas Administrativas
   if (url.pathname.startsWith("/admin")) {

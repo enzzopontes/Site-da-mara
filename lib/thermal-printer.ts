@@ -96,6 +96,14 @@ export class ThermalPrinter {
   }
 
   /**
+   * Remove caracteres de controle (ESC, GS, etc.) para evitar injeção de comandos na impressora térmica
+   */
+  private sanitize(text: any): string {
+    if (text === null || text === undefined) return '';
+    return String(text).replace(/[\x00-\x09\x0B-\x1F\x7F-\x9F]/g, '');
+  }
+
+  /**
    * Formata e imprime um pedido
    */
   async printOrder(order: any) {
@@ -127,7 +135,7 @@ export class ThermalPrinter {
 
     // Dados do Pedido
     commands.push(ThermalPrinter.ESC, 0x61, 0x00); // Esquerda
-    commands.push(...Array.from(encoder.encode(`Pedido: #${order.id.substring(0, 8)}\n`)));
+    commands.push(...Array.from(encoder.encode(`Pedido: #${this.sanitize(order.id).substring(0, 8)}\n`)));
     commands.push(...Array.from(encoder.encode(`Data: ${new Date().toLocaleString('pt-BR')}\n`)));
     commands.push(...Array.from(encoder.encode("--------------------------------\n")));
 
@@ -136,13 +144,15 @@ export class ThermalPrinter {
     commands.push(...Array.from(encoder.encode("ITENS:\n")));
     commands.push(ThermalPrinter.ESC, 0x45, 0x00);
     
-    order.items.forEach((item: any) => {
-      commands.push(...Array.from(encoder.encode(`${item.quantity}x ${item.name}\n`)));
+    (order.items || []).forEach((item: any) => {
+      const cleanQty = Number(item.quantity) || 1;
+      const cleanName = this.sanitize(item.name || 'Item');
+      commands.push(...Array.from(encoder.encode(`${cleanQty}x ${cleanName}\n`)));
       if (item.adicionais && item.adicionais.length > 0) {
-        const adds = item.adicionais.map((a: any) => a.name).join(", ");
+        const adds = item.adicionais.map((a: any) => this.sanitize(a.name)).filter(Boolean).join(", ");
         commands.push(...Array.from(encoder.encode(` + ${adds}\n`)));
       }
-      const price = (item.price * item.quantity).toFixed(2).replace('.', ',');
+      const price = (Number(item.price || 0) * cleanQty).toFixed(2).replace('.', ',');
       commands.push(...Array.from(encoder.encode(`               R$ ${price}\n`)));
     });
 
@@ -150,7 +160,7 @@ export class ThermalPrinter {
     
     // Total
     commands.push(ThermalPrinter.GS, 0x21, 0x01); // Altura dupla
-    const total = order.total.toFixed(2).replace('.', ',');
+    const total = Number(order.total || 0).toFixed(2).replace('.', ',');
     commands.push(...Array.from(encoder.encode(`TOTAL: R$ ${total}\n`)));
     commands.push(ThermalPrinter.GS, 0x21, 0x00);
 
@@ -159,10 +169,14 @@ export class ThermalPrinter {
     // Endereço
     commands.push(...Array.from(encoder.encode("ENTREGA EM:\n")));
     if (typeof order.address === 'string') {
-      commands.push(...Array.from(encoder.encode(`${order.address}\n`)));
-    } else {
-      commands.push(...Array.from(encoder.encode(`${order.address.street}, ${order.address.number}\n`)));
-      if (order.address.neighborhood) commands.push(...Array.from(encoder.encode(`${order.address.neighborhood}\n`)));
+      commands.push(...Array.from(encoder.encode(`${this.sanitize(order.address)}\n`)));
+    } else if (order.address) {
+      const cleanStreet = this.sanitize(order.address.street || '');
+      const cleanNum = this.sanitize(order.address.number || '');
+      commands.push(...Array.from(encoder.encode(`${cleanStreet}, ${cleanNum}\n`)));
+      if (order.address.neighborhood) {
+        commands.push(...Array.from(encoder.encode(`${this.sanitize(order.address.neighborhood)}\n`)));
+      }
     }
 
     commands.push(...Array.from(encoder.encode("--------------------------------\n")));

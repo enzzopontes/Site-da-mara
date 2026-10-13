@@ -34,8 +34,8 @@ export async function GET(req: NextRequest) {
 
     const token = process.env.MERCADO_PAGO_ACCESS_TOKEN;
 
-    if (!id) {
-      return NextResponse.json({ success: false, error: 'id do pagamento é obrigatório' }, { status: 400 });
+    if (!id || !/^[a-zA-Z0-9_-]{1,64}$/.test(id)) {
+      return NextResponse.json({ success: false, error: 'id do pagamento inválido ou ausente' }, { status: 400 });
     }
 
     if (!token) {

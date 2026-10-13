@@ -34,12 +34,26 @@ export async function GET(
     // Converte base64 para Buffer
     const buffer = Buffer.from(data.data, "base64")
 
-    // Retorna a imagem com o tipo MIME correto
+    // Whitelist segura de MIME types (bloqueia SVG executável)
+    const rawMime = (data.mime_type || "image/jpeg").toLowerCase().trim()
+    const safeMimes = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+    const isSafeMime = safeMimes.includes(rawMime)
+    const contentType = isSafeMime ? rawMime : "application/octet-stream"
+
+    // Retorna a imagem com cabeçalhos rígidos de isolamento
+    const responseHeaders: Record<string, string> = {
+      "Content-Type": contentType,
+      "X-Content-Type-Options": "nosniff",
+      "Content-Security-Policy": "default-src 'none'; sandbox",
+      "Cache-Control": "public, max-age=31536000, immutable",
+    }
+
+    if (!isSafeMime) {
+      responseHeaders["Content-Disposition"] = "attachment; filename=\"image\""
+    }
+
     return new NextResponse(buffer, {
-      headers: {
-        "Content-Type": data.mime_type || "image/jpeg",
-        "Cache-Control": "public, max-age=31536000", // Cache por 1 ano
-      },
+      headers: responseHeaders,
     })
   } catch (error) {
     console.error("[Images API] Error:", error)

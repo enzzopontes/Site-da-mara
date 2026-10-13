@@ -178,6 +178,11 @@ export default function AdminAdministradoresPage() {
     )
   }
 
+  const isCurrentUserOwner = Boolean(
+    user?.email &&
+    ["enzzobaraldo2008@gmail.com", "maraysis9010@gmail.com"].includes(user.email.toLowerCase())
+  )
+
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-yellow-50 via-white to-yellow-50">
       <HeaderWrapper />
@@ -197,7 +202,7 @@ export default function AdminAdministradoresPage() {
               </div>
               <div>
                 <h1 className="text-4xl md:text-5xl font-black text-gray-900">Gerenciar Administradores</h1>
-                <p className="text-gray-500 text-sm md:text-base">Cadastre e remova e-mails com acesso total ao painel administrativo</p>
+                <p className="text-gray-500 text-sm md:text-base">Visualização e controle de contas com acesso administrativo</p>
               </div>
             </div>
           </div>
@@ -217,42 +222,50 @@ export default function AdminAdministradoresPage() {
             </div>
           )}
 
-          {/* Card: Adicionar Administrador */}
-          <Card className="mb-8 border-none shadow-md bg-white rounded-3xl overflow-hidden">
-            <CardHeader className="bg-gradient-to-r from-indigo-50 to-white border-b border-indigo-100 p-6">
-              <CardTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <Plus className="h-5 w-5 text-indigo-600" />
-                Adicionar Novo Administrador
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
-              <form onSubmit={handleAddAdmin} className="flex flex-col sm:flex-row gap-4">
-                <div className="flex-1">
-                  <Label htmlFor="admin-email" className="sr-only">E-mail do administrador</Label>
-                  <div className="relative">
-                    <Mail className="h-5 w-5 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2" />
-                    <Input
-                      id="admin-email"
-                      type="email"
-                      value={newEmail}
-                      onChange={(e) => setNewEmail(e.target.value)}
-                      placeholder="novo.administrador@email.com"
-                      className="pl-12 h-12 text-base border-2 focus:border-indigo-400 rounded-xl"
-                      disabled={submitting}
-                      required
-                    />
+          {/* Card: Adicionar Administrador (Apenas Donos) */}
+          {isCurrentUserOwner ? (
+            <Card className="mb-8 border-none shadow-md bg-white rounded-3xl overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-indigo-50 to-white border-b border-indigo-100 p-6">
+                <CardTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <Plus className="h-5 w-5 text-indigo-600" />
+                  Adicionar Novo Administrador
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <form onSubmit={handleAddAdmin} className="flex flex-col sm:flex-row gap-4">
+                  <div className="flex-1">
+                    <Label htmlFor="admin-email" className="sr-only">E-mail do administrador</Label>
+                    <div className="relative">
+                      <Mail className="h-5 w-5 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                      <Input
+                        id="admin-email"
+                        type="email"
+                        value={newEmail}
+                        onChange={(e) => setNewEmail(e.target.value)}
+                        placeholder="novo.administrador@email.com"
+                        className="pl-12 h-12 text-base border-2 focus:border-indigo-400 rounded-xl"
+                        disabled={submitting}
+                        required
+                      />
+                    </div>
                   </div>
-                </div>
-                <Button
-                  type="submit"
-                  disabled={submitting || !newEmail.trim()}
-                  className="bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-bold h-12 px-6 rounded-xl shadow-lg gap-2"
-                >
-                  {submitting ? "Adicionando..." : "Adicionar Administrador"}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+                  <Button
+                    type="submit"
+                    disabled={submitting || !newEmail.trim()}
+                    className="bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-bold h-12 px-6 rounded-xl shadow-lg gap-2"
+                  >
+                    {submitting ? "Adicionando..." : "Adicionar"}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="mb-8 p-4 bg-amber-50/80 border border-amber-200 rounded-2xl flex items-center gap-3 text-amber-800 text-sm font-semibold">
+              <Crown className="h-5 w-5 text-amber-600 shrink-0" />
+              <span>Apenas os proprietários principais podem adicionar ou remover administradores.</span>
+            </div>
+          )}
+
 
           {/* Card: Lista de Administradores */}
           <Card className="border-none shadow-md bg-white rounded-3xl overflow-hidden">
@@ -324,7 +337,7 @@ export default function AdminAdministradoresPage() {
                         </div>
 
                         <div>
-                          {!isOwner && !isSelf && (
+                          {isCurrentUserOwner && !isOwner && !isSelf && (
                             <Button
                               variant="ghost"
                               size="sm"
