@@ -78,6 +78,8 @@ export async function POST(req: NextRequest) {
       issuerId,
       docNumber,
       savedCardId,
+      installments,
+      installmentsBaseAmount,
     } = await req.json();
 
     if (!cardToken) {
@@ -128,6 +130,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'online_total_must_be_positive' }, { status: 400 });
     }
 
+    const numericInstallments = installments == null ? 1 : Number(installments);
+    if (!Number.isInteger(numericInstallments) || numericInstallments < 1) {
+      return NextResponse.json({ success: false, error: 'invalid_installments' }, { status: 400 });
+    }
+    if (numericInstallments > 1) {
+      if (order.metadata?.card_type === 'debit') {
+        return NextResponse.json({ success: false, error: 'invalid_installments' }, { status: 400 });
+      }
+      if (installmentsBaseAmount == null || Math.abs(Number(installmentsBaseAmount) - numericAmount) > 0.05) {
+        return NextResponse.json({ success: false, error: 'installments_amount_mismatch' }, { status: 409 });
+      }
+    }
+
     // 4. Máx 5 tentativas de cartão
     const existingPayments = Array.isArray(order.metadata?.card_payments) ? order.metadata.card_payments : [];
     const attemptCount = existingPayments.length;
@@ -150,7 +165,7 @@ export async function POST(req: NextRequest) {
       transaction_amount: numericAmount,
       token: cardToken,
       description: 'Pedido Batata Top',
-      installments: 1,
+      installments: numericInstallments,
       payment_method_id: paymentMethodId,
       external_reference: orderId,
       notification_url: 'https://batatatop.vercel.app/api/mercadopago/webhook',
