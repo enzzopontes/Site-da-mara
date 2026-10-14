@@ -15,6 +15,11 @@ export const metadata: Metadata = {
   title: "batata top - Batatas Recheadas Delivery",
   description: "As melhores batatas recheadas da cidade! Peça agora pelo delivery.",
   generator: "Enzzo Baraldo",
+  verification: {
+    other: {
+      "facebook-domain-verification": "1tc9vktmc04z28e4ckdfjix40r9tyd",
+    },
+  },
   icons: {
     icon: [
       {
