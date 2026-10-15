@@ -168,7 +168,7 @@ export async function POST(req: NextRequest) {
       installments: numericInstallments,
       payment_method_id: paymentMethodId,
       external_reference: orderId,
-      notification_url: 'https://batatatop.vercel.app/api/mercadopago/webhook',
+      notification_url: 'https://batatatopiacanga.com.br/api/mercadopago/webhook',
       statement_descriptor: 'BATATA TOP',
       payer: mpCustomerId
         ? {

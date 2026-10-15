@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
           email: payerEmail,
         },
         external_reference: orderId,
-        notification_url: 'https://batatatop.vercel.app/api/mercadopago/webhook',
+        notification_url: 'https://batatatopiacanga.com.br/api/mercadopago/webhook',
         date_of_expiration: expirationDate,
       }),
     });

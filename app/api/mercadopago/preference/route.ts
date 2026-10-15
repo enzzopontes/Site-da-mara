@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         items,
         external_reference: orderId,
-        notification_url: 'https://batatatop.vercel.app/api/mercadopago/webhook',
+        notification_url: 'https://batatatopiacanga.com.br/api/mercadopago/webhook',
         back_urls: {
           success: 'batatatop://pedidos',
           failure: 'batatatop://cart',
