@@ -104,9 +104,14 @@ export async function POST(req: NextRequest) {
         });
 
         if (!createRes.ok) {
-          const errData = await createRes.json();
+          const errData = await createRes.json().catch(() => ({}));
           console.error('[cards] Falha ao criar customer no MP:', errData);
-          return NextResponse.json({ success: false, error: 'Falha ao registrar cliente no Mercado Pago' }, { status: 502 });
+          const detail = errData?.cause?.[0]?.description || errData?.message || '';
+          return NextResponse.json({
+            success: false,
+            error: detail ? `Falha ao registrar cliente no Mercado Pago (${detail})` : 'Falha ao registrar cliente no Mercado Pago',
+            details: errData,
+          }, { status: 502 });
         }
 
         const newCustomer = await createRes.json();
@@ -129,9 +134,18 @@ export async function POST(req: NextRequest) {
     });
 
     if (!mpCardRes.ok) {
-      const cardErr = await mpCardRes.json();
+      const cardErr = await mpCardRes.json().catch(() => ({}));
       console.error('[cards] Falha ao salvar cartão no MP:', cardErr);
-      return NextResponse.json({ success: false, error: 'Falha ao registrar cartão no Mercado Pago' }, { status: 502 });
+      const isCredentialError = cardErr?.message?.toLowerCase().includes('credential') || cardErr?.error === 'bad_request' && cardErr?.message === 'Invalid credentials';
+      const detail = isCredentialError
+        ? 'Chave pública do app e token de acesso do servidor pertencem a contas diferentes no Mercado Pago.'
+        : (cardErr?.cause?.[0]?.description || cardErr?.message || '');
+
+      return NextResponse.json({
+        success: false,
+        error: detail ? `Falha ao registrar cartão no Mercado Pago: ${detail}` : 'Falha ao registrar cartão no Mercado Pago',
+        details: cardErr,
+      }, { status: 502 });
     }
 
     const mpCard = await mpCardRes.json();
