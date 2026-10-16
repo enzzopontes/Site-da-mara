@@ -152,12 +152,15 @@ export function Footer() {
               </div>
             </div>
 
-            <div className="flex items-center gap-8">
+            <div className="flex items-center gap-6 sm:gap-8 flex-wrap">
               <Link href="/termos" className="text-[11px] text-gray-400 hover:text-gray-900 font-bold transition-colors uppercase tracking-tighter">
                 Termos de Uso
               </Link>
               <Link href="/privacidade" className="text-[11px] text-gray-400 hover:text-gray-900 font-bold transition-colors uppercase tracking-tighter">
                 Privacidade
+              </Link>
+              <Link href="/excluir-conta" className="text-[11px] text-gray-400 hover:text-gray-900 font-bold transition-colors uppercase tracking-tighter">
+                Excluir Conta
               </Link>
               <div className="flex items-center gap-1 text-[11px] text-gray-400 font-bold uppercase tracking-tighter">
                 FEITO COM <Heart className="h-3 w-3 text-red-500 fill-current" /> POR ENZZO BARALDO
