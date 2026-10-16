@@ -231,8 +231,8 @@ export default function PrivacidadePage() {
                 </div>
                 <div>
                   <strong className="text-[#1F1B16]">E-mail oficial:</strong>{" "}
-                  <a href="mailto:suporte@batatatop.com.br" className="text-[#1F1B16] font-bold underline hover:text-[#C1440E]">
-                    suporte@batatatop.com.br
+                  <a href="mailto:enzzobaraldo2008@gmail.com" className="text-[#1F1B16] font-bold underline hover:text-[#C1440E]">
+                    enzzobaraldo2008@gmail.com
                   </a>
                 </div>
                 <div>

@@ -1,34 +1,57 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { useAuth } from "@/lib/auth-context"
 import { 
-  ShieldAlert, 
   Trash2, 
   FileText, 
   Smartphone, 
   Mail, 
   CheckCircle2, 
   ArrowLeft,
-  AlertTriangle,
+  ChevronDown,
+  Check,
   Loader2
 } from "lucide-react"
+
+const REASON_OPTIONS = [
+  { value: "privacy", label: "Preocupações com privacidade de dados" },
+  { value: "not_using", label: "Não utilizo mais o serviço" },
+  { value: "duplicate", label: "Possuo outra conta cadastrada" },
+  { value: "experience", label: "Experiência insatisfatória com o app" },
+  { value: "other", label: "Outro motivo" }
+]
 
 export default function ExcluirContaPage() {
   const { user } = useAuth()
   const [identifier, setIdentifier] = useState("")
   const [reason, setReason] = useState("")
+  const [isOpenSelect, setIsOpenSelect] = useState(false)
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [protocol, setProtocol] = useState("")
+  const selectRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (user?.email) {
       setIdentifier(user.email)
     }
   }, [user])
+
+  // Fecha dropdown ao clicar fora
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (selectRef.current && !selectRef.current.contains(event.target as Node)) {
+        setIsOpenSelect(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  const selectedReasonObj = REASON_OPTIONS.find((opt) => opt.value === reason)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -134,29 +157,59 @@ export default function ExcluirContaPage() {
                 />
               </div>
 
-              <div>
-                <label htmlFor="reason" className="block text-xs sm:text-sm font-bold text-[#1F1B16] mb-1.5">
+              {/* Custom Select Bonito e Moderno */}
+              <div className="relative" ref={selectRef}>
+                <label className="block text-xs sm:text-sm font-bold text-[#1F1B16] mb-1.5">
                   Motivo da solicitação <span className="font-normal text-[#6B635B]">(opcional)</span>
                 </label>
-                <select
-                  id="reason"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-[#E8E2D9] text-[#1F1B16] bg-white focus:outline-none focus:ring-2 focus:ring-[#E3A008] focus:border-transparent transition-all text-sm font-medium"
+                
+                <button
+                  type="button"
+                  onClick={() => setIsOpenSelect(!isOpenSelect)}
+                  className={`w-full px-4 py-3 rounded-xl border bg-white text-left text-sm font-medium flex items-center justify-between transition-all cursor-pointer ${
+                    isOpenSelect 
+                      ? "border-[#E3A008] ring-2 ring-[#E3A008]/20 shadow-sm" 
+                      : "border-[#E8E2D9] hover:border-gray-300"
+                  }`}
                 >
-                  <option value="">Selecione um motivo...</option>
-                  <option value="privacy">Preocupações com privacidade de dados</option>
-                  <option value="not_using">Não utilizo mais o serviço</option>
-                  <option value="duplicate">Possuo outra conta cadastrada</option>
-                  <option value="experience">Experiência insatisfatória com o app</option>
-                  <option value="other">Outro motivo</option>
-                </select>
+                  <span className={selectedReasonObj ? "text-[#1F1B16] font-semibold" : "text-gray-400"}>
+                    {selectedReasonObj ? selectedReasonObj.label : "Selecione um motivo..."}
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-[#6B635B] transition-transform duration-200 ${isOpenSelect ? "rotate-180 text-[#E3A008]" : ""}`} />
+                </button>
+
+                {/* Dropdown Menu Estilizado */}
+                {isOpenSelect && (
+                  <div className="absolute z-30 left-0 right-0 mt-2 bg-white border border-[#E8E2D9] rounded-2xl shadow-xl overflow-hidden py-1.5 animate-in fade-in zoom-in-95 duration-150">
+                    {REASON_OPTIONS.map((opt) => {
+                      const isSelected = reason === opt.value
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => {
+                            setReason(opt.value)
+                            setIsOpenSelect(false)
+                          }}
+                          className={`w-full px-4 py-2.5 text-left text-xs sm:text-sm flex items-center justify-between transition-colors cursor-pointer ${
+                            isSelected 
+                              ? "bg-[#FFF7E8] text-[#C1440E] font-bold" 
+                              : "text-[#1F1B16] hover:bg-[#F7F4EF]"
+                          }`}
+                        >
+                          <span>{opt.label}</span>
+                          {isSelected && <Check className="w-4 h-4 text-[#C1440E] shrink-0" />}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3.5 px-6 rounded-xl bg-[#E3A008] hover:bg-[#C1440E] text-white font-extrabold text-sm sm:text-base shadow-md transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed active:scale-[0.99]"
+                className="w-full py-3.5 px-6 rounded-xl bg-[#E3A008] hover:bg-[#C1440E] text-white font-extrabold text-sm sm:text-base shadow-md transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed active:scale-[0.99] mt-2"
               >
                 {loading ? (
                   <>
@@ -200,10 +253,10 @@ export default function ExcluirContaPage() {
                 <span>
                   Via e-mail de suporte:{" "}
                   <a 
-                    href="mailto:suporte@batatatop.com.br" 
+                    href="mailto:enzzobaraldo2008@gmail.com" 
                     className="text-[#1F1B16] font-bold underline hover:text-[#C1440E] transition-colors"
                   >
-                    suporte@batatatop.com.br
+                    enzzobaraldo2008@gmail.com
                   </a>
                 </span>
               </div>

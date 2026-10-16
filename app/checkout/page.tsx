@@ -601,7 +601,14 @@ export default function CheckoutPage() {
                     <Button onClick={handleFinalizarPedido} disabled={isSubmitting} className="w-full h-14 mt-8 bg-yellow-500 hover:bg-yellow-600 text-white font-black text-lg rounded-2xl shadow-lg shadow-yellow-100 transition-all active:scale-95">
                       {isSubmitting ? <div className="flex items-center gap-2"><Loader2 className="h-5 w-5 animate-spin" /> Processando...</div> : "Finalizar Pedido"}
                     </Button>
-                    <p className="text-[10px] text-center text-gray-400 mt-4 font-bold uppercase tracking-widest">Você será redirecionado para o WhatsApp</p>
+                    <p className="text-[11px] text-center text-gray-500 mt-4 font-medium leading-relaxed">
+                      Ao confirmar o pedido, você declara estar ciente dos{" "}
+                      <Link href="/termos" target="_blank" className="text-gray-800 underline hover:text-yellow-600 font-bold">
+                        Termos de Uso
+                      </Link>{" "}
+                      e das regras de preparo e entrega em Iacanga-SP.
+                    </p>
+                    <p className="text-[10px] text-center text-gray-400 mt-2 font-bold uppercase tracking-widest">Você será redirecionado para o WhatsApp</p>
                   </CardContent>
                 </Card>
               </div>

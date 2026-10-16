@@ -257,6 +257,18 @@ export function AuthContainer({ initialMode = "login" }: { initialMode?: "login"
               Entrar com Google
             </Button>
 
+            <p className="text-[11px] text-center text-gray-400 mt-2 font-medium leading-relaxed">
+              Ao continuar, você concorda com os{" "}
+              <Link href="/termos" className="text-gray-600 underline hover:text-yellow-600 font-bold">
+                Termos de Uso
+              </Link>{" "}
+              e confirma que leu nossa{" "}
+              <Link href="/privacidade" className="text-gray-600 underline hover:text-yellow-600 font-bold">
+                Política de Privacidade
+              </Link>{" "}
+              do Batata Top.
+            </p>
+
             <p className="text-center text-gray-500 font-medium text-sm lg:hidden">
               Não tem conta? <button onClick={() => setMode("register")} className="text-yellow-600 font-black">Cadastre-se</button>
             </p>
@@ -406,6 +418,18 @@ export function AuthContainer({ initialMode = "login" }: { initialMode?: "login"
               </svg>
               Cadastrar com Google
             </Button>
+
+            <p className="text-[11px] text-center text-gray-400 mt-2 font-medium leading-relaxed">
+              Ao continuar, você concorda com os{" "}
+              <Link href="/termos" className="text-gray-600 underline hover:text-yellow-600 font-bold">
+                Termos de Uso
+              </Link>{" "}
+              e confirma que leu nossa{" "}
+              <Link href="/privacidade" className="text-gray-600 underline hover:text-yellow-600 font-bold">
+                Política de Privacidade
+              </Link>{" "}
+              do Batata Top.
+            </p>
 
             <p className="text-center text-gray-500 font-medium text-sm lg:hidden">
               Já tem conta? <button onClick={() => setMode("login")} className="text-yellow-600 font-black">Faça Login</button>
