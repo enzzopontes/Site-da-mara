@@ -65,7 +65,12 @@ export async function POST(req: NextRequest) {
 
     const { data: order, error: orderError } = await supabase
       .from('orders')
-      .select('id, user_id, customer_name, status, metadata, order_number, order_items (id, product_name, quantity, adicionais)')
+      .select(`
+        id, user_id, customer_name, customer_phone, status, metadata, order_number,
+        delivery_type, customer_address, customer_complement, customer_neighborhood,
+        payment_method, total_amount, notes,
+        order_items (id, product_name, quantity, product_price, adicionais)
+      `)
       .eq('id', orderId)
       .single();
 
@@ -132,8 +137,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const uniqueTokens = [
+    const uniqueAdminTokens = [
       ...new Set((tokens || []).map((t) => t.expo_push_token).filter(Boolean)),
+    ] as string[];
+
+    // Buscar tokens do cliente cadastrados em user_push_tokens
+    const { data: userTokenRows } = await supabase
+      .from('user_push_tokens')
+      .select('expo_push_token')
+      .eq('user_id', order.user_id);
+
+    const uniqueUserTokens = [
+      ...new Set(
+        (userTokenRows || [])
+          .map((t) => t.expo_push_token)
+          .filter((t) => Boolean(t) && !uniqueAdminTokens.includes(t))
+      ),
     ] as string[];
 
     // Marcar como notificado via rpc merge_order_metadata ANTES do envio para travar concorrência
@@ -145,15 +164,42 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    let messages: any[] = [];
+    let adminMessages: any[] = [];
+    let customerMessages: any[] = [];
     let pushResult: any = null;
+    let customerPushResult: any = null;
 
     try {
       const content = buildNewOrderPushContent(order, order.order_items || []);
-      messages = buildExpoPushMessages(uniqueTokens, content);
-      pushResult = await sendExpoPush(messages);
+      adminMessages = buildExpoPushMessages(uniqueAdminTokens, content);
 
-      if (!pushResult.ok) {
+      const etaMin = order.metadata?.eta_minutes || 40;
+      const etaMax = etaMin + 20;
+      customerMessages = uniqueUserTokens.map((to) => ({
+        to,
+        title: 'Pedido confirmado',
+        body: `Estamos preparando seu pedido. Previsão de entrega: ${etaMin} a ${etaMax} min`,
+        sound: 'default',
+        priority: 'high',
+        data: {
+          orderId: order.id,
+          screen: 'pedidos',
+          url: `/pedidos/${order.id}`,
+        },
+        android: {
+          color: '#FFB800',
+          priority: 'high',
+        },
+      }));
+
+      const [adminRes, custRes] = await Promise.all([
+        sendExpoPush(adminMessages),
+        sendExpoPush(customerMessages),
+      ]);
+      pushResult = adminRes;
+      customerPushResult = custRes;
+
+      if (!pushResult.ok && !customerPushResult.ok) {
         throw new Error('Falha retornada pelo serviço Expo Push');
       }
     } catch (pushErr: any) {
@@ -174,9 +220,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        sent: messages.length,
+        sent_admin: adminMessages.length,
+        sent_customer: customerMessages.length,
         channelId: ADMIN_ORDERS_CHANNEL_ID,
         push: pushResult,
+        push_customer: customerPushResult,
       },
       { headers: { 'Access-Control-Allow-Origin': '*' } },
     );

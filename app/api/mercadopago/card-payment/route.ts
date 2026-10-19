@@ -156,6 +156,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'CPF inválido. Informe um CPF válido para pagamento com cartão.' }, { status: 400 });
     }
 
+    // Persiste CPF em profiles se ausente
+    try {
+      await supabase.from('profiles').update({ cpf: cleanDocNumber }).eq('id', user.id).is('cpf', null);
+    } catch {}
+
     // 6. E-mail e idempotency
     const payerEmail = await resolvePayerEmail(supabase, user);
     const cardN = attemptCount + 1;

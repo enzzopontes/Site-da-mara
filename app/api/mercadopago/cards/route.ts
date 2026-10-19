@@ -36,10 +36,19 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { token, payment_method_id, cardholder_name, is_default } = body;
+    const { token, payment_method_id, cardholder_name, is_default, doc_number } = body;
 
     if (!token) {
       return NextResponse.json({ success: false, error: 'Token do cartão obrigatório' }, { status: 400 });
+    }
+
+    if (doc_number) {
+      const cleanDoc = String(doc_number).replace(/\D/g, '');
+      if (cleanDoc.length === 11) {
+        try {
+          await supabase.from('profiles').update({ cpf: cleanDoc }).eq('id', user.id);
+        } catch {}
+      }
     }
 
     // Limite de 5 cartões por usuário

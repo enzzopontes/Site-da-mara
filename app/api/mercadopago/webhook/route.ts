@@ -178,7 +178,12 @@ export async function POST(req: NextRequest) {
             // Push de novo pedido aprovado
             const { data: orderData } = await supabase
               .from('orders')
-              .select('id, order_number, customer_name, order_items (product_name, quantity, adicionais)')
+              .select(`
+                id, order_number, customer_name, customer_phone,
+                delivery_type, customer_address, customer_complement, customer_neighborhood,
+                payment_method, total_amount, notes,
+                order_items (id, product_name, quantity, product_price, adicionais)
+              `)
               .eq('id', externalRef)
               .maybeSingle();
 

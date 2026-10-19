@@ -61,12 +61,37 @@ export async function GET(req: NextRequest) {
       // Valida se o external_reference é de um pedido pertencente ao usuário logado
       const { data: order, error: orderError } = await supabase
         .from('orders')
-        .select('id, user_id')
+        .select('id, user_id, status, metadata')
         .eq('id', externalRef)
         .maybeSingle();
 
       if (orderError || !order || order.user_id !== user.id) {
         return NextResponse.json({ success: false, error: 'Acesso não autorizado ao pedido' }, { status: 403 });
+      }
+
+      // Se aprovado, garante persistência no Supabase imediatamente para status 'preparing'
+      if (data.status === 'approved' || data.status_detail === 'accredited') {
+        if (order.status === 'awaiting_payment' || order.status === 'pending') {
+          try {
+            await supabase.rpc('apply_payment_result', {
+              p_order_id: externalRef,
+              p_payment_id: String(data.id || id),
+              p_mp_status: 'approved',
+              p_amount: Number(data.transaction_amount || 0),
+              p_status_detail: data.status_detail || null,
+            });
+
+            await supabase
+              .from('orders')
+              .update({
+                status: 'preparing',
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', externalRef);
+          } catch (syncErr) {
+            console.error('[pix-status] Erro ao sincronizar status aprovado no Supabase:', syncErr);
+          }
+        }
       }
 
       return NextResponse.json({
