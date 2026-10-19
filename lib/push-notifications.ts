@@ -131,18 +131,18 @@ export function buildExpoPushMessages(
     title: content.title,
     subtitle: content.subtitle,
     body: content.body,
-    sound: 'new-order.mp3',
+    sound: 'new_order.mp3',
     priority: 'high',
     channelId: ADMIN_ORDERS_CHANNEL_ID,
     data: content.data,
     android: {
       channelId: ADMIN_ORDERS_CHANNEL_ID,
       priority: 'max',
-      sound: 'new-order.mp3',
-      color: '#1A1A1A',
+      sound: 'new_order.mp3',
+      color: '#FFB800',
     },
     ios: {
-      sound: 'new-order.mp3',
+      sound: 'new_order.mp3',
       subtitle: content.subtitle,
     },
   }));

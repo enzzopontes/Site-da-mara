@@ -151,7 +151,7 @@ export async function POST(req: NextRequest) {
       ...new Set(
         (userTokenRows || [])
           .map((t) => t.expo_push_token)
-          .filter((t) => Boolean(t) && !uniqueAdminTokens.includes(t))
+          .filter(Boolean)
       ),
     ] as string[];
 
