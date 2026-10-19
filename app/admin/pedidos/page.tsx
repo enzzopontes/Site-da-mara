@@ -19,6 +19,7 @@ import Link from "next/link"
 const ADMIN_EMAILS = ["enzzobaraldo2008@gmail.com", "maraysis9010@gmail.com"]
 
 const statusConfig = {
+  awaiting_payment: { label: "Aguardando Pix", color: "bg-amber-100 text-amber-700", bgColor: "bg-amber-50", icon: Clock, borderColor: "border-amber-200" },
   pending: { label: "Pendente", color: "bg-orange-100 text-orange-700", bgColor: "bg-orange-50", icon: Clock, borderColor: "border-orange-200" },
   preparing: { label: "Preparando", color: "bg-blue-100 text-blue-700", bgColor: "bg-blue-50", icon: ChefHat, borderColor: "border-blue-200" },
   ready: { label: "Pronto", color: "bg-purple-100 text-purple-700", bgColor: "bg-purple-50", icon: CheckCircle, borderColor: "border-purple-200" },

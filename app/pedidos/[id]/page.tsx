@@ -9,6 +9,7 @@ import { useEffect, useState } from "react"
 import { ArrowLeft, Clock, MapPin, Phone, MessageSquare, Package, ShoppingBag, CheckCircle2, Truck, Timer, Ticket } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ordersManager, type Order } from "@/lib/orders-manager"
+import { PixPaymentBox } from "@/components/pix-payment-box"
 
 export default function DetalhesPedidoPage() {
   const { user, loading } = useAuth()
@@ -33,10 +34,13 @@ export default function DetalhesPedidoPage() {
   const loadOrder = async () => {
     setIsLoading(true)
     try {
-      const allOrders = await ordersManager.getTodayOrders()
-      const foundOrder = allOrders.find(o => o.id === orderId)
+      const foundOrder = await ordersManager.getOrderById(orderId)
       if (foundOrder) {
         setOrder(foundOrder)
+      } else {
+        const allOrders = await ordersManager.getTodayOrders()
+        const fallback = allOrders.find(o => o.id === orderId)
+        if (fallback) setOrder(fallback)
       }
     } catch (error) {
       console.error("Erro ao carregar pedido:", error)
@@ -47,6 +51,7 @@ export default function DetalhesPedidoPage() {
 
   const getStatusLabel = (status: string) => {
     const labels: Record<string, string> = {
+      awaiting_payment: "Aguardando pagamento Pix",
       pending: "Aguardando confirmação",
       preparing: "Preparando seu pedido",
       ready: "Pronto para entrega",
@@ -58,6 +63,7 @@ export default function DetalhesPedidoPage() {
 
   const getStatusStep = (status: string) => {
     const steps: Record<string, number> = {
+      awaiting_payment: 0,
       pending: 1,
       preparing: 2,
       ready: 3,
@@ -111,6 +117,18 @@ export default function DetalhesPedidoPage() {
         </div>
 
         <div className="container mx-auto px-4 max-w-2xl mt-6">
+          {/* Seção Pix Embutido caso aguarde pagamento */}
+          {order.status === "awaiting_payment" && (
+            <PixPaymentBox
+              orderId={order.id}
+              total={order.total}
+              pixData={order.metadata?.pix}
+              onPaymentApproved={() => {
+                loadOrder()
+              }}
+            />
+          )}
+
           {/* Status Visual - Estilo iFood */}
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
             <div className="flex items-center gap-4 mb-8">

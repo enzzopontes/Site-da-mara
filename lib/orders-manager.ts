@@ -7,7 +7,7 @@ export interface Order {
   customerPhone: string
   items: any[]
   total: number
-  status: "pending" | "preparing" | "ready" | "delivered" | "cancelled"
+  status: "pending" | "preparing" | "ready" | "delivered" | "cancelled" | "awaiting_payment"
   paymentMethod: string
   deliveryType: "delivery" | "pickup"
   address: string
@@ -18,6 +18,7 @@ export interface Order {
   discountAmount?: number
   couponCode?: string | null
   user_id?: string | null
+  metadata?: any
 }
 
 export interface DailySales {
@@ -121,7 +122,24 @@ class OrdersManager {
       notes: o.notes,
       discountAmount: Number(o.discount_amount),
       couponCode: o.coupon_code,
-      user_id: o.user_id
+      user_id: o.user_id,
+      metadata: o.metadata
+    }
+  }
+
+  async getOrderById(orderId: string): Promise<Order | null> {
+    try {
+      const sb = this.supabase
+      const { data, error } = await sb
+        .from("orders")
+        .select(`*, order_items (*)`)
+        .eq("id", orderId)
+        .maybeSingle()
+      if (error || !data) return null
+      return this.mapOrderData(data)
+    } catch (err) {
+      console.error("[OrdersManager] getOrderById erro:", err)
+      return null
     }
   }
 

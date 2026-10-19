@@ -50,6 +50,9 @@ export function MobileNavbar() {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
+  // Não exibir no checkout para garantir fluxo focado e rodapé desobstruído
+  if (pathname === "/checkout" || pathname?.startsWith("/checkout")) return null
+
   // Só aparece se estiver logado
   if (loading || !user) return null
 
