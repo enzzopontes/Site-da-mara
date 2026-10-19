@@ -2,11 +2,9 @@
 
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { ArrowRight, Star, Clock, Truck, MapPin, Search, Loader2, Trophy, Megaphone } from "lucide-react"
+import { ArrowRight, Star, Clock, Truck, Trophy, Sparkles, MapPin, ShieldCheck, Flame } from "lucide-react"
 import { useState, useEffect } from "react"
-import { useAuth } from "@/lib/auth-context"
-import { addressesManager } from "@/lib/addresses-manager"
-import { storeStatusManager } from "@/lib/store-status-manager"
+import { storeStatusManager, type StoreStatus } from "@/lib/store-status-manager"
 
 interface Product {
   id: string
@@ -24,274 +22,231 @@ interface HeroProps {
   totalCustomers?: number
 }
 
-export function Hero({ 
-  mostRequestedProduct, 
+export function Hero({
+  mostRequestedProduct,
   totalOrders = 1258,
   customerPhotos = [],
-  totalCustomers = 5234
+  totalCustomers = 5234,
 }: HeroProps) {
-  const { user } = useAuth()
-  const [addressInput, setAddressInput] = useState("")
-  const [suggestions, setSuggestions] = useState<any[]>([])
-  const [showSuggestions, setShowSuggestions] = useState(false)
-  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false)
-  const [hasAddress, setHasAddress] = useState(false)
-  const [isCheckingAddress, setIsCheckingAddress] = useState(true)
-  const [waitTime, setWaitTime] = useState({ min: 15, max: 22 })
+  const [storeStatus, setStoreStatus] = useState<StoreStatus | null>(null)
+  const [isStoreOpen, setIsStoreOpen] = useState(true)
+  const [waitTime, setWaitTime] = useState({ min: 15, max: 25 })
+  const [deliveryFee, setDeliveryFee] = useState(3.0)
   const [isDeliveryFeeEnabled, setIsDeliveryFeeEnabled] = useState(true)
-  const [deliveryFee, setDeliveryFee] = useState(3.00)
-  const [isPromoActive, setIsPromoActive] = useState(false)
-  const [promoPrice, setPromoPrice] = useState(24.99)
-  const [promoImage, setPromoImage] = useState<string | undefined>()
+
   const [superPromoActive, setSuperPromoActive] = useState(false)
   const [superPromoImage, setSuperPromoImage] = useState<string | undefined>()
   const [itemPromoActive, setItemPromoActive] = useState(false)
   const [itemPromoImage, setItemPromoImage] = useState<string | undefined>()
 
   useEffect(() => {
-    const checkUserAddress = async () => {
-      if (user) {
-        const addresses = await addressesManager.getUserAddresses(user.id)
-        setHasAddress(addresses.length > 0)
-      } else {
-        setHasAddress(false)
-      }
-      setIsCheckingAddress(false)
-    }
-    checkUserAddress()
-  }, [user])
+    async function loadStatus() {
+      try {
+        const status = await storeStatusManager.getStatus()
+        setStoreStatus(status)
+        setIsStoreOpen(status.isOpen ?? true)
+        setWaitTime({ min: status.waitTimeMin || 15, max: status.waitTimeMax || 25 })
+        setIsDeliveryFeeEnabled(status.isDeliveryFeeEnabled ?? true)
+        setDeliveryFee(Number(status.deliveryFee) || 3.0)
 
-  useEffect(() => {
-    const updateStatus = async () => {
-      const status = await storeStatusManager.getStatus()
-      setWaitTime({ min: status.waitTimeMin, max: status.waitTimeMax })
-      setIsDeliveryFeeEnabled(status.isDeliveryFeeEnabled ?? true)
-      setDeliveryFee(status.deliveryFee ?? 3.00)
-      setIsPromoActive(status.isPromoActive ?? false)
-      setPromoPrice(status.promoPrice ?? 24.99)
-      setPromoImage(status.promoImage)
-      
-      if (status.superPromo?.isActive) {
-        setSuperPromoActive(true)
-        let imgUrl: string | undefined
-        if (status.superPromo.useUrl && status.superPromo.imageUrl) {
-          imgUrl = status.superPromo.imageUrl
-        } else if (status.superPromo.imageId) {
-          imgUrl = `/api/images/${status.superPromo.imageId}`
+        if (status.superPromo?.isActive) {
+          setSuperPromoActive(true)
+          const imgUrl =
+            status.superPromo.useUrl && status.superPromo.imageUrl
+              ? status.superPromo.imageUrl
+              : status.superPromo.imageId
+              ? `/api/images/${status.superPromo.imageId}`
+              : undefined
+          setSuperPromoImage(imgUrl)
+        } else {
+          setSuperPromoActive(false)
         }
-        setSuperPromoImage(imgUrl)
-      } else {
-        setSuperPromoActive(false)
-      }
-      
-      if (status.itemPromo?.isActive) {
-        setItemPromoActive(true)
-        let imgUrl: string | undefined
-        if (status.itemPromo.useUrl && status.itemPromo.imageUrl) {
-          imgUrl = status.itemPromo.imageUrl
-        } else if (status.itemPromo.imageId) {
-          imgUrl = `/api/images/${status.itemPromo.imageId}`
+
+        if (status.itemPromo?.isActive) {
+          setItemPromoActive(true)
+          const imgUrl =
+            status.itemPromo.useUrl && status.itemPromo.imageUrl
+              ? status.itemPromo.imageUrl
+              : status.itemPromo.imageId
+              ? `/api/images/${status.itemPromo.imageId}`
+              : undefined
+          setItemPromoImage(imgUrl)
+        } else {
+          setItemPromoActive(false)
         }
-        setItemPromoImage(imgUrl)
-      } else {
-        setItemPromoActive(false)
-      }
+      } catch {}
     }
-    updateStatus()
-    const interval = setInterval(updateStatus, 10000)
-    return () => clearInterval(interval)
+
+    loadStatus()
   }, [])
 
-  const handleAddressSearch = async (value: string) => {
-    setAddressInput(value)
-    if (value.length > 3) {
-      setIsLoadingSuggestions(true)
-      try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(value + " Iacanga SP")}&addressdetails=1&limit=5`)
-        const data = await response.json()
-        setSuggestions(data)
-        setShowSuggestions(true)
-      } catch (error) {
-        console.error("Erro ao buscar sugestões:", error)
-      } finally {
-        setIsLoadingSuggestions(false)
-      }
-    } else {
-      setSuggestions([])
-      setShowSuggestions(false)
-    }
-  }
-
-  const selectSuggestion = (suggestion: any) => {
-    setAddressInput(suggestion.display_name)
-    setShowSuggestions(false)
-  }
-
-  if (isCheckingAddress) return null
-
   return (
-    <section className="relative overflow-hidden bg-white pt-8 pb-20 md:pt-12 md:pb-32">
-      {/* ELEMENTOS DE FUNDO DECORATIVOS (AMARELO) */}
-      <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/4 w-[500px] h-[500px] bg-yellow-100/50 rounded-full blur-3xl -z-10" />
-      <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/4 w-[400px] h-[400px] bg-orange-50/50 rounded-full blur-3xl -z-10" />
+    <section className="relative overflow-hidden bg-gradient-to-b from-amber-500/5 via-white to-white pt-6 pb-14 md:pt-10 md:pb-20">
+      {/* Luzes de fundo decorativas */}
+      <div className="absolute top-0 right-0 -translate-y-1/3 translate-x-1/4 w-[420px] h-[420px] bg-amber-200/30 rounded-full blur-3xl -z-10" />
+      <div className="absolute bottom-0 left-0 translate-y-1/3 -translate-x-1/4 w-[350px] h-[350px] bg-orange-100/40 rounded-full blur-3xl -z-10" />
 
-      <div className="container mx-auto px-4">
-        
-        {/* BANNER DE PROMOÇÃO ESTILO IFOOD - SÓ APARECE COM IMAGEM SELECIONADA */}
+      <div className="container mx-auto px-4 max-w-6xl">
+        {/* Banner de Promoção se ativo */}
         {(superPromoActive || itemPromoActive) && (superPromoImage || itemPromoImage) && (
-          <div className="mb-12 animate-in fade-in slide-in-from-top-8 duration-1000">
+          <div className="mb-8 animate-in fade-in slide-in-from-top-4 duration-700">
             <Link href="/cardapio">
-              <div className="relative group overflow-hidden rounded-[2rem] shadow-lg shadow-yellow-100 border-2 border-yellow-200 cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99]">
-                <img 
-                  src={superPromoImage || itemPromoImage} 
-                  alt="Promoção" 
-                  className="w-full h-auto object-contain md:object-cover max-h-[250px] md:max-h-[450px]"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none'
-                  }}
+              <div className="relative group overflow-hidden rounded-3xl shadow-lg border-2 border-amber-300 cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99]">
+                <img
+                  src={superPromoImage || itemPromoImage}
+                  alt="Promoção Especial"
+                  className="w-full h-auto object-cover max-h-[220px] md:max-h-[380px]"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                
-                {/* BOTÃO DE AÇÃO NO BANNER */}
-                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all translate-y-4 group-hover:translate-y-0">
-                  <Button className="bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-black px-8 py-4 rounded-2xl text-lg shadow-2xl">
-                    APROVEITAR AGORA
-                    <ArrowRight className="ml-2 h-6 w-6" />
-                  </Button>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent flex items-end p-4 md:p-6">
+                  <span className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-gray-900 font-black text-xs md:text-sm px-5 py-2.5 rounded-xl shadow-lg">
+                    <span>Aproveitar Oferta</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </span>
                 </div>
               </div>
             </Link>
           </div>
         )}
 
-        <div className="flex flex-col lg:flex-row items-center gap-12">
-          
-          {/* CONTEÚDO TEXTUAL */}
-          <div className="flex-1 text-center lg:text-left space-y-8">
-            {/* BADGE DE DESTAQUE COM DADOS REAIS */}
-            <div className="inline-flex items-center gap-2 bg-yellow-100 text-yellow-700 px-4 py-2 rounded-full text-sm font-bold animate-bounce">
-              <Star className="h-4 w-4 fill-current" />
-              {totalOrders ? `${totalOrders.toLocaleString('pt-BR')} pedidos já feitos!` : "A Melhor Batata Recheada de Iacanga!"}
+        {/* Status da Loja em Tempo Real (Padrão iFood) */}
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6 p-2.5 sm:p-3 rounded-2xl bg-white border border-gray-100 shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="relative flex h-3 w-3">
+              <span
+                className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                  isStoreOpen ? "bg-emerald-400" : "bg-red-400"
+                }`}
+              />
+              <span
+                className={`relative inline-flex rounded-full h-3 w-3 ${
+                  isStoreOpen ? "bg-emerald-500" : "bg-red-500"
+                }`}
+              />
+            </div>
+            <span className="text-xs font-black text-gray-800">
+              {isStoreOpen ? "Aberto Agora" : "Fechado no Momento"}
+            </span>
+            <span className="text-gray-300">•</span>
+            <div className="flex items-center gap-1 text-xs text-gray-600 font-bold">
+              <Clock className="w-3.5 h-3.5 text-amber-500" />
+              <span>{waitTime.min}-{waitTime.max} min</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs font-bold text-gray-600">
+            <MapPin className="w-3.5 h-3.5 text-amber-500" />
+            <span>Iacanga - SP</span>
+            <span className="text-gray-300">•</span>
+            <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md font-black">
+              {isDeliveryFeeEnabled ? `Taxa R$ ${deliveryFee.toFixed(2).replace(".", ",")}` : "Taxa Grátis"}
+            </span>
+          </div>
+        </div>
+
+        {/* Grid Principal Hero */}
+        <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-12">
+          {/* Coluna Texto & Ações */}
+          <div className="flex-1 text-center lg:text-left space-y-5">
+            <div className="inline-flex items-center gap-2 bg-amber-100/80 border border-amber-200 text-amber-900 px-3.5 py-1.5 rounded-full text-xs font-black shadow-xs">
+              <Flame className="w-4 h-4 text-amber-600 fill-amber-500" />
+              <span>A Melhor Batata Recheada de Iacanga</span>
             </div>
 
-            <div className="space-y-4">
-              <h1 className="text-5xl md:text-7xl font-black tracking-tight text-gray-900 leading-[1.1]">
-                Fome de <span className="text-yellow-500">batata top?</span>
+            <div className="space-y-3">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-gray-900 leading-[1.1]">
+                Fome de verdade? <br />
+                Peça uma <span className="text-amber-500 underline decoration-amber-300 decoration-wavy">Batata Top!</span>
               </h1>
-              <p className="text-lg md:text-xl text-gray-500 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
-                Batatas gigantes, recheios generosos e aquele sabor que só a <span className="font-bold text-gray-800">batata top</span> tem. Peça agora e receba quentinho em minutos! 🚀
+              <p className="text-base sm:text-lg text-gray-600 max-w-xl mx-auto lg:mx-0 leading-relaxed font-medium">
+                Batatas gigantes selecionadas, recheios artesanais generosos e queijo derretido quentinho na sua porta em minutos.
               </p>
             </div>
 
-            {/* CTAs PRINCIPAIS (VISÍVEL EM TODOS OS DISPOSITIVOS PARA MAIOR CONVERSÃO) */}
-            <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
+            {/* Ações Primárias */}
+            <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3 pt-2">
               <Link href="/cardapio" className="w-full sm:w-auto">
                 <Button
                   size="lg"
-                  className="w-full sm:w-auto bg-yellow-500 hover:bg-yellow-600 text-gray-900 font-black text-xl px-10 h-16 rounded-2xl shadow-xl shadow-yellow-200 hover:shadow-yellow-300 transition-all hover:-translate-y-1"
+                  className="w-full sm:w-auto h-14 bg-amber-500 hover:bg-amber-600 text-white font-black text-base px-8 rounded-2xl shadow-lg shadow-amber-200 hover:shadow-amber-300 transition-all hover:-translate-y-0.5 active:scale-95 flex items-center justify-center gap-2"
                 >
-                  VER CARDÁPIO
-                  <ArrowRight className="ml-2 h-6 w-6" />
+                  <span>Ver Cardápio Completo</span>
+                  <ArrowRight className="w-5 h-5" />
                 </Button>
               </Link>
-              
-              <div className="flex items-center gap-4 px-4 py-2">
-                {/* AVATARES REAIS DOS CLIENTES */}
-                <div className="flex -space-x-2">
-                  {customerPhotos.slice(0, 3).map((photo, i) => (
-                    <div key={i} className="w-10 h-10 rounded-full border-2 border-white bg-gray-200 overflow-hidden">
-                      <img 
-                        src={photo} 
-                        alt={`Cliente ${i + 1}`}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          e.currentTarget.src = `https://i.pravatar.cc/100?img=${i + 10}`
-                        }}
-                      />
-                    </div>
-                  ))}
-                </div>
-                <div className="text-left">
-                  <div className="flex items-center text-yellow-500">
-                    {[1, 2, 3, 4, 5].map((s) => <Star key={s} className="h-3 w-3 fill-current" />)}
-                  </div>
-                  <p className="text-xs font-bold text-gray-600">
-                    +{totalCustomers ? totalCustomers.toLocaleString('pt-BR') : "500"} clientes felizes
-                  </p>
-                </div>
-              </div>
+
+              <Link href="/cardapio?category=batata" className="w-full sm:w-auto">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="w-full sm:w-auto h-14 border-2 border-gray-200 hover:border-amber-400 bg-white text-gray-800 font-black text-sm px-6 rounded-2xl transition-all active:scale-95"
+                >
+                  🥔 Escolher Batatas
+                </Button>
+              </Link>
             </div>
 
-            {/* DIFERENCIAIS RÁPIDOS */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-4">
-              <div className="flex items-center gap-2 text-gray-600 font-medium text-sm">
-                <div className="bg-green-100 p-2 rounded-lg text-green-600">
-                  <Clock className="h-4 w-4" />
-                </div>
-                {waitTime.min}-{waitTime.max} min
+            {/* Prova Social */}
+            <div className="pt-3 flex flex-wrap items-center justify-center lg:justify-start gap-4">
+              <div className="flex items-center gap-1.5">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <Star key={i} className="w-4 h-4 text-amber-500 fill-amber-500" />
+                ))}
+                <span className="font-black text-sm text-gray-900 ml-1">4.9</span>
               </div>
-              <div className="flex items-center gap-2 text-gray-600 font-medium text-sm">
-                <div className="bg-blue-100 p-2 rounded-lg text-blue-600">
-                  <Truck className="h-4 w-4" />
-                </div>
-                {isDeliveryFeeEnabled ? `Frete R$ ${deliveryFee.toFixed(2).replace('.', ',')}` : "Frete Grátis*"}
-              </div>
+              <span className="text-gray-300 hidden sm:inline">•</span>
+              <p className="text-xs font-bold text-gray-500">
+                Mais de <strong>{totalOrders.toLocaleString("pt-BR")}</strong> batatas entregues com perfeição!
+              </p>
             </div>
           </div>
 
-          {/* IMAGEM DE IMPACTO COM DADOS REAIS */}
-          <div className="flex-1 relative w-full max-w-lg lg:max-w-none">
-            <div className="relative z-10 animate-in fade-in zoom-in duration-1000">
-              {mostRequestedProduct ? (
-                <>
-                  <img 
-                    src={mostRequestedProduct.image || "https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&w=800&q=80"} 
-                    alt={mostRequestedProduct.name} 
-                    className="w-full h-auto rounded-[40px] drop-shadow-[0_35px_35px_rgba(250,204,21,0.3)] hover:rotate-2 transition-transform duration-500 object-cover"
-                    onError={(e) => {
-                      e.currentTarget.src = "https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&w=800&q=80"
-                    }}
-                  />
-                  
-                  {/* FLOATING BADGE COM DADOS REAIS DO PRODUTO MAIS PEDIDO - ESTILO IFOOD PROFISSIONAL */}
-                  <div className="absolute -top-4 -right-2 sm:-right-4 bg-white p-3 sm:p-4 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] z-20 border border-gray-100 animate-in fade-in slide-in-from-top-4 duration-700">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 bg-yellow-400 rounded-xl shadow-inner">
-                        <Trophy className="h-5 w-5 sm:h-6 sm:w-6 text-white fill-current" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] font-black text-yellow-600 uppercase tracking-widest">Mais Pedida</span>
-                          <div className="h-1 w-1 rounded-full bg-yellow-400" />
-                        </div>
-                        <p className="text-sm sm:text-base font-black text-gray-900 line-clamp-1 tracking-tight">{mostRequestedProduct.name}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* NOME DO PRODUTO EMBAIXO DA FOTO (MOBILE) - DESIGN CLEAN */}
-                  <div className="mt-6 text-center lg:hidden">
-                    <div className="inline-flex items-center gap-2 bg-yellow-50 px-4 py-1.5 rounded-full border border-yellow-100 mb-2">
-                      <Star className="h-3 w-3 text-yellow-500 fill-current" />
-                      <span className="text-[10px] font-black text-yellow-700 uppercase tracking-widest">Destaque da Casa</span>
-                    </div>
-                    <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tighter leading-none">{mostRequestedProduct.name}</h2>
-                  </div>
-                </>
-              ) : (
-                <img 
-                  src="https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&w=800&q=80" 
-                  alt="Batata Recheada Deliciosa" 
-                  className="w-full h-auto rounded-[40px] drop-shadow-[0_35px_35px_rgba(250,204,21,0.3)] hover:rotate-2 transition-transform duration-500"
+          {/* Coluna Imagem em Destaque */}
+          <div className="flex-1 w-full max-w-md lg:max-w-none relative">
+            <div className="relative z-10">
+              <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-amber-500/15 border-2 border-amber-200/80 group">
+                <img
+                  src={
+                    mostRequestedProduct?.image ||
+                    "https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&w=800&q=80"
+                  }
+                  alt={mostRequestedProduct?.name || "Batata Recheada Batata Top"}
+                  className="w-full h-[280px] sm:h-[360px] object-cover group-hover:scale-105 transition-transform duration-700"
                 />
-              )}
-              
-            </div>
-            
-            {/* CÍRCULO DE FUNDO */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-yellow-400 rounded-full -z-10 opacity-10 blur-2xl" />
-          </div>
 
+                {/* Badge Flutuante "Nº 1 Mais Pedida" estilo iFood */}
+                <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-md px-3.5 py-2 rounded-2xl shadow-lg border border-amber-200 flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-xs">
+                    <Trophy className="w-4 h-4" />
+                  </div>
+                  <div className="text-left">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 block">
+                      Campeã de Vendas
+                    </span>
+                    <span className="text-xs font-black text-gray-900 line-clamp-1">
+                      {mostRequestedProduct?.name || "Especial da Casa"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Tarja Inferior Transparente com CTA Direto */}
+                <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex items-center justify-between text-white">
+                  <div>
+                    <p className="text-xs text-amber-300 font-black uppercase tracking-wider">Batata Top Original</p>
+                    <p className="text-sm sm:text-base font-black line-clamp-1">{mostRequestedProduct?.name}</p>
+                  </div>
+                  <Link href="/cardapio">
+                    <button className="h-10 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs shadow-md active:scale-95 transition-all flex items-center gap-1.5">
+                      <span>Pedir</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </Link>
+                </div>
+              </div>
+            </div>
+
+            {/* Círculo luminoso de profundidade */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[110%] h-[110%] bg-amber-400/20 rounded-full blur-3xl -z-10" />
+          </div>
         </div>
       </div>
     </section>

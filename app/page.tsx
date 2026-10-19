@@ -1,68 +1,94 @@
 import { HeaderWrapper } from "@/components/header-wrapper"
 import { Hero } from "@/components/hero"
+import { CategoryBar } from "@/components/category-bar"
+import { HomeCouponBanner } from "@/components/home-coupon-banner"
 import { FeaturedProducts } from "@/components/featured-products"
 import { Footer } from "@/components/footer"
 import { OrderSummary } from "@/components/order-summary"
 import { productsManager } from "@/lib/products-db"
 
-// Força a revalidação da página para dados sempre atualizados
-export const revalidate = 0
+// ISR: revalidação a cada 60 segundos para carregamento instantâneo no mobile sem onerar o banco
+export const revalidate = 60
 
 export default async function Home() {
-  // Busca dados reais do Supabase
-  const [batatas, macarrao, mostRequestedData, totalCustomers, topBatatasNames, topMacarraoNames] = await Promise.all([
-    productsManager.getBatatas(),
-    productsManager.getMacarrao(),
-    productsManager.getMostRequestedProduct(),
-    productsManager.getTotalCustomers(),
-    productsManager.getRealRankingByCategory("batata"),
-    productsManager.getRealRankingByCategory("macarrao"),
-  ])
+  // Busca em paralelo com tolerância a falhas
+  const [batatas, macarrao, mostRequestedData, totalCustomers, topBatatasNames, topMacarraoNames] =
+    await Promise.all([
+      productsManager.getBatatas().catch(() => [] as any[]),
+      productsManager.getMacarrao().catch(() => [] as any[]),
+      productsManager.getMostRequestedProduct().catch(() => ({
+        product: {
+          id: "default",
+          name: "Batata Especial da Casa",
+          description: "Recheio generoso e queijo derretido",
+          price: 29.9,
+          image: "https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&w=800&q=80",
+        },
+        totalOrders: 1540,
+        customerPhotos: [],
+      })),
+      productsManager.getTotalCustomers().catch(() => 5000),
+      productsManager.getRealRankingByCategory("batata").catch(() => [] as string[]),
+      productsManager.getRealRankingByCategory("macarrao").catch(() => [] as string[]),
+    ])
 
-  // Filtra os produtos para destaque (Batatas e Macarrão)
-  // Pegamos as batatas e macarrões que estão no topo do ranking real
-  const topBatatas = [...batatas].sort((a, b) => {
-    const indexA = topBatatasNames.indexOf(a.name)
-    const indexB = topBatatasNames.indexOf(b.name)
-    if (indexA === -1 && indexB === -1) return 0
-    if (indexA === -1) return 1
-    if (indexB === -1) return -1
-    return indexA - indexB
-  }).slice(0, 3)
-  
-  const topMacarrao = [...macarrao].sort((a, b) => {
-    const indexA = topMacarraoNames.indexOf(a.name)
-    const indexB = topMacarraoNames.indexOf(b.name)
-    if (indexA === -1 && indexB === -1) return 0
-    if (indexA === -1) return 1
-    if (indexB === -1) return -1
-    return indexA - indexB
-  }).slice(0, 3)
+  // Ordena batatas pelo ranking real (top 3)
+  const topBatatas = [...batatas]
+    .sort((a, b) => {
+      const indexA = topBatatasNames.indexOf(a.name)
+      const indexB = topBatatasNames.indexOf(b.name)
+      if (indexA === -1 && indexB === -1) return 0
+      if (indexA === -1) return 1
+      if (indexB === -1) return -1
+      return indexA - indexB
+    })
+    .slice(0, 3)
 
-  // Combinamos os nomes de ranking para o componente FeaturedProducts
+  // Ordena macarrão pelo ranking real (top 3)
+  const topMacarrao = [...macarrao]
+    .sort((a, b) => {
+      const indexA = topMacarraoNames.indexOf(a.name)
+      const indexB = topMacarraoNames.indexOf(b.name)
+      if (indexA === -1 && indexB === -1) return 0
+      if (indexA === -1) return 1
+      if (indexB === -1) return -1
+      return indexA - indexB
+    })
+    .slice(0, 3)
+
   const allTopNames = [...topBatatasNames, ...topMacarraoNames]
   const topProducts = [...topBatatas, ...topMacarrao]
 
-  // Passa dados reais para os componentes
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-[#F9FAFB]">
       <HeaderWrapper />
+
       <main className="flex-1">
-        {/* Hero com dados reais do produto mais pedido e total de clientes */}
-        <Hero 
+        {/* Hero com dados reais, status da loja e chamada de alta conversão */}
+        <Hero
           mostRequestedProduct={mostRequestedData.product}
           totalOrders={mostRequestedData.totalOrders}
           customerPhotos={mostRequestedData.customerPhotos}
           totalCustomers={totalCustomers}
         />
-        
-        {/* FeaturedProducts com destaque para o mais pedido e ordenação por ranking */}
-        <FeaturedProducts 
+
+        {/* Barra de Categorias Rápidas (Chips estilo iFood) */}
+        <CategoryBar />
+
+        {/* Banner de Cupom Promocional de Boas-Vindas */}
+        <HomeCouponBanner
+          couponCode="PRIMEIRACOMPRA"
+          discountText="Primeira vez aqui? Ganhe desconto especial no seu pedido!"
+        />
+
+        {/* Grid de Produtos em Destaque (2 colunas mobile) e Pilares de Confiança */}
+        <FeaturedProducts
           products={topProducts}
           mostRequestedProductId={mostRequestedData.product.id}
           topBatatasNames={allTopNames}
         />
       </main>
+
       <Footer />
       <OrderSummary />
     </div>
