@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Trophy, Medal, Star, Tag } from "lucide-react"
+import { Plus, Tag, Flame } from "lucide-react"
 import { AddToCartDialog } from "@/components/add-to-cart-dialog"
 import { useCart } from "@/lib/cart-context"
 import { useToast } from "@/hooks/use-toast"
@@ -37,7 +37,6 @@ export function ProductCard({ product, rank = null, isMostRequested = false }: P
       
       let finalPromoPrice: number | null = null
       
-      // Prioridade 1: Promoção de Itens Específicos
       if (status.itemPromo?.isActive) {
         const itemPromo = status.promoProducts?.find(p => p.productId === product.id)
         if (itemPromo) {
@@ -45,12 +44,10 @@ export function ProductCard({ product, rank = null, isMostRequested = false }: P
         }
       }
       
-      // Prioridade 2: Super Promoção (todos os preços para batatas)
       if (finalPromoPrice === null && status.superPromo?.isActive && product.category === "batata") {
         finalPromoPrice = status.superPromo.price
       }
       
-      // Prioridade 3: Promoção legada (compatibilidade)
       if (finalPromoPrice === null && status.isPromoActive) {
         const specificPromo = status.promoProducts?.find(p => p.productId === product.id)
         if (specificPromo) {
@@ -84,7 +81,6 @@ export function ProductCard({ product, rank = null, isMostRequested = false }: P
         description: `${product.name} foi adicionado ao seu carrinho.`,
       })
       
-      // Redirecionar para o cardápio se estiver na home
       if (window.location.pathname === "/") {
         window.location.href = "/cardapio"
       }
@@ -102,147 +98,89 @@ export function ProductCard({ product, rank = null, isMostRequested = false }: P
 
   const imageUrl = imageError ? "" : getImageUrl()
 
-  // Configurações visuais do ranking (TROFÉUS RESTAURADOS)
-  const rankConfig = {
-    1: { 
-      icon: <Trophy className="h-6 w-6 text-gray-900" />, 
-      label: "Nº1", 
-      color: "bg-yellow-500", 
-      shadow: "shadow-yellow-200",
-      border: "border-yellow-400"
-    },
-    2: { 
-      icon: <Medal className="h-6 w-6 text-gray-700" />, 
-      label: "Nº2", 
-      color: "bg-gray-200", 
-      shadow: "shadow-gray-100",
-      border: "border-gray-300"
-    },
-    3: { 
-      icon: <Star className="h-6 w-6 text-orange-700" />, 
-      label: "Nº3", 
-      color: "bg-orange-200", 
-      shadow: "shadow-orange-100",
-      border: "border-orange-300"
-    }
-  }
-
-  const currentRank = rank ? rankConfig[rank] : null
-
   return (
     <>
       <div 
         onClick={handleAddClick}
-        className={`relative bg-white rounded-3xl overflow-hidden hover:shadow-lg transition-all duration-300 cursor-pointer group border ${
-          currentRank ? `${currentRank.border} shadow-lg ${currentRank.shadow}` : "border-gray-100 hover:border-yellow-200"
-        }`}
+        className="bg-white rounded-2xl overflow-hidden border border-[#ECE7E0] hover:border-[#E3A008]/60 transition-all duration-200 cursor-pointer group flex flex-col justify-between shadow-2xs hover:shadow-sm"
       >
-        {/* SELO DE RANKING (TROFÉU) */}
-        {currentRank && (
-          <div className={`absolute top-3 left-3 z-20 flex items-center justify-center w-14 h-14 ${currentRank.color} rounded-full shadow-lg ${rank === 1 ? 'animate-pulse ring-4 ring-yellow-400/50' : ''}`}>
-            <div className="text-center">
-              <div className="flex justify-center">{currentRank.icon}</div>
-              <div className="text-[10px] font-black text-gray-900 leading-none mt-0.5">{currentRank.label}</div>
-            </div>
-          </div>
-        )}
+        <div>
+          {/* Imagem do Produto com Aspect Ratio Limpo */}
+          <div className="relative aspect-[16/10] overflow-hidden bg-[#F7F4EF]">
+            {imageUrl ? (
+              <img
+                src={imageUrl}
+                alt={product.name}
+                onError={() => setImageError(true)}
+                className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-300"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-stone-300 text-sm">
+                Batata Top
+              </div>
+            )}
+            
+            {/* Tag Discreta de Ranking / Mais Pedido (Estilo iFood) */}
+            {rank === 1 && (
+              <div className="absolute top-2.5 left-2.5">
+                <span className="inline-flex items-center gap-1 bg-[#FEF8EC] text-[#8A6100] border border-[#FCE8C3] text-[10px] font-black px-2 py-0.5 rounded-full shadow-2xs">
+                  <Flame className="w-3 h-3 text-[#E3A008] fill-[#E3A008]" />
+                  Nº 1 Mais Pedido
+                </span>
+              </div>
+            )}
 
-        {/* SELO DE PROMOÇÃO */}
-        {hasDiscount && (
-          <div className="absolute top-3 right-3 z-20">
-            <div className="bg-red-600 text-white text-[10px] font-black px-3 py-1.5 rounded-full shadow-xl border border-red-500 flex items-center gap-1 animate-pulse">
-              <Tag className="h-3 w-3 fill-current" />
-              <span>OFERTA</span>
-            </div>
+            {/* Tag de Oferta / Promoção */}
+            {hasDiscount && (
+              <div className="absolute top-2.5 right-2.5">
+                <span className="inline-flex items-center gap-1 bg-[#C1440E] text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-2xs">
+                  <Tag className="w-2.5 h-2.5 fill-current" />
+                  PROMOÇÃO
+                </span>
+              </div>
+            )}
           </div>
-        )}
 
-        {/* DESTAQUE "MAIS PEDIDA" EM DOURADO (SE NÃO TIVER DESCONTO OU SE FOR RANK 1) */}
-        {rank === 1 && !hasDiscount && (
-          <div className="absolute top-3 right-3 z-20">
-            <div className="bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 text-gray-900 text-[10px] font-black px-3 py-1.5 rounded-full shadow-xl border border-yellow-300 flex items-center gap-1 animate-bounce">
-              <Star className="h-3 w-3 fill-current" />
-              <span>MAIS PEDIDA</span>
-              <Trophy className="h-3 w-3 fill-current" />
-            </div>
+          {/* Conteúdo do Card */}
+          <div className="p-3.5 sm:p-4">
+            <h3 className="font-bold text-sm sm:text-base text-[#1F1B16] mb-1 line-clamp-1 leading-snug group-hover:text-[#C1440E] transition-colors">
+              {product.name}
+            </h3>
+
+            <p className="text-xs text-[#6B6157] line-clamp-2 leading-relaxed mb-3">
+              {product.description}
+            </p>
           </div>
-        )}
-
-        {/* IMAGEM DO PRODUTO */}
-        <div className="relative aspect-[16/10] overflow-hidden bg-gradient-to-br from-yellow-50 to-orange-50">
-          {imageUrl ? (
-            <img
-              src={imageUrl}
-              alt={product.name}
-              onError={() => setImageError(true)}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 rounded-t-3xl"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="text-gray-300 text-4xl">🍽️</div>
-            </div>
-          )}
-          
-          {product.category && !rank && (
-            <div className="absolute top-3 left-3">
-              <span className="bg-white/95 backdrop-blur-sm text-gray-700 text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm">
-                {product.category === "batata"
-                  ? "Batata"
-                  : product.category === "macarrao"
-                    ? "Macarrão"
-                    : "Bebida"}
-              </span>
-            </div>
-          )}
         </div>
 
-        {/* CONTEÚDO DO CARD */}
-        <div className="p-4">
-          <h3 className="font-bold text-base text-gray-800 mb-1 line-clamp-2 leading-tight">
-            {product.name}
-          </h3>
-
-          <p className="text-sm text-gray-500 mb-3 line-clamp-2 leading-snug">
-            {product.description}
-          </p>
-
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex-1">
-              {hasDiscount && (
-                <div className="text-[10px] text-gray-400 line-through font-bold">
-                  R$ {product.price.toFixed(2).replace('.', ',')}
-                </div>
-              )}
-              <div className={`text-xl font-black ${hasDiscount ? 'text-red-600' : 'text-gray-800'}`}>
-                R$ {currentPrice.toFixed(2).replace('.', ',')}
+        {/* Rodapé: Preço e Botão Adicionar */}
+        <div className="p-3.5 sm:p-4 pt-0 flex items-center justify-between gap-2 border-t border-[#ECE7E0]/60 mt-1">
+          <div>
+            {hasDiscount && (
+              <div className="text-[10px] text-[#9C9188] line-through font-semibold">
+                R$ {product.price.toFixed(2).replace('.', ',')}
               </div>
+            )}
+            <div className={`text-sm sm:text-base font-bold ${hasDiscount ? 'text-[#C1440E]' : 'text-[#1F1B16]'}`}>
+              R$ {currentPrice.toFixed(2).replace('.', ',')}
             </div>
-
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                handleAddClick()
-              }}
-              className={`${
-                rank === 1 
-                  ? "bg-yellow-500 hover:bg-yellow-600" 
-                  : "bg-yellow-400 hover:bg-yellow-500"
-              } text-gray-900 font-bold px-4 py-2.5 rounded-full shadow-sm hover:shadow-md transition-all flex items-center gap-1.5 group-hover:scale-105`}
-            >
-              <Plus className="h-4 w-4" />
-              <span className="text-sm">Adicionar</span>
-            </button>
           </div>
+
+          <button
+            type="button"
+            className="h-8 px-3 rounded-lg bg-[#FEF8EC] border border-[#E3A008] text-[#A16207] hover:bg-[#E3A008] hover:text-white font-bold text-xs flex items-center gap-1 transition-all active:scale-95"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Adicionar</span>
+          </button>
         </div>
       </div>
 
-      {(product.category === "batata" || product.category === "macarrao") && (
-        <AddToCartDialog 
-          product={{...product, price: currentPrice}} 
-          open={dialogOpen} 
-          onOpenChange={setDialogOpen} 
-        />
-      )}
+      <AddToCartDialog
+        product={product}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+      />
     </>
   )
 }

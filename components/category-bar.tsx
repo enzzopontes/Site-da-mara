@@ -1,73 +1,66 @@
 "use client"
 
 import Link from "next/link"
-import { Sparkles, Utensils, Flame, Ticket, GlassWater } from "lucide-react"
+import { Utensils, Sparkles, GlassWater, Flame, Tag } from "lucide-react"
 
 const CATEGORIES = [
   {
-    id: "todas",
+    id: "todos",
     name: "Tudo",
     icon: Flame,
     href: "/cardapio",
-    badge: "Completo",
   },
   {
     id: "batata",
-    name: "Batatas",
+    name: "Batatas Recheadas",
     icon: Utensils,
     href: "/cardapio?category=batata",
-    badge: "Carro-chefe",
   },
   {
     id: "macarrao",
-    name: "Macarrão",
+    name: "Massas Artesanais",
     icon: Sparkles,
     href: "/cardapio?category=macarrao",
-    badge: "Artesanal",
   },
   {
     id: "bebida",
     name: "Bebidas",
     icon: GlassWater,
     href: "/cardapio?category=bebida",
-    badge: "Geladas",
   },
   {
     id: "cupons",
-    name: "Cupons",
-    icon: Ticket,
+    name: "Cupons de Desconto",
+    icon: Tag,
     href: "#cupons",
-    badge: "Ofertas",
   },
 ]
 
 export function CategoryBar() {
   return (
-    <section className="py-4 bg-white border-y border-gray-100 sticky top-16 z-30 shadow-xs">
-      <div className="container mx-auto px-4 max-w-6xl">
-        <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar scroll-smooth py-1 -my-1">
-          {CATEGORIES.map((cat) => {
+    <div className="sticky top-16 z-30 bg-white/95 backdrop-blur-md border-b border-[#ECE7E0] py-3">
+      <div className="container mx-auto px-4 max-w-5xl">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
+          {CATEGORIES.map((cat, idx) => {
             const Icon = cat.icon
+            const isFirst = idx === 0
             return (
               <Link
                 key={cat.id}
                 href={cat.href}
-                className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gray-50 hover:bg-amber-50 border border-gray-200/80 hover:border-amber-300 text-gray-800 hover:text-amber-900 font-black text-xs transition-all active:scale-95 group shadow-xs"
+                className={`shrink-0 h-9 px-4 rounded-full flex items-center gap-2 text-xs font-bold transition-all border ${
+                  isFirst
+                    ? "bg-[#FEF8EC] border-[#E3A008] text-[#A16207]"
+                    : "bg-white border-[#ECE7E0] text-[#1F1B16] hover:bg-[#F7F4EF] hover:border-[#E3A008]/40"
+                }`}
               >
-                <div className="w-6 h-6 rounded-lg bg-amber-100 group-hover:bg-amber-500 text-amber-700 group-hover:text-white flex items-center justify-center transition-colors">
-                  <Icon className="w-3.5 h-3.5" />
-                </div>
+                <Icon className={`w-3.5 h-3.5 ${isFirst ? "text-[#E3A008]" : "text-[#6B6157]"}`} />
                 <span>{cat.name}</span>
-                {cat.badge && (
-                  <span className="text-[9px] font-bold uppercase tracking-wider bg-gray-200/80 group-hover:bg-amber-200/80 text-gray-700 group-hover:text-amber-900 px-1.5 py-0.5 rounded-full">
-                    {cat.badge}
-                  </span>
-                )}
               </Link>
             )
           })}
         </div>
       </div>
-    </section>
+    </div>
   )
 }

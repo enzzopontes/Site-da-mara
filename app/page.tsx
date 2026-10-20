@@ -62,7 +62,7 @@ export default async function Home() {
   const topProducts = [...topBatatas, ...topMacarrao]
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F9FAFB]">
+    <div className="min-h-screen flex flex-col bg-white">
       <HeaderWrapper />
 
       <main className="flex-1">

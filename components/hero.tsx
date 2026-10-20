@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { ArrowRight, Star, Clock, Truck, Trophy, Sparkles, MapPin, ShieldCheck, Flame } from "lucide-react"
+import { Star, Clock, MapPin, CheckCircle2, ChevronRight, Sparkles } from "lucide-react"
 import { useState, useEffect } from "react"
 import { storeStatusManager, type StoreStatus } from "@/lib/store-status-manager"
 
@@ -81,173 +81,143 @@ export function Hero({
   }, [])
 
   return (
-    <section className="relative overflow-hidden bg-gradient-to-b from-amber-500/5 via-white to-white pt-6 pb-14 md:pt-10 md:pb-20">
-      {/* Luzes de fundo decorativas */}
-      <div className="absolute top-0 right-0 -translate-y-1/3 translate-x-1/4 w-[420px] h-[420px] bg-amber-200/30 rounded-full blur-3xl -z-10" />
-      <div className="absolute bottom-0 left-0 translate-y-1/3 -translate-x-1/4 w-[350px] h-[350px] bg-orange-100/40 rounded-full blur-3xl -z-10" />
+    <section className="bg-white border-b border-[#ECE7E0]">
+      {/* Capa de Restaurante Estilo iFood */}
+      <div className="relative h-36 sm:h-52 md:h-64 w-full bg-[#1F1B16] overflow-hidden">
+        <img
+          src="/products/costela.jpg"
+          alt="Batata Top Capa"
+          className="w-full h-full object-cover opacity-60 scale-105"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+      </div>
 
-      <div className="container mx-auto px-4 max-w-6xl">
-        {/* Banner de Promoção se ativo */}
+      <div className="container mx-auto px-4 max-w-5xl">
+        {/* Card de Identidade do Restaurante iFood */}
+        <div className="relative -mt-12 sm:-mt-16 bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm border border-[#ECE7E0] mb-6">
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 text-center sm:text-left">
+            {/* Logo Oficial Redonda com Borda de Destaque */}
+            <div className="relative shrink-0">
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-white p-1.5 shadow-md border-2 border-[#E3A008] flex items-center justify-center overflow-hidden">
+                <img
+                  src="/logo.png"
+                  alt="Batata Top Logo"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <div className="absolute -bottom-1 -right-1 bg-[#27AE60] text-white p-1 rounded-full shadow-xs" title="Restaurante Verificado">
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
+            </div>
+
+            {/* Dados do Restaurante */}
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mb-1">
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-[#1F1B16] tracking-tight">
+                  Batata Top
+                </h1>
+                <span className="inline-flex items-center gap-1 bg-[#FEF8EC] text-[#8A6100] text-xs font-bold px-2 py-0.5 rounded-full border border-[#FCE8C3]">
+                  <Sparkles className="w-3 h-3 text-[#E3A008]" />
+                  Super Restaurante
+                </span>
+              </div>
+
+              <p className="text-xs sm:text-sm text-[#6B6157] font-medium mb-3">
+                Batatas Recheadas • Massas Artesanais • Bebidas
+              </p>
+
+              {/* Linha de Indicadores Operacionais iFood */}
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 sm:gap-4 text-xs">
+                {/* Nota e Avaliação */}
+                <div className="flex items-center gap-1 font-bold text-[#1F1B16]">
+                  <Star className="w-4 h-4 fill-[#FCBB00] text-[#FCBB00]" />
+                  <span>4.9</span>
+                  <span className="text-[#9C9188] font-normal">(500+ avaliações)</span>
+                </div>
+
+                <span className="text-[#ECE7E0] hidden sm:inline">•</span>
+
+                {/* Tempo de Espera */}
+                <div className="flex items-center gap-1 font-medium text-[#6B6157]">
+                  <Clock className="w-3.5 h-3.5 text-[#E3A008]" />
+                  <span>{waitTime.min}-{waitTime.max} min</span>
+                </div>
+
+                <span className="text-[#ECE7E0] hidden sm:inline">•</span>
+
+                {/* Taxa de Entrega */}
+                <div className="flex items-center gap-1 font-bold">
+                  {isDeliveryFeeEnabled ? (
+                    <span className="text-[#1F1B16]">
+                      Entrega R$ {deliveryFee.toFixed(2).replace(".", ",")}
+                    </span>
+                  ) : (
+                    <span className="text-[#27AE60] bg-[#27AE60]/10 px-2 py-0.5 rounded">
+                      Entrega Grátis
+                    </span>
+                  )}
+                </div>
+
+                <span className="text-[#ECE7E0] hidden sm:inline">•</span>
+
+                {/* Localização */}
+                <div className="flex items-center gap-1 text-[#6B6157]">
+                  <MapPin className="w-3.5 h-3.5 text-[#C1440E]" />
+                  <span>Iacanga - SP</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Status da Loja e Botão Primário */}
+            <div className="shrink-0 flex flex-col items-center sm:items-end gap-2.5 w-full sm:w-auto pt-2 sm:pt-0">
+              <div
+                className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border ${
+                  isStoreOpen
+                    ? "bg-[#27AE60]/10 text-[#27AE60] border-[#27AE60]/30"
+                    : "bg-red-50 text-red-700 border-red-200"
+                }`}
+              >
+                <span className="relative flex h-2 w-2">
+                  <span
+                    className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                      isStoreOpen ? "bg-[#27AE60]" : "bg-red-500"
+                    }`}
+                  />
+                  <span
+                    className={`relative inline-flex rounded-full h-2 w-2 ${
+                      isStoreOpen ? "bg-[#27AE60]" : "bg-red-500"
+                    }`}
+                  />
+                </span>
+                <span>{isStoreOpen ? "Loja aberta agora" : "Fechada no momento"}</span>
+              </div>
+
+              <Link href="/cardapio" className="w-full sm:w-auto">
+                <Button
+                  className="w-full sm:w-auto h-11 bg-[#E3A008] hover:bg-[#B5860A] text-white font-bold text-sm px-6 rounded-xl shadow-xs transition-all flex items-center justify-center gap-2"
+                >
+                  <span>Fazer pedido</span>
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* Banner de Oferta Especial (se houver configurada) */}
         {(superPromoActive || itemPromoActive) && (superPromoImage || itemPromoImage) && (
-          <div className="mb-8 animate-in fade-in slide-in-from-top-4 duration-700">
+          <div className="mb-6">
             <Link href="/cardapio">
-              <div className="relative group overflow-hidden rounded-3xl shadow-lg border-2 border-amber-300 cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99]">
+              <div className="relative overflow-hidden rounded-2xl border border-[#ECE7E0] shadow-xs cursor-pointer hover:opacity-95 transition-opacity">
                 <img
                   src={superPromoImage || itemPromoImage}
-                  alt="Promoção Especial"
-                  className="w-full h-auto object-cover max-h-[220px] md:max-h-[380px]"
+                  alt="Promoção Batata Top"
+                  className="w-full h-36 sm:h-48 md:h-56 object-cover"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent flex items-end p-4 md:p-6">
-                  <span className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-gray-900 font-black text-xs md:text-sm px-5 py-2.5 rounded-xl shadow-lg">
-                    <span>Aproveitar Oferta</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </span>
-                </div>
               </div>
             </Link>
           </div>
         )}
-
-        {/* Status da Loja em Tempo Real (Padrão iFood) */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-6 p-2.5 sm:p-3 rounded-2xl bg-white border border-gray-100 shadow-xs">
-          <div className="flex items-center gap-2.5">
-            <div className="relative flex h-3 w-3">
-              <span
-                className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                  isStoreOpen ? "bg-emerald-400" : "bg-red-400"
-                }`}
-              />
-              <span
-                className={`relative inline-flex rounded-full h-3 w-3 ${
-                  isStoreOpen ? "bg-emerald-500" : "bg-red-500"
-                }`}
-              />
-            </div>
-            <span className="text-xs font-black text-gray-800">
-              {isStoreOpen ? "Aberto Agora" : "Fechado no Momento"}
-            </span>
-            <span className="text-gray-300">•</span>
-            <div className="flex items-center gap-1 text-xs text-gray-600 font-bold">
-              <Clock className="w-3.5 h-3.5 text-amber-500" />
-              <span>{waitTime.min}-{waitTime.max} min</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs font-bold text-gray-600">
-            <MapPin className="w-3.5 h-3.5 text-amber-500" />
-            <span>Iacanga - SP</span>
-            <span className="text-gray-300">•</span>
-            <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md font-black">
-              {isDeliveryFeeEnabled ? `Taxa R$ ${deliveryFee.toFixed(2).replace(".", ",")}` : "Taxa Grátis"}
-            </span>
-          </div>
-        </div>
-
-        {/* Grid Principal Hero */}
-        <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-12">
-          {/* Coluna Texto & Ações */}
-          <div className="flex-1 text-center lg:text-left space-y-5">
-            <div className="inline-flex items-center gap-2 bg-amber-100/80 border border-amber-200 text-amber-900 px-3.5 py-1.5 rounded-full text-xs font-black shadow-xs">
-              <Flame className="w-4 h-4 text-amber-600 fill-amber-500" />
-              <span>A Melhor Batata Recheada de Iacanga</span>
-            </div>
-
-            <div className="space-y-3">
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-gray-900 leading-[1.1]">
-                Fome de verdade? <br />
-                Peça uma <span className="text-amber-500 underline decoration-amber-300 decoration-wavy">Batata Top!</span>
-              </h1>
-              <p className="text-base sm:text-lg text-gray-600 max-w-xl mx-auto lg:mx-0 leading-relaxed font-medium">
-                Batatas gigantes selecionadas, recheios artesanais generosos e queijo derretido quentinho na sua porta em minutos.
-              </p>
-            </div>
-
-            {/* Ações Primárias */}
-            <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3 pt-2">
-              <Link href="/cardapio" className="w-full sm:w-auto">
-                <Button
-                  size="lg"
-                  className="w-full sm:w-auto h-14 bg-amber-500 hover:bg-amber-600 text-white font-black text-base px-8 rounded-2xl shadow-lg shadow-amber-200 hover:shadow-amber-300 transition-all hover:-translate-y-0.5 active:scale-95 flex items-center justify-center gap-2"
-                >
-                  <span>Ver Cardápio Completo</span>
-                  <ArrowRight className="w-5 h-5" />
-                </Button>
-              </Link>
-
-              <Link href="/cardapio?category=batata" className="w-full sm:w-auto">
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="w-full sm:w-auto h-14 border-2 border-gray-200 hover:border-amber-400 bg-white text-gray-800 font-black text-sm px-6 rounded-2xl transition-all active:scale-95"
-                >
-                  🥔 Escolher Batatas
-                </Button>
-              </Link>
-            </div>
-
-            {/* Prova Social */}
-            <div className="pt-3 flex flex-wrap items-center justify-center lg:justify-start gap-4">
-              <div className="flex items-center gap-1.5">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <Star key={i} className="w-4 h-4 text-amber-500 fill-amber-500" />
-                ))}
-                <span className="font-black text-sm text-gray-900 ml-1">4.9</span>
-              </div>
-              <span className="text-gray-300 hidden sm:inline">•</span>
-              <p className="text-xs font-bold text-gray-500">
-                Mais de <strong>{totalOrders.toLocaleString("pt-BR")}</strong> batatas entregues com perfeição!
-              </p>
-            </div>
-          </div>
-
-          {/* Coluna Imagem em Destaque */}
-          <div className="flex-1 w-full max-w-md lg:max-w-none relative">
-            <div className="relative z-10">
-              <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-amber-500/15 border-2 border-amber-200/80 group">
-                <img
-                  src={
-                    mostRequestedProduct?.image ||
-                    "https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&w=800&q=80"
-                  }
-                  alt={mostRequestedProduct?.name || "Batata Recheada Batata Top"}
-                  className="w-full h-[280px] sm:h-[360px] object-cover group-hover:scale-105 transition-transform duration-700"
-                />
-
-                {/* Badge Flutuante "Nº 1 Mais Pedida" estilo iFood */}
-                <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-md px-3.5 py-2 rounded-2xl shadow-lg border border-amber-200 flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-xs">
-                    <Trophy className="w-4 h-4" />
-                  </div>
-                  <div className="text-left">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 block">
-                      Campeã de Vendas
-                    </span>
-                    <span className="text-xs font-black text-gray-900 line-clamp-1">
-                      {mostRequestedProduct?.name || "Especial da Casa"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Tarja Inferior Transparente com CTA Direto */}
-                <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex items-center justify-between text-white">
-                  <div>
-                    <p className="text-xs text-amber-300 font-black uppercase tracking-wider">Batata Top Original</p>
-                    <p className="text-sm sm:text-base font-black line-clamp-1">{mostRequestedProduct?.name}</p>
-                  </div>
-                  <Link href="/cardapio">
-                    <button className="h-10 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs shadow-md active:scale-95 transition-all flex items-center gap-1.5">
-                      <span>Pedir</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  </Link>
-                </div>
-              </div>
-            </div>
-
-            {/* Círculo luminoso de profundidade */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[110%] h-[110%] bg-amber-400/20 rounded-full blur-3xl -z-10" />
-          </div>
-        </div>
       </div>
     </section>
   )

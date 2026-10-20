@@ -158,21 +158,25 @@ export default function AdminLayout({
         }`}
       >
         {/* Brand Header */}
-        <div className="h-16 px-6 flex items-center justify-between border-b border-[#2D2721] bg-[#191511]">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-[#E3A008] to-[#C1440E] flex items-center justify-center text-white shadow-md shadow-amber-950/40">
-              <Flame className="h-5 w-5" />
+        <div className="h-20 px-5 flex items-center justify-between border-b border-[#2D2721] bg-[#14100C]">
+          <Link href="/admin" className="flex items-center gap-3 group">
+            <div className="h-11 w-11 rounded-xl bg-white p-1 flex items-center justify-center shadow-md shadow-black/40 border border-amber-400/40 shrink-0">
+              <img
+                src="/logo.png"
+                alt="Batata Top Logo"
+                className="h-full w-full object-contain"
+              />
             </div>
             <div>
-              <div className="text-base font-black tracking-tight text-white flex items-center gap-1.5">
+              <div className="text-sm font-black tracking-wider text-white flex items-center gap-1.5 uppercase">
                 BATATA TOP
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#E3A008]/20 text-[#E3A008] border border-[#E3A008]/30">
-                  PRO
+                <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-[#E3A008] text-[#1F1B16]">
+                  PARCEIRO
                 </span>
               </div>
-              <p className="text-[11px] text-stone-400 font-medium">Portal do Parceiro</p>
+              <p className="text-[11px] text-amber-200/60 font-medium">Gestor Operacional</p>
             </div>
-          </div>
+          </Link>
           <button
             onClick={() => setMobileMenuOpen(false)}
             className="p-1.5 text-stone-400 hover:text-white rounded-lg lg:hidden"
