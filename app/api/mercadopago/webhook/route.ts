@@ -66,6 +66,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Assinatura inválida ou ausente' }, { status: 401 });
     }
 
+    // Validação de tolerância a replay-attack (janela de 10 minutos / 600 segundos)
+    const rawTs = Number(ts);
+    const tsSeconds = rawTs > 1e11 ? Math.floor(rawTs / 1000) : rawTs;
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    if (!Number.isFinite(tsSeconds) || Math.abs(nowSeconds - tsSeconds) > 600) {
+      console.error('[webhook] Timestamp expirado ou fora da janela de tolerância');
+      return NextResponse.json({ error: 'Assinatura expirada' }, { status: 401 });
+    }
+
     const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
     const hmac = crypto.createHmac('sha256', secret).update(manifest).digest('hex');
 
@@ -238,5 +247,5 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ error: 'Method Not Allowed' }, { status: 405 });
 }

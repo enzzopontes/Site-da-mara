@@ -2,10 +2,13 @@ import { getSupabaseBrowserClient } from "./client"
 
 export function isAdminUser(user: any): boolean {
   if (!user) return false
+  const adminEmails = (process.env.ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAILS)
+    ?.split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean) || []
   return (
-    user.email === 'enzzobaraldo2008@gmail.com' ||
-    user.email === 'maraysis9010@gmail.com' ||
-    user.app_metadata?.role === 'admin'
+    user.app_metadata?.role === 'admin' ||
+    (!!user.email && adminEmails.includes(user.email.toLowerCase()))
   )
 }
 
@@ -38,8 +41,11 @@ export async function isAdmin(userId: string): Promise<boolean> {
   }
 
   // 3. Fallback extra por variável de ambiente
-  const adminEmails = process.env.NEXT_PUBLIC_ADMIN_EMAILS?.split(",") || []
-  if (user.email && adminEmails.includes(user.email)) {
+  const adminEmails = (process.env.ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAILS)
+    ?.split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean) || []
+  if (user.email && adminEmails.includes(user.email.toLowerCase())) {
     return true
   }
 

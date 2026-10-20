@@ -8,7 +8,22 @@ import {
   sendExpoPush,
 } from '@/lib/push-notifications';
 
-const ADMIN_EMAILS = ['enzzobaraldo2008@gmail.com', 'maraysis9010@gmail.com'];
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAILS || '')
+  .split(',')
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
+
+function getCorsOrigin(req: NextRequest): string {
+  const origin = req.headers.get('origin') || '';
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || '';
+  const isAllowed =
+    !origin ||
+    origin === siteUrl ||
+    origin.startsWith('http://localhost:') ||
+    origin.startsWith('http://127.0.0.1:');
+
+  return isAllowed && origin ? origin : (siteUrl || '*');
+}
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -21,11 +36,11 @@ function getSupabaseAdmin() {
   return createClient(url, key);
 }
 
-export async function OPTIONS() {
+export async function OPTIONS(req: NextRequest) {
   return new NextResponse(null, {
     status: 200,
     headers: {
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': getCorsOrigin(req),
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     },
@@ -33,6 +48,9 @@ export async function OPTIONS() {
 }
 
 export async function POST(req: NextRequest) {
+  const corsOrigin = getCorsOrigin(req);
+  const corsHeaders = { 'Access-Control-Allow-Origin': corsOrigin };
+
   try {
     const authHeader = req.headers.get('authorization') || '';
     const userJwt = authHeader.replace(/^Bearer\s+/i, '');
@@ -40,7 +58,7 @@ export async function POST(req: NextRequest) {
     if (!userJwt) {
       return NextResponse.json(
         { success: false, error: 'Token de autenticação obrigatório' },
-        { status: 401, headers: { 'Access-Control-Allow-Origin': '*' } },
+        { status: 401, headers: corsHeaders },
       );
     }
 
@@ -50,7 +68,7 @@ export async function POST(req: NextRequest) {
     if (authError || !user) {
       return NextResponse.json(
         { success: false, error: 'Usuário não autenticado' },
-        { status: 401, headers: { 'Access-Control-Allow-Origin': '*' } },
+        { status: 401, headers: corsHeaders },
       );
     }
 
@@ -59,7 +77,7 @@ export async function POST(req: NextRequest) {
     if (!orderId) {
       return NextResponse.json(
         { success: false, error: 'orderId obrigatorio' },
-        { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } },
+        { status: 400, headers: corsHeaders },
       );
     }
 
@@ -77,12 +95,12 @@ export async function POST(req: NextRequest) {
     if (orderError || !order) {
       return NextResponse.json(
         { success: false, error: 'Pedido nao encontrado' },
-        { status: 404, headers: { 'Access-Control-Allow-Origin': '*' } },
+        { status: 404, headers: corsHeaders },
       );
     }
 
     // Dono do pedido OU admin pelos e-mails mestres ou profile.role
-    let isAdmin = ADMIN_EMAILS.includes(user.email || '');
+    let isAdmin = ADMIN_EMAILS.includes((user.email || '').toLowerCase());
     if (!isAdmin) {
       const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).single();
       if (prof?.role === 'admin') {
@@ -94,7 +112,7 @@ export async function POST(req: NextRequest) {
     if (!isAdmin && !isOwner) {
       return NextResponse.json(
         { success: false, error: 'Acesso negado: você não é dono nem admin deste pedido' },
-        { status: 403, headers: { 'Access-Control-Allow-Origin': '*' } },
+        { status: 403, headers: corsHeaders },
       );
     }
 
@@ -110,7 +128,7 @@ export async function POST(req: NextRequest) {
           success: false,
           error: 'Pedido não elegível para notificação manual (deve ter status "pending" e pagamento offline)',
         },
-        { status: 409, headers: { 'Access-Control-Allow-Origin': '*' } },
+        { status: 409, headers: corsHeaders },
       );
     }
 
@@ -122,7 +140,7 @@ export async function POST(req: NextRequest) {
           message: 'Notificação já enviada anteriormente',
           skipped: true,
         },
-        { status: 200, headers: { 'Access-Control-Allow-Origin': '*' } },
+        { status: 200, headers: corsHeaders },
       );
     }
 
@@ -133,7 +151,7 @@ export async function POST(req: NextRequest) {
     if (tokenError) {
       return NextResponse.json(
         { success: false, error: tokenError.message },
-        { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } },
+        { status: 500, headers: corsHeaders },
       );
     }
 
@@ -213,7 +231,7 @@ export async function POST(req: NextRequest) {
       });
       return NextResponse.json(
         { success: false, error: 'Falha no envio de push: ' + (pushErr?.message || 'erro desconhecido') },
-        { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } },
+        { status: 500, headers: corsHeaders },
       );
     }
 
@@ -226,13 +244,13 @@ export async function POST(req: NextRequest) {
         push: pushResult,
         push_customer: customerPushResult,
       },
-      { headers: { 'Access-Control-Allow-Origin': '*' } },
+      { headers: corsHeaders },
     );
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Erro interno';
     return NextResponse.json(
       { success: false, error: message },
-      { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } },
+      { status: 500, headers: corsHeaders },
     );
   }
 }

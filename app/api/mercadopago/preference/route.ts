@@ -71,6 +71,8 @@ export async function POST(req: NextRequest) {
       currency_id: 'BRL',
     }];
 
+    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://batatatopiacanga.com.br').replace(/\/$/, '');
+
     const mpRes = await fetch('https://api.mercadopago.com/checkout/preferences', {
       method: 'POST',
       headers: {
@@ -80,11 +82,11 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         items,
         external_reference: orderId,
-        notification_url: 'https://batatatopiacanga.com.br/api/mercadopago/webhook',
+        notification_url: `${siteUrl}/api/mercadopago/webhook`,
         back_urls: {
-          success: 'batatatop://pedidos',
-          failure: 'batatatop://cart',
-          pending: 'batatatop://pedidos',
+          success: `${siteUrl}/pedidos?order_id=${encodeURIComponent(orderId)}`,
+          failure: `${siteUrl}/carrinho?error=payment_failed`,
+          pending: `${siteUrl}/pedidos?order_id=${encodeURIComponent(orderId)}`,
         },
         auto_return: 'approved',
       }),
