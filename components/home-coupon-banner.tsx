@@ -173,7 +173,7 @@ export function HomeCouponBanner({
   return (
     <section
       id="cupons"
-      className="py-5 bg-[#F7F4EF]/70 select-none overflow-hidden"
+      className="py-5 bg-[#F7F4EF] select-none overflow-hidden"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onTouchStart={handleTouchStart}
@@ -196,14 +196,14 @@ export function HomeCouponBanner({
             <div className="flex items-center gap-1.5">
               <button
                 onClick={handlePrev}
-                className="h-7 w-7 rounded-full bg-white border border-[#E5E7EB] hover:border-[#FFB800] text-[#1F1B16] flex items-center justify-center transition-all active:scale-95 shadow-2xs"
+                className="h-7 w-7 rounded-full bg-white border border-[#E5E7EB] hover:border-[#FFB800] text-[#1F1B16] flex items-center justify-center transition-all active:scale-95 shadow-2xs cursor-pointer"
                 aria-label="Cupom anterior"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <button
                 onClick={handleNext}
-                className="h-7 w-7 rounded-full bg-white border border-[#E5E7EB] hover:border-[#FFB800] text-[#1F1B16] flex items-center justify-center transition-all active:scale-95 shadow-2xs"
+                className="h-7 w-7 rounded-full bg-white border border-[#E5E7EB] hover:border-[#FFB800] text-[#1F1B16] flex items-center justify-center transition-all active:scale-95 shadow-2xs cursor-pointer"
                 aria-label="Próximo cupom"
               >
                 <ChevronRight className="h-4 w-4" />
@@ -232,10 +232,10 @@ export function HomeCouponBanner({
             return (
               <div
                 key={`${c.id}-${i}`}
-                className="w-full flex flex-col shadow-xs transition-transform hover:-translate-y-0.5"
+                className="w-full flex flex-col justify-between h-full shadow-xs transition-transform hover:-translate-y-0.5"
               >
                 {/* Parte Superior do Ticket (Idêntico ao HomeCouponCard.jsx do App) */}
-                <div className="bg-white rounded-t-2xl border-x-[1.5px] border-t-[1.5px] border-[#E5E7EB] px-3.5 pt-3 pb-2">
+                <div className="bg-white rounded-t-2xl border-x-[1.5px] border-t-[1.5px] border-[#E5E7EB] px-3.5 pt-3 pb-2 flex-1">
                   <div className="flex items-center gap-2.5">
                     {/* Ícone Oficial do Cupom Verde do App */}
                     <div className="w-11 h-11 flex items-center justify-center shrink-0">
@@ -270,18 +270,28 @@ export function HomeCouponBanner({
                   )}
                 </div>
 
-                {/* Divisória do Ticket com mordidas laterais redondas (TicketDivider do App) */}
-                <div className="relative h-4 bg-white flex items-center justify-center border-x-[1.5px] border-[#E5E7EB]">
-                  {/* Mordida Esquerda */}
-                  <div className="absolute -left-2.5 w-4 h-4 rounded-full bg-[#F7F4EF] border-r-[1.5px] border-[#E5E7EB]" />
+                {/* Divisória do Ticket com mordidas laterais perfeitamente redondas (TicketDivider do App) */}
+                <div className="relative h-3.5 bg-white flex items-center justify-between">
+                  {/* Mordida Esquerda recortada sem quinas visíveis */}
+                  <div className="w-2 h-3.5 overflow-hidden relative shrink-0">
+                    <div className="w-3.5 h-3.5 rounded-full bg-[#F7F4EF] border-[1.5px] border-[#E5E7EB] absolute -left-[7px] top-0" />
+                  </div>
+
                   {/* Linha Tracejada Central */}
-                  <div className="w-[88%] border-t border-dashed border-[#D1D5DB]" />
-                  {/* Mordida Direita */}
-                  <div className="absolute -right-2.5 w-4 h-4 rounded-full bg-[#F7F4EF] border-l-[1.5px] border-[#E5E7EB]" />
+                  <div className="flex-1 border-t border-dashed border-[#D1D5DB] mx-2" />
+
+                  {/* Mordida Direita recortada sem quinas visíveis */}
+                  <div className="w-2 h-3.5 overflow-hidden relative shrink-0">
+                    <div className="w-3.5 h-3.5 rounded-full bg-[#F7F4EF] border-[1.5px] border-[#E5E7EB] absolute -right-[7px] top-0" />
+                  </div>
                 </div>
 
                 {/* Parte Inferior do Ticket com Caixa Tracejada de Cópia */}
-                <div className="bg-white rounded-b-2xl border-x-[1.5px] border-b-[1.5px] border-[#E5E7EB] px-3 pt-1.5 pb-2.5">
+                <div
+                  className={`bg-white border-x-[1.5px] border-[#E5E7EB] px-3 pt-1.5 pb-2.5 ${
+                    unavailable ? "border-b-0 rounded-b-none" : "border-b-[1.5px] rounded-b-2xl"
+                  }`}
+                >
                   <button
                     onClick={() => handleCopyCode(c.code)}
                     className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg border-[1.2px] transition-all cursor-pointer ${
@@ -315,12 +325,12 @@ export function HomeCouponBanner({
                   </button>
                 </div>
 
-                {/* Barra de Progresso com Cadeado (Idêntica ao App) */}
+                {/* Seção de Pedido Mínimo com Cadeado e Barra de Progresso (Idêntico ao App) */}
                 {unavailable && (
-                  <div className="bg-[#F3F4F6] border-x-[1.5px] border-b-[1.5px] border-[#E5E7EB] rounded-b-2xl -mt-3.5 pt-4 px-3 pb-2 z-0">
+                  <div className="bg-[#F3F4F6] border-x-[1.5px] border-b-[1.5px] border-t border-[#E5E7EB] rounded-b-2xl px-3.5 py-2.5">
                     <div className="flex items-center gap-1.5 mb-1.5">
-                      <Lock className="w-3 h-3 text-[#71717A]" />
-                      <span className="text-[10.5px] text-[#6B7280] font-medium">
+                      <Lock className="w-3 h-3 text-[#71717A] shrink-0" />
+                      <span className="text-[11px] text-[#6B7280] font-medium truncate">
                         Faltam R$ {missingAmount.toFixed(2).replace(".", ",")} para usar
                       </span>
                     </div>

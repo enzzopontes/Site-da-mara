@@ -73,38 +73,6 @@ export function CardapioContent({
     }
   }, [])
 
-  // SINCRONIZAÇÃO VIA INTERSECTION OBSERVER (O segredo para funcionar 100%)
-  useEffect(() => {
-    if (!mounted) return;
-
-    const observerOptions = {
-      root: scrollContainerRef.current,
-      threshold: 0.6, // Detecta quando 60% da seção está visível
-    };
-
-    const observerCallback = (entries: IntersectionObserverEntry[]) => {
-      if (isManualScrolling.current) return;
-
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          const sectionId = entry.target.id;
-          if (sectionId && activeTab !== sectionId) {
-            setActiveTab(sectionId);
-            centerActiveTab(sectionId);
-          }
-        }
-      });
-    };
-
-    const observer = new IntersectionObserver(observerCallback, observerOptions);
-
-    if (sectionBatatasRef.current) observer.observe(sectionBatatasRef.current);
-    if (sectionMacarraoRef.current) observer.observe(sectionMacarraoRef.current);
-    if (sectionBebidasRef.current) observer.observe(sectionBebidasRef.current);
-
-    return () => observer.disconnect();
-  }, [mounted, activeTab, centerActiveTab]);
-
   // Escutar evento global de pesquisa (Vindo da Navbar)
   useEffect(() => {
     const handleFocusSearch = () => {
@@ -155,29 +123,8 @@ export function CardapioContent({
   }, [batatas])
 
   const scrollToCategory = (catId: string) => {
-    if (!scrollContainerRef.current) return
-    
-    isManualScrolling.current = true
-    if (manualScrollTimeout.current) clearTimeout(manualScrollTimeout.current)
-    
-    const width = scrollContainerRef.current.offsetWidth
-    let targetScroll = 0
-    
-    if (catId === "todos" || catId === "batatas") targetScroll = 0
-    if (catId === "macarrao") targetScroll = width
-    if (catId === "bebidas") targetScroll = width * 2
-    
     setActiveTab(catId)
     centerActiveTab(catId)
-    
-    scrollContainerRef.current.scrollTo({
-      left: targetScroll,
-      behavior: "smooth"
-    })
-
-    manualScrollTimeout.current = setTimeout(() => {
-      isManualScrolling.current = false
-    }, 800)
   }
 
   // Lógica para arrastar as abas (Drag to Scroll)
@@ -255,14 +202,14 @@ export function CardapioContent({
               onMouseLeave={handleMouseLeave}
               onMouseUp={handleMouseUp}
               onMouseMove={handleMouseMove}
-              className={`flex items-center justify-center overflow-x-auto no-scrollbar py-3 gap-6 px-4 md:px-0 w-full ${isDragging ? 'cursor-grabbing select-none' : 'cursor-grab'}`}
+              className={`flex items-center justify-center overflow-x-auto no-scrollbar pt-3 pb-0 gap-6 px-4 md:px-0 w-full ${isDragging ? 'cursor-grabbing select-none' : 'cursor-grab'}`}
               style={{ WebkitOverflowScrolling: 'touch' }}
             >
               {categories.map((cat) => (
                 <button
                   key={cat.id}
                   onClick={() => !isDragging && scrollToCategory(cat.id)}
-                  className={`flex items-center gap-1.5 xs:gap-2 whitespace-nowrap pb-3 border-b-[3px] transition-all font-bold text-[13px] xs:text-sm min-w-fit ${
+                  className={`flex items-center gap-1.5 xs:gap-2 whitespace-nowrap pb-3 border-b-[3px] -mb-[1px] transition-all font-bold text-[13px] xs:text-sm min-w-fit cursor-pointer ${
                     activeTab === cat.id 
                     ? "border-yellow-500 text-yellow-600" 
                     : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-200"
@@ -299,101 +246,96 @@ export function CardapioContent({
           </div>
         </div>
 
-        <div 
-          ref={scrollContainerRef}
-          className="flex overflow-x-auto snap-x snap-mandatory no-scrollbar w-full relative"
-          style={{ 
-            scrollBehavior: 'smooth',
-            display: 'flex',
-            flexDirection: 'row',
-            flexWrap: 'nowrap',
-            scrollSnapType: 'x mandatory',
-            WebkitOverflowScrolling: 'touch'
-          }}
-        >
-          <section 
-            ref={sectionBatatasRef}
-            id="batatas"
-            className="w-full min-w-full flex-shrink-0 snap-start snap-always px-1"
-          >
-            <div className="mb-6">
-              <h2 className="text-2xl font-black text-gray-800 mb-2 flex items-center gap-2">
-                <Utensils className="h-6 w-6 text-yellow-500" /> 
-                Batatas Recheadas
-              </h2>
-              <p className="text-sm text-gray-500 flex items-center gap-1.5">
-                <Sparkles className="h-4 w-4 text-yellow-500" />
-                <span className="font-medium">Personalize com adicionais!</span>
-              </p>
-            </div>
-            {filteredBatatas.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {filteredBatatas.map((product) => (
-                  <ProductCard key={product.id} product={product} rank={topBatatasNames.findIndex(name => name.toLowerCase() === product.name.toLowerCase()) !== -1 ? (topBatatasNames.findIndex(name => name.toLowerCase() === product.name.toLowerCase()) + 1) as 1 | 2 | 3 : null} />
-                ))}
+        <div className="space-y-10 w-full">
+          {(activeTab === "todos" || activeTab === "batatas") && (
+            <section 
+              ref={sectionBatatasRef}
+              id="batatas"
+              className="w-full px-1"
+            >
+              <div className="mb-6">
+                <h2 className="text-2xl font-black text-gray-800 mb-2 flex items-center gap-2">
+                  <Utensils className="h-6 w-6 text-yellow-500" /> 
+                  Batatas Recheadas
+                </h2>
+                <p className="text-sm text-gray-500 flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4 text-yellow-500" />
+                  <span className="font-medium">Personalize com adicionais!</span>
+                </p>
               </div>
-            ) : (
-              <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200">
-                <Utensils className="h-12 w-12 mx-auto text-gray-300 mb-3" />
-                <p className="text-gray-400 font-semibold">Nenhuma batata encontrada.</p>
-              </div>
-            )}
-          </section>
+              {filteredBatatas.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {filteredBatatas.map((product) => (
+                    <ProductCard key={product.id} product={product} rank={topBatatasNames.findIndex(name => name.toLowerCase() === product.name.toLowerCase()) !== -1 ? (topBatatasNames.findIndex(name => name.toLowerCase() === product.name.toLowerCase()) + 1) as 1 | 2 | 3 : null} />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200">
+                  <Utensils className="h-12 w-12 mx-auto text-gray-300 mb-3" />
+                  <p className="text-gray-400 font-semibold">Nenhuma batata encontrada.</p>
+                </div>
+              )}
+            </section>
+          )}
 
-          <section 
-            ref={sectionMacarraoRef}
-            id="macarrao"
-            className="w-full min-w-full flex-shrink-0 snap-start snap-always px-1"
-          >
-            <div className="mb-6">
-              <h2 className="text-2xl font-black text-gray-800 mb-2 flex items-center gap-2">
-                <Soup className="h-6 w-6 text-yellow-500" /> 
-                Macarrão
-              </h2>
-              <p className="text-sm text-gray-500 flex items-center gap-1.5">
-                <Sparkles className="h-4 w-4 text-yellow-500" />
-                <span className="font-medium">Adicione proteínas!</span>
-              </p>
-            </div>
-            {filteredMacarrao.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {filteredMacarrao.map((product) => (
-                  <ProductCard key={product.id} product={product} rank={topMacarraoNames.findIndex(name => name.toLowerCase() === product.name.toLowerCase()) !== -1 ? (topMacarraoNames.findIndex(name => name.toLowerCase() === product.name.toLowerCase()) + 1) as 1 | 2 | 3 : null} />
-                ))}
+          {(activeTab === "todos" || activeTab === "macarrao") && (
+            <section 
+              ref={sectionMacarraoRef}
+              id="macarrao"
+              className="w-full px-1"
+            >
+              <div className="mb-6">
+                <h2 className="text-2xl font-black text-gray-800 mb-2 flex items-center gap-2">
+                  <Soup className="h-6 w-6 text-yellow-500" /> 
+                  Macarrão
+                </h2>
+                <p className="text-sm text-gray-500 flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4 text-yellow-500" />
+                  <span className="font-medium">Adicione proteínas!</span>
+                </p>
               </div>
-            ) : (
-              <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200">
-                <Soup className="h-12 w-12 mx-auto text-gray-300 mb-3" />
-                <p className="text-gray-400 font-semibold">Nenhum macarrão encontrado.</p>
-              </div>
-            )}
-          </section>
+              {filteredMacarrao.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {filteredMacarrao.map((product) => (
+                    <ProductCard key={product.id} product={product} rank={topMacarraoNames.findIndex(name => name.toLowerCase() === product.name.toLowerCase()) !== -1 ? (topMacarraoNames.findIndex(name => name.toLowerCase() === product.name.toLowerCase()) + 1) as 1 | 2 | 3 : null} />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200">
+                  <Soup className="h-12 w-12 mx-auto text-gray-300 mb-3" />
+                  <p className="text-gray-400 font-semibold">Nenhum macarrão encontrado.</p>
+                </div>
+              )}
+            </section>
+          )}
 
-          <section 
-            ref={sectionBebidasRef}
-            id="bebidas"
-            className="w-full min-w-full flex-shrink-0 snap-start snap-always px-1"
-          >
-            <div className="mb-6">
-              <h2 className="text-2xl font-black text-gray-800 mb-2 flex items-center gap-2">
-                <GlassWater className="h-6 w-6 text-yellow-500" /> 
-                Bebidas Geladas
-              </h2>
-              <p className="text-sm text-gray-500">Complemente seu pedido!</p>
-            </div>
-            {filteredBebidas.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {filteredBebidas.map((product) => (
-                  <ProductCard key={product.id} product={product} rank={null} />
-                ))}
+          {(activeTab === "todos" || activeTab === "bebidas") && (
+            <section 
+              ref={sectionBebidasRef}
+              id="bebidas"
+              className="w-full px-1"
+            >
+              <div className="mb-6">
+                <h2 className="text-2xl font-black text-gray-800 mb-2 flex items-center gap-2">
+                  <GlassWater className="h-6 w-6 text-yellow-500" /> 
+                  Bebidas Geladas
+                </h2>
+                <p className="text-sm text-gray-500">Complemente seu pedido!</p>
               </div>
-            ) : (
-              <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200">
-                <GlassWater className="h-12 w-12 mx-auto text-gray-300 mb-3" />
-                <p className="text-gray-400 font-semibold">Nenhuma bebida encontrada.</p>
-              </div>
-            )}
-          </section>
+              {filteredBebidas.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {filteredBebidas.map((product) => (
+                    <ProductCard key={product.id} product={product} rank={null} />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200">
+                  <GlassWater className="h-12 w-12 mx-auto text-gray-300 mb-3" />
+                  <p className="text-gray-400 font-semibold">Nenhuma bebida encontrada.</p>
+                </div>
+              )}
+            </section>
+          )}
         </div>
       </div>
     </main>
