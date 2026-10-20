@@ -237,10 +237,10 @@ export function CardapioContent({
   const totalCount = filteredBatatas.length + filteredMacarrao.length + filteredBebidas.length
 
   const categories = [
-    { id: "todos", label: "Todos", icon: Layers, count: totalCount },
-    { id: "batatas", label: "Batatas", icon: Flame, count: filteredBatatas.length },
-    { id: "macarrao", label: "Macarrão", icon: Soup, count: filteredMacarrao.length },
-    { id: "bebidas", label: "Bebidas", icon: GlassWater, count: filteredBebidas.length },
+    { id: "todos", label: "Todos", iconSrc: "/assets/icones3d/icone cardapio.png", count: totalCount },
+    { id: "batatas", label: "Batatas", iconSrc: "/assets/icones3d/icone batata.png", count: filteredBatatas.length },
+    { id: "macarrao", label: "Macarrão", iconSrc: "/assets/icones3d/icone macarrao.png", count: filteredMacarrao.length },
+    { id: "bebidas", label: "Bebidas", iconSrc: "/assets/icones3d/icone bebidas geladas.png", count: filteredBebidas.length },
   ]
 
   return (
@@ -268,7 +268,7 @@ export function CardapioContent({
                     : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-200"
                   }`}
                 >
-                  <cat.icon className="h-4 w-4 xs:h-5 xs:w-5" />
+                  <img src={cat.iconSrc} alt={cat.label} className="h-5 w-5 object-contain" />
                   <span>{cat.label}</span>
                   <span className={`px-1.5 xs:px-2 py-0.5 rounded-full text-[10px] xs:text-xs font-bold ${
                     activeTab === cat.id

@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { Ticket, Copy, Check, ChevronLeft, ChevronRight } from "lucide-react"
+import { Clock, Copy, Check, Lock, ChevronLeft, ChevronRight } from "lucide-react"
+import { useCart } from "@/lib/cart-context"
 import type { Coupon } from "@/lib/cupons-manager"
 
 interface HomeCouponBannerProps {
@@ -18,31 +19,16 @@ export function HomeCouponBanner({
   coupons = [],
   couponCode = "PRIMEIRACOMPRA",
   discountText = "Desconto especial no seu pedido",
-  badgeLabel = "CUPOM",
   discountValue = 15,
   discountType = "percentage",
   minOrderValue = null,
 }: HomeCouponBannerProps) {
-  // Constrói lista de cupons com fallback seguro
-  const displayCoupons: Array<{
-    id: string
-    code: string
-    discount: number
-    type: "percentage" | "fixed"
-    minOrderValue?: number | null
-    description?: string
-    badge?: string
-  }> =
+  const { getTotalPrice } = useCart()
+
+  // Constrói lista de cupons com dados normalizados
+  const rawCoupons =
     coupons && coupons.length > 0
-      ? coupons.map((c) => ({
-          id: c.id,
-          code: c.code,
-          discount: c.discount,
-          type: c.type,
-          minOrderValue: c.minOrderValue,
-          description: c.description || (c.minOrderValue ? `Em pedidos acima de R$ ${Number(c.minOrderValue).toFixed(2).replace(".", ",")}` : "Válido para todo o cardápio"),
-          badge: c.showOnHome ? "Destaque" : "Cupom",
-        }))
+      ? coupons
       : [
           {
             id: "1",
@@ -51,67 +37,113 @@ export function HomeCouponBanner({
             type: discountType,
             minOrderValue: minOrderValue,
             description: discountText,
-            badge: badgeLabel,
+            showOnHome: true,
+            isActive: true,
+            expiresAt: null,
           },
           {
             id: "2",
             code: "BATATATOP10",
             discount: 10,
-            type: "fixed",
+            type: "fixed" as const,
             minOrderValue: 40,
-            description: "R$ 10 OFF em pedidos acima de R$ 40,00",
-            badge: "Imperdível",
+            description: "R$ 10 de desconto no pedido",
+            showOnHome: false,
+            isActive: true,
+            expiresAt: null,
           },
         ]
 
+  const displayCoupons = rawCoupons.map((c) => {
+    const isPercent = c.type === "percentage"
+    const discountLabel = isPercent
+      ? `${c.discount}% OFF`
+      : `R$ ${Number(c.discount).toFixed(2).replace(".", ",")} OFF`
+
+    let desc = c.description || ""
+    if (!desc || desc.toLowerCase().includes("qualquer")) {
+      desc = isPercent
+        ? `${c.discount}% de desconto em qualquer batata`
+        : `R$ ${Number(c.discount).toFixed(2).replace(".", ",")} de desconto no pedido`
+    }
+
+    let expiryLabel: string | null = null
+    if (c.expiresAt) {
+      const d = new Date(c.expiresAt)
+      if (!isNaN(d.getTime())) {
+        const dia = String(d.getDate()).padStart(2, "0")
+        const mes = String(d.getMonth() + 1).padStart(2, "0")
+        expiryLabel = `Até ${dia}/${mes}`
+      }
+    }
+
+    return {
+      id: c.id,
+      code: c.code,
+      discountLabel,
+      description: desc,
+      minOrderVal: Number(c.minOrderValue || 0),
+      expiryLabel,
+    }
+  })
+
   const [currentIndex, setCurrentIndex] = useState(0)
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
+  const [animating, setAnimating] = useState(false)
+  const [direction, setDirection] = useState<"next" | "prev">("next")
   const [isHovered, setIsHovered] = useState(false)
+
   const touchStartX = useRef<number>(0)
   const touchEndX = useRef<number>(0)
+  const totalItems = displayCoupons.length
 
-  // O carrossel avança de 1 em 1 para permitir visualização rotativa de 2 simultâneos
-  const totalSlides = displayCoupons.length
+  const triggerChange = useCallback((newDir: "next" | "prev", nextIdx: number) => {
+    setDirection(newDir)
+    setAnimating(true)
+    setTimeout(() => {
+      setCurrentIndex(nextIdx)
+      setAnimating(false)
+    }, 280)
+  }, [])
 
   const handleNext = useCallback(() => {
-    setCurrentIndex((prev) => (prev + 1) % totalSlides)
-  }, [totalSlides])
+    if (animating || totalItems <= 1) return
+    const nextIdx = (currentIndex + 1) % totalItems
+    triggerChange("next", nextIdx)
+  }, [animating, totalItems, currentIndex, triggerChange])
 
   const handlePrev = useCallback(() => {
-    setCurrentIndex((prev) => (prev - 1 + totalSlides) % totalSlides)
-  }, [totalSlides])
+    if (animating || totalItems <= 1) return
+    const prevIdx = (currentIndex - 1 + totalItems) % totalItems
+    triggerChange("prev", prevIdx)
+  }, [animating, totalItems, currentIndex, triggerChange])
 
-  // Rotação suave automática a cada 4.5s
+  // Rotação automática suave a cada 5 segundos
   useEffect(() => {
-    if (isHovered || totalSlides <= 2) return
+    if (isHovered || totalItems <= 2 || animating) return
     const timer = setInterval(() => {
       handleNext()
-    }, 4500)
+    }, 5000)
     return () => clearInterval(timer)
-  }, [isHovered, totalSlides, handleNext])
+  }, [isHovered, totalItems, animating, handleNext])
 
-  // Gestos Touch (Mobile First)
+  // Touch Swipe
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.targetTouches[0].clientX
   }
-
   const handleTouchMove = (e: React.TouchEvent) => {
     touchEndX.current = e.targetTouches[0].clientX
   }
-
   const handleTouchEnd = () => {
     if (!touchStartX.current || !touchEndX.current) return
-    const distance = touchStartX.current - touchEndX.current
-    if (distance > 45) {
-      handleNext()
-    } else if (distance < -45) {
-      handlePrev()
-    }
+    const diff = touchStartX.current - touchEndX.current
+    if (diff > 40) handleNext()
+    else if (diff < -40) handlePrev()
     touchStartX.current = 0
     touchEndX.current = 0
   }
 
-  const handleCopy = async (code: string) => {
+  const handleCopyCode = async (code: string) => {
     try {
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(code)
@@ -130,16 +162,18 @@ export function HomeCouponBanner({
     } catch {}
   }
 
-  // Janela visível de 2 cupons
-  const visibleCoupons = [
+  // Dois cupons por vez na tela
+  const visible = [
     displayCoupons[currentIndex],
-    displayCoupons[(currentIndex + 1) % totalSlides],
+    displayCoupons[(currentIndex + 1) % totalItems],
   ]
+
+  const currentTotal = typeof getTotalPrice === "function" ? getTotalPrice() : 0
 
   return (
     <section
       id="cupons"
-      className="py-5 bg-[#F7F4EF]/70 select-none"
+      className="py-5 bg-[#F7F4EF]/70 select-none overflow-hidden"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onTouchStart={handleTouchStart}
@@ -147,30 +181,29 @@ export function HomeCouponBanner({
       onTouchEnd={handleTouchEnd}
     >
       <div className="container mx-auto px-4 max-w-5xl">
-        {/* Cabeçalho da Seção de Cupons */}
-        <div className="flex items-center justify-between mb-3 px-1">
+        {/* Header da Seção com Controles */}
+        <div className="flex items-center justify-between mb-3.5 px-1">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-[#1F1B16] uppercase tracking-wider">
+            <h2 className="text-sm font-extrabold text-[#1F1B16] tracking-tight">
               Cupons de Desconto
-            </span>
-            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-[#27AE60]/10 text-[#27AE60] border border-[#27AE60]/20">
-              Economize hoje
+            </h2>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#27AE60]/10 text-[#27AE60] border border-[#27AE60]/20">
+              Disponíveis
             </span>
           </div>
 
-          {/* Controles de Navegação */}
-          {totalSlides > 2 && (
+          {totalItems > 2 && (
             <div className="flex items-center gap-1.5">
               <button
                 onClick={handlePrev}
-                className="h-7 w-7 rounded-full bg-white border border-[#ECE7E0] hover:border-[#E3A008] text-[#1F1B16] flex items-center justify-center transition-colors shadow-2xs"
+                className="h-7 w-7 rounded-full bg-white border border-[#E5E7EB] hover:border-[#FFB800] text-[#1F1B16] flex items-center justify-center transition-all active:scale-95 shadow-2xs"
                 aria-label="Cupom anterior"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <button
                 onClick={handleNext}
-                className="h-7 w-7 rounded-full bg-white border border-[#ECE7E0] hover:border-[#E3A008] text-[#1F1B16] flex items-center justify-center transition-colors shadow-2xs"
+                className="h-7 w-7 rounded-full bg-white border border-[#E5E7EB] hover:border-[#FFB800] text-[#1F1B16] flex items-center justify-center transition-all active:scale-95 shadow-2xs"
                 aria-label="Próximo cupom"
               >
                 <ChevronRight className="h-4 w-4" />
@@ -179,85 +212,146 @@ export function HomeCouponBanner({
           )}
         </div>
 
-        {/* Grade do Carrossel: Mostra exatamente 2 por vez na tela */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 transition-all duration-500 ease-in-out">
-          {visibleCoupons.map((c, idx) => {
+        {/* Trilha do Carrossel com Animação Fluida de Saída e Entrada */}
+        <div
+          className={`grid grid-cols-1 sm:grid-cols-2 gap-3.5 transition-all duration-300 ease-out transform ${
+            animating
+              ? direction === "next"
+                ? "opacity-0 -translate-x-4 scale-[0.98]"
+                : "opacity-0 translate-x-4 scale-[0.98]"
+              : "opacity-100 translate-x-0 scale-100"
+          }`}
+        >
+          {visible.map((c, i) => {
             if (!c) return null
-            const discountLabel =
-              c.type === "percentage"
-                ? `${c.discount}% OFF`
-                : `R$ ${Number(c.discount).toFixed(2).replace(".", ",")} OFF`
             const isCopied = copiedCode === c.code
+            const missingAmount = c.minOrderVal > 0 ? c.minOrderVal - currentTotal : 0
+            const unavailable = c.minOrderVal > 0 && missingAmount > 0
+            const progress = c.minOrderVal > 0 ? Math.min(currentTotal / c.minOrderVal, 1) : 1
 
             return (
               <div
-                key={`${c.id}-${idx}`}
-                className="relative overflow-hidden rounded-2xl bg-[#FEF8EC] border border-[#FCE8C3] p-4 flex flex-col justify-between shadow-2xs hover:shadow-xs transition-shadow"
+                key={`${c.id}-${i}`}
+                className="w-full flex flex-col shadow-xs transition-transform hover:-translate-y-0.5"
               >
-                {/* Recortes de Bilhete Laterais */}
-                <div className="absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-white border-r border-[#FCE8C3]" />
-                <div className="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-white border-l border-[#FCE8C3]" />
-
-                <div className="flex items-start justify-between gap-3 px-1.5 mb-3">
-                  <div className="flex items-center gap-3">
-                    {/* Ícone Verde de Cupom (Paridade Mobile cuponverde.png) */}
-                    <div className="h-10 w-10 rounded-xl bg-[#27AE60]/10 border border-[#27AE60]/20 flex items-center justify-center text-[#27AE60] shrink-0">
-                      <Ticket className="h-5 w-5 stroke-[2.2]" />
+                {/* Parte Superior do Ticket (Idêntico ao HomeCouponCard.jsx do App) */}
+                <div className="bg-white rounded-t-2xl border-x-[1.5px] border-t-[1.5px] border-[#E5E7EB] px-3.5 pt-3 pb-2">
+                  <div className="flex items-center gap-2.5">
+                    {/* Ícone Oficial do Cupom Verde do App */}
+                    <div className="w-11 h-11 flex items-center justify-center shrink-0">
+                      <img
+                        src="/assets/cuponverde.png"
+                        alt="Cupom"
+                        className="w-11 h-11 object-contain"
+                      />
                     </div>
 
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-black text-[#C1440E]">
-                          {discountLabel}
-                        </span>
-                        <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-white border border-[#FCE8C3] text-[#8A6100]">
-                          {c.badge}
-                        </span>
-                      </div>
-                      <p className="text-xs text-[#6B6157] font-medium line-clamp-1 mt-0.5">
-                        {c.description}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-[19px] font-black text-[#1F1B16] tracking-tight leading-tight truncate">
+                        {c.discountLabel}
+                      </h3>
+                      <p className="text-[11px] text-[#6B7280] font-medium truncate mt-0.5">
+                        {c.minOrderVal > 0
+                          ? `Pedido mínimo de R$ ${c.minOrderVal.toFixed(2).replace(".", ",")}`
+                          : "Válido para todo o cardápio"}
                       </p>
                     </div>
                   </div>
+
+                  <p className="text-xs text-[#374151] font-medium mt-2 leading-snug line-clamp-2">
+                    {c.description}
+                  </p>
+
+                  {c.expiryLabel && (
+                    <div className="flex items-center gap-1 mt-1.5 text-[#9CA3AF] text-[11px] font-medium">
+                      <Clock className="w-3 h-3" />
+                      <span>{c.expiryLabel}</span>
+                    </div>
+                  )}
                 </div>
 
-                {/* Rodapé do Ticket com Código e Botão de Cópia */}
-                <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#FCE8C3]/70 px-1.5">
-                  <span className="font-mono font-bold text-xs text-[#1F1B16] bg-white px-2.5 py-1 rounded-lg border border-[#FCE8C3]">
-                    {c.code}
-                  </span>
+                {/* Divisória do Ticket com mordidas laterais redondas (TicketDivider do App) */}
+                <div className="relative h-4 bg-white flex items-center justify-center border-x-[1.5px] border-[#E5E7EB]">
+                  {/* Mordida Esquerda */}
+                  <div className="absolute -left-2.5 w-4 h-4 rounded-full bg-[#F7F4EF] border-r-[1.5px] border-[#E5E7EB]" />
+                  {/* Linha Tracejada Central */}
+                  <div className="w-[88%] border-t border-dashed border-[#D1D5DB]" />
+                  {/* Mordida Direita */}
+                  <div className="absolute -right-2.5 w-4 h-4 rounded-full bg-[#F7F4EF] border-l-[1.5px] border-[#E5E7EB]" />
+                </div>
 
+                {/* Parte Inferior do Ticket com Caixa Tracejada de Cópia */}
+                <div className="bg-white rounded-b-2xl border-x-[1.5px] border-b-[1.5px] border-[#E5E7EB] px-3 pt-1.5 pb-2.5">
                   <button
-                    onClick={() => handleCopy(c.code)}
-                    className="h-8 px-3 rounded-lg bg-white border border-[#E3A008] text-[#A16207] hover:bg-[#E3A008] hover:text-white font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 shadow-2xs"
+                    onClick={() => handleCopyCode(c.code)}
+                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg border-[1.2px] transition-all cursor-pointer ${
+                      isCopied
+                        ? "bg-[#F0FDF4] border-solid border-[#86EFAC]"
+                        : "bg-[#F9FAFB] border-dashed border-[#D1D5DB] hover:border-[#FFB800]"
+                    }`}
                   >
-                    {isCopied ? (
-                      <>
-                        <Check className="h-3.5 w-3.5 text-[#27AE60]" />
-                        <span className="text-[#27AE60]">Copiado!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3.5 w-3.5" />
-                        <span>Copiar</span>
-                      </>
-                    )}
+                    <div className="flex items-center gap-1.5 truncate">
+                      {isCopied ? (
+                        <Check className="w-3.5 h-3.5 text-[#16A34A] shrink-0" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5 text-[#FFB800] shrink-0" />
+                      )}
+                      <span
+                        className={`text-xs font-black tracking-wide truncate ${
+                          isCopied ? "text-[#16A34A]" : "text-[#1F1B16]"
+                        }`}
+                      >
+                        {isCopied ? "CUPOM COPIADO!" : c.code}
+                      </span>
+                    </div>
+
+                    <span
+                      className={`text-[11px] font-extrabold shrink-0 ml-1.5 ${
+                        isCopied ? "text-[#16A34A]" : "text-[#FFB800]"
+                      }`}
+                    >
+                      {isCopied ? "Pronto" : "Copiar"}
+                    </span>
                   </button>
                 </div>
+
+                {/* Barra de Progresso com Cadeado (Idêntica ao App) */}
+                {unavailable && (
+                  <div className="bg-[#F3F4F6] border-x-[1.5px] border-b-[1.5px] border-[#E5E7EB] rounded-b-2xl -mt-3.5 pt-4 px-3 pb-2 z-0">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <Lock className="w-3 h-3 text-[#71717A]" />
+                      <span className="text-[10.5px] text-[#6B7280] font-medium">
+                        Faltam R$ {missingAmount.toFixed(2).replace(".", ",")} para usar
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-[#E5E7EB] overflow-hidden">
+                      <div
+                        className="h-full bg-[#27AE60] rounded-full transition-all duration-300"
+                        style={{ width: `${progress * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )
           })}
         </div>
 
         {/* Indicadores de Ponto (Dots) */}
-        {totalSlides > 2 && (
-          <div className="flex items-center justify-center gap-1.5 mt-3">
+        {totalItems > 2 && (
+          <div className="flex items-center justify-center gap-1.5 mt-3.5">
             {displayCoupons.map((_, i) => (
-              <span
+              <button
                 key={i}
+                onClick={() => {
+                  if (i !== currentIndex) {
+                    triggerChange(i > currentIndex ? "next" : "prev", i)
+                  }
+                }}
                 className={`h-1.5 rounded-full transition-all duration-300 ${
-                  i === currentIndex ? "w-5 bg-[#E3A008]" : "w-1.5 bg-[#ECE7E0]"
+                  i === currentIndex ? "w-5 bg-[#FFB800]" : "w-1.5 bg-[#D1D5DB]"
                 }`}
+                aria-label={`Ir para o cupom ${i + 1}`}
               />
             ))}
           </div>
