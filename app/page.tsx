@@ -6,13 +6,14 @@ import { FeaturedProducts } from "@/components/featured-products"
 import { Footer } from "@/components/footer"
 import { OrderSummary } from "@/components/order-summary"
 import { productsManager } from "@/lib/products-db"
+import { couponsManager } from "@/lib/cupons-manager"
 
 // ISR: revalidação a cada 60 segundos para carregamento instantâneo no mobile sem onerar o banco
 export const revalidate = 60
 
 export default async function Home() {
   // Busca em paralelo com tolerância a falhas
-  const [batatas, macarrao, mostRequestedData, totalCustomers, topBatatasNames, topMacarraoNames] =
+  const [batatas, macarrao, mostRequestedData, totalCustomers, topBatatasNames, topMacarraoNames, homeCoupon] =
     await Promise.all([
       productsManager.getBatatas().catch(() => [] as any[]),
       productsManager.getMacarrao().catch(() => [] as any[]),
@@ -30,6 +31,7 @@ export default async function Home() {
       productsManager.getTotalCustomers().catch(() => 5000),
       productsManager.getRealRankingByCategory("batata").catch(() => [] as string[]),
       productsManager.getRealRankingByCategory("macarrao").catch(() => [] as string[]),
+      couponsManager.getActiveHomeCoupon().catch(() => null),
     ])
 
   // Ordena batatas pelo ranking real (top 3)
@@ -75,10 +77,15 @@ export default async function Home() {
         {/* Barra de Categorias Rápidas (Chips estilo iFood) */}
         <CategoryBar />
 
-        {/* Banner de Cupom Promocional de Boas-Vindas */}
+        {/* Banner de Cupom Promocional da Home (dinâmico configurado no Admin) */}
         <HomeCouponBanner
-          couponCode="PRIMEIRACOMPRA"
-          discountText="Primeira vez aqui? Ganhe desconto especial no seu pedido!"
+          couponCode={homeCoupon?.code || "PRIMEIRACOMPRA"}
+          discountText={homeCoupon?.description || homeCoupon?.title || "Ganhe desconto especial no seu pedido!"}
+          badgeLabel={homeCoupon?.badgeLabel || "CUPOM EXCLUSIVO"}
+          bannerImageUrl={homeCoupon?.bannerImageUrl}
+          discountValue={homeCoupon?.discount || 15}
+          discountType={homeCoupon?.type || "percentage"}
+          minOrderValue={homeCoupon?.minOrderValue}
         />
 
         {/* Grid de Produtos em Destaque (2 colunas mobile) e Pilares de Confiança */}
@@ -88,6 +95,7 @@ export default async function Home() {
           topBatatasNames={allTopNames}
         />
       </main>
+
 
       <Footer />
       <OrderSummary />

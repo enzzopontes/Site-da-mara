@@ -1,16 +1,27 @@
 "use client"
 
 import { useState } from "react"
-import { Ticket, Copy, Check, Sparkles, Percent } from "lucide-react"
+import { Ticket, Copy, Check, Sparkles, Percent, Tag, ArrowRight } from "lucide-react"
+import Link from "next/link"
 
 interface HomeCouponBannerProps {
   couponCode?: string
   discountText?: string
+  badgeLabel?: string
+  bannerImageUrl?: string | null
+  discountValue?: number
+  discountType?: "percentage" | "fixed"
+  minOrderValue?: number | null
 }
 
 export function HomeCouponBanner({
   couponCode = "PRIMEIRACOMPRA",
   discountText = "Ganhe desconto especial no seu primeiro pedido!",
+  badgeLabel = "CUPOM ESPECIAL",
+  bannerImageUrl = null,
+  discountValue = 15,
+  discountType = "percentage",
+  minOrderValue = null,
 }: HomeCouponBannerProps) {
   const [copied, setCopied] = useState(false)
 
@@ -33,29 +44,44 @@ export function HomeCouponBanner({
     } catch {}
   }
 
+  const formattedDiscount =
+    discountType === "percentage" ? `${discountValue}% OFF` : `R$ ${discountValue?.toFixed(2).replace(".", ",")} OFF`
+
   return (
     <section id="cupons" className="py-6 bg-amber-500/5">
       <div className="container mx-auto px-4 max-w-6xl">
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 text-white p-5 sm:p-6 shadow-xl shadow-amber-500/15 border border-amber-400/40">
-          {/* Círculos decorativos de ticket */}
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#E3A008] via-[#D97706] to-[#C1440E] text-white p-5 sm:p-6 shadow-xl shadow-amber-500/15 border border-amber-300/40">
+          {/* Círculos decorativos estilo ticket iFood */}
           <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-[#F9FAFB]" />
           <div className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-[#F9FAFB]" />
 
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pl-3 pr-3">
+          {/* Fundo com foto se houver bannerImageUrl */}
+          {bannerImageUrl && (
+            <div
+              className="absolute inset-0 opacity-15 bg-cover bg-center mix-blend-overlay pointer-events-none"
+              style={{ backgroundImage: `url(${bannerImageUrl})` }}
+            />
+          )}
+
+          <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-4 pl-3 pr-3">
             <div className="flex items-center gap-3.5 text-center sm:text-left">
               <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0 shadow-inner">
                 <Ticket className="w-6 h-6 text-white stroke-[2.5]" />
               </div>
               <div>
-                <div className="inline-flex items-center gap-1.5 bg-black/20 text-amber-100 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full mb-1">
-                  <Sparkles className="w-3 h-3" />
-                  <span>Cupom Especial de Boas-Vindas</span>
+                <div className="inline-flex items-center gap-1.5 bg-black/25 text-amber-100 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full mb-1">
+                  <Sparkles className="w-3 h-3 text-amber-300" />
+                  <span>{badgeLabel}</span>
+                  <span className="opacity-40">|</span>
+                  <span className="text-white font-bold">{formattedDiscount}</span>
                 </div>
                 <h3 className="text-base sm:text-lg font-black text-white leading-tight">
                   {discountText}
                 </h3>
                 <p className="text-xs text-amber-100/90 font-medium">
-                  Copie o código e cole na finalização do pedido no site
+                  {minOrderValue
+                    ? `Válido para pedidos acima de R$ ${minOrderValue.toFixed(0)} no site`
+                    : "Copie o código e aproveite agora na finalização"}
                 </p>
               </div>
             </div>
@@ -85,6 +111,14 @@ export function HomeCouponBanner({
                   </>
                 )}
               </button>
+
+              <Link
+                href="/cardapio"
+                className="hidden md:flex h-11 px-4 rounded-2xl bg-black/20 hover:bg-black/30 text-white font-bold text-xs items-center gap-1 transition-all"
+              >
+                <span>Usar</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
           </div>
         </div>
