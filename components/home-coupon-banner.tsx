@@ -89,8 +89,8 @@ export function HomeCouponBanner({
 
   const [currentIndex, setCurrentIndex] = useState(0)
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
-  const [animating, setAnimating] = useState(false)
-  const [direction, setDirection] = useState<"next" | "prev">("next")
+  const [animPhase, setAnimPhase] = useState<"idle" | "exit" | "enter">("idle")
+  const [animDirection, setAnimDirection] = useState<"next" | "prev">("next")
   const [isHovered, setIsHovered] = useState(false)
 
   const touchStartX = useRef<number>(0)
@@ -98,34 +98,39 @@ export function HomeCouponBanner({
   const totalItems = displayCoupons.length
 
   const triggerChange = useCallback((newDir: "next" | "prev", nextIdx: number) => {
-    setDirection(newDir)
-    setAnimating(true)
+    setAnimDirection(newDir)
+    setAnimPhase("exit")
     setTimeout(() => {
       setCurrentIndex(nextIdx)
-      setAnimating(false)
-    }, 280)
+      setAnimPhase("enter")
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setAnimPhase("idle")
+        })
+      })
+    }, 220)
   }, [])
 
   const handleNext = useCallback(() => {
-    if (animating || totalItems <= 1) return
+    if (animPhase !== "idle" || totalItems <= 1) return
     const nextIdx = (currentIndex + 1) % totalItems
     triggerChange("next", nextIdx)
-  }, [animating, totalItems, currentIndex, triggerChange])
+  }, [animPhase, totalItems, currentIndex, triggerChange])
 
   const handlePrev = useCallback(() => {
-    if (animating || totalItems <= 1) return
+    if (animPhase !== "idle" || totalItems <= 1) return
     const prevIdx = (currentIndex - 1 + totalItems) % totalItems
     triggerChange("prev", prevIdx)
-  }, [animating, totalItems, currentIndex, triggerChange])
+  }, [animPhase, totalItems, currentIndex, triggerChange])
 
   // Rotação automática suave a cada 5 segundos
   useEffect(() => {
-    if (isHovered || totalItems <= 2 || animating) return
+    if (isHovered || totalItems <= 2 || animPhase !== "idle") return
     const timer = setInterval(() => {
       handleNext()
     }, 5000)
     return () => clearInterval(timer)
-  }, [isHovered, totalItems, animating, handleNext])
+  }, [isHovered, totalItems, animPhase, handleNext])
 
   // Touch Swipe
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -212,14 +217,18 @@ export function HomeCouponBanner({
           )}
         </div>
 
-        {/* Trilha do Carrossel com Animação Fluida de Saída e Entrada */}
+        {/* Trilha do Carrossel com Animação Direcional (Sai para esquerda, entra pela direita) */}
         <div
-          className={`grid grid-cols-1 sm:grid-cols-2 gap-3.5 transition-all duration-300 ease-out transform ${
-            animating
-              ? direction === "next"
-                ? "opacity-0 -translate-x-4 scale-[0.98]"
-                : "opacity-0 translate-x-4 scale-[0.98]"
-              : "opacity-100 translate-x-0 scale-100"
+          className={`grid grid-cols-1 sm:grid-cols-2 gap-3.5 transform ${
+            animPhase === "exit"
+              ? animDirection === "next"
+                ? "-translate-x-12 opacity-0 scale-[0.98] transition-all duration-200 ease-in"
+                : "translate-x-12 opacity-0 scale-[0.98] transition-all duration-200 ease-in"
+              : animPhase === "enter"
+              ? animDirection === "next"
+                ? "translate-x-12 opacity-0 scale-[0.98] transition-none"
+                : "-translate-x-12 opacity-0 scale-[0.98] transition-none"
+              : "translate-x-0 opacity-100 scale-100 transition-all duration-300 ease-out"
           }`}
         >
           {visible.map((c, i) => {

@@ -192,8 +192,8 @@ export function CardapioContent({
 
   return (
     <main className="flex-1 bg-gray-50 pb-20">
-      {/* Header Sticky Travado Flush no Scroll (sem espaço em branco) */}
-      <div className="bg-white border-b border-[#ECE7E0] sticky top-16 z-30 shadow-xs">
+      {/* Header Sticky Travado Flush no Scroll (sem espaço em branco e sem sombras) */}
+      <div className="bg-white border-b border-[#ECE7E0] sticky top-16 z-30">
         <div className="container mx-auto px-4">
           <div className="relative flex items-center justify-center">
             <div

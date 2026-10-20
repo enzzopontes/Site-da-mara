@@ -131,7 +131,7 @@ export function Header({ variant = "default" }: HeaderProps) {
   if (!user) {
     return (
       <header className={`sticky top-0 z-40 w-full transition-all duration-200 bg-white ${
-        isScrolled ? "shadow-md py-2" : "py-4 sm:py-6"
+        isScrolled ? "py-2" : "py-4 sm:py-6"
       }`}>
         <div className="container mx-auto px-4 sm:px-8">
           <div className="flex items-center justify-between relative">
@@ -348,7 +348,7 @@ export function Header({ variant = "default" }: HeaderProps) {
       </header>
 
       <header className={`sticky top-0 z-40 w-full transition-all duration-200 bg-white hidden lg:block ${
-        isScrolled ? "shadow-md py-2" : "border-b py-4"
+        isScrolled ? "py-2" : "border-b py-4"
       }`}>
         <div className="w-full px-4 sm:px-8">
           <div className="flex items-center justify-between w-full gap-4">
