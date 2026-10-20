@@ -7,8 +7,10 @@ export default async function proxy(request: NextRequest) {
   const url = request.nextUrl.clone()
 
   // 0. Rate Limiting por IP (Proteção contra força bruta, scraping e DDoS)
-  const forwardedFor = request.headers.get("x-forwarded-for")
-  const clientIp = forwardedFor ? forwardedFor.split(",")[0].trim() : (request.headers.get("x-real-ip") || "127.0.0.1")
+  const clientIp =
+    request.headers.get("x-real-ip") ||
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    "127.0.0.1"
 
   // Rate limit para APIs (60 req/min, 180/min para webhook do MP)
   if (url.pathname.startsWith("/api/")) {
@@ -99,10 +101,11 @@ export default async function proxy(request: NextRequest) {
       }
     }
 
-    // FIX: fallback extra pela variável de ambiente NEXT_PUBLIC_ADMIN_EMAILS
+    // FIX: fallback extra pela variável de ambiente ADMIN_EMAILS ou NEXT_PUBLIC_ADMIN_EMAILS
     if (!isAdmin) {
-      const adminEmails = process.env.NEXT_PUBLIC_ADMIN_EMAILS?.split(",").map((e) => e.trim()) || []
-      if (user.email && adminEmails.includes(user.email)) {
+      const adminEnv = process.env.ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAILS || ""
+      const adminEmails = adminEnv.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean)
+      if (user.email && adminEmails.includes(user.email.toLowerCase())) {
         isAdmin = true
       }
     }

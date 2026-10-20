@@ -165,6 +165,7 @@ export async function POST(req: NextRequest) {
     const payerEmail = await resolvePayerEmail(supabase, user);
     const cardN = attemptCount + 1;
     const idempotencyKey = `order_${orderId}_card_${cardN}`;
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://batatatopiacanga.com.br';
 
     const mpBody: Record<string, any> = {
       transaction_amount: numericAmount,
@@ -173,7 +174,7 @@ export async function POST(req: NextRequest) {
       installments: numericInstallments,
       payment_method_id: paymentMethodId,
       external_reference: orderId,
-      notification_url: 'https://batatatopiacanga.com.br/api/mercadopago/webhook',
+      notification_url: `${siteUrl}/api/mercadopago/webhook`,
       statement_descriptor: 'BATATA TOP',
       payer: mpCustomerId
         ? {

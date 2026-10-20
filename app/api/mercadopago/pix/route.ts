@@ -106,6 +106,7 @@ export async function POST(req: NextRequest) {
     // 6. Expiração: agora + 30 min, fuso -03:00
     const exp = new Date(Date.now() + 30 * 60 * 1000 - 3 * 60 * 60 * 1000);
     const expirationDate = exp.toISOString().replace('Z', '-03:00');
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://batatatopiacanga.com.br';
 
     // 7. Criar pagamento no Mercado Pago
     const mpRes = await fetch('https://api.mercadopago.com/v1/payments', {
@@ -123,7 +124,7 @@ export async function POST(req: NextRequest) {
           email: payerEmail,
         },
         external_reference: orderId,
-        notification_url: 'https://batatatopiacanga.com.br/api/mercadopago/webhook',
+        notification_url: `${siteUrl}/api/mercadopago/webhook`,
         date_of_expiration: expirationDate,
       }),
     });
