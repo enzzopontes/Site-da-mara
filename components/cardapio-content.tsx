@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import { ProductCard } from "@/components/product-card"
-import { Search, Utensils, Beer, Soup, Sparkles } from "lucide-react"
+import { Search, Utensils, GlassWater, Soup, Sparkles, Flame, Layers } from "lucide-react"
 
 interface Product {
   id: string
@@ -53,7 +53,7 @@ export function CardapioContent({
   // Função para centralizar a aba ativa
   const centerActiveTab = useCallback((tabId: string) => {
     if (tabsContainerRef.current) {
-      const tabIds = ["batatas", "macarrao", "bebidas"]
+      const tabIds = ["todos", "batatas", "macarrao", "bebidas"]
       const index = tabIds.indexOf(tabId)
       
       if (index !== -1) {
@@ -163,6 +163,7 @@ export function CardapioContent({
     const width = scrollContainerRef.current.offsetWidth
     let targetScroll = 0
     
+    if (catId === "todos" || catId === "batatas") targetScroll = 0
     if (catId === "macarrao") targetScroll = width
     if (catId === "bebidas") targetScroll = width * 2
     
@@ -233,15 +234,19 @@ export function CardapioContent({
 
   if (!mounted) return null
 
+  const totalCount = filteredBatatas.length + filteredMacarrao.length + filteredBebidas.length
+
   const categories = [
-    { id: "batatas", label: "Batatas", icon: Utensils, count: filteredBatatas.length },
+    { id: "todos", label: "Todos", icon: Layers, count: totalCount },
+    { id: "batatas", label: "Batatas", icon: Flame, count: filteredBatatas.length },
     { id: "macarrao", label: "Macarrão", icon: Soup, count: filteredMacarrao.length },
-    { id: "bebidas", label: "Bebidas", icon: Beer, count: filteredBebidas.length },
+    { id: "bebidas", label: "Bebidas", icon: GlassWater, count: filteredBebidas.length },
   ]
 
   return (
     <main className="flex-1 bg-gray-50 pb-20">
-      <div className="bg-white border-b sticky top-[75px] sm:top-[68px] lg:top-[90px] z-30 shadow-sm">
+      {/* Header Sticky Travado Flush no Scroll (sem espaço em branco) */}
+      <div className="bg-white border-b border-[#ECE7E0] sticky top-16 z-30 shadow-xs">
         <div className="container mx-auto px-4">
           <div className="relative flex items-center justify-center">
             <div
@@ -371,7 +376,7 @@ export function CardapioContent({
           >
             <div className="mb-6">
               <h2 className="text-2xl font-black text-gray-800 mb-2 flex items-center gap-2">
-                <Beer className="h-6 w-6 text-yellow-500" /> 
+                <GlassWater className="h-6 w-6 text-yellow-500" /> 
                 Bebidas Geladas
               </h2>
               <p className="text-sm text-gray-500">Complemente seu pedido!</p>
@@ -384,7 +389,7 @@ export function CardapioContent({
               </div>
             ) : (
               <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200">
-                <Beer className="h-12 w-12 mx-auto text-gray-300 mb-3" />
+                <GlassWater className="h-12 w-12 mx-auto text-gray-300 mb-3" />
                 <p className="text-gray-400 font-semibold">Nenhuma bebida encontrada.</p>
               </div>
             )}

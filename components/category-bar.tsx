@@ -1,25 +1,25 @@
 "use client"
 
 import Link from "next/link"
-import { Utensils, Sparkles, GlassWater, Flame, Tag } from "lucide-react"
+import { Flame, Utensils, Soup, GlassWater, Ticket, Layers } from "lucide-react"
 
 const CATEGORIES = [
   {
     id: "todos",
-    name: "Tudo",
-    icon: Flame,
+    name: "Todos",
+    icon: Layers,
     href: "/cardapio",
   },
   {
     id: "batata",
-    name: "Batatas Recheadas",
-    icon: Utensils,
+    name: "Batatas",
+    icon: Flame,
     href: "/cardapio?category=batata",
   },
   {
     id: "macarrao",
-    name: "Massas Artesanais",
-    icon: Sparkles,
+    name: "Macarrão",
+    icon: Soup,
     href: "/cardapio?category=macarrao",
   },
   {
@@ -30,8 +30,8 @@ const CATEGORIES = [
   },
   {
     id: "cupons",
-    name: "Cupons de Desconto",
-    icon: Tag,
+    name: "Cupons",
+    icon: Ticket,
     href: "#cupons",
   },
 ]

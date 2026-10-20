@@ -286,6 +286,20 @@ export default function AdminLayout({
           </div>
 
           <div className="flex items-center gap-2.5 sm:gap-3">
+            {/* Botão de Retorno à Loja / Home (Destacado e Claro) */}
+            <Link href="/">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2 h-9 px-3.5 rounded-xl border-[#E3A008]/40 bg-[#FEF8EC] text-[#8A6100] hover:bg-[#E3A008] hover:text-white font-bold text-xs shadow-2xs transition-all"
+                title="Voltar para a página inicial da loja"
+              >
+                <Store className="h-4 w-4" />
+                <span className="hidden xs:inline">Ir para a Loja</span>
+                <ExternalLink className="h-3 w-3 opacity-70" />
+              </Button>
+            </Link>
+
             {/* Live Store Status Badge */}
             <div
               className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${

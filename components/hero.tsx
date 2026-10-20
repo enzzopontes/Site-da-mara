@@ -123,7 +123,7 @@ export function Hero({
               </div>
 
               <p className="text-xs sm:text-sm text-[#6B6157] font-medium mb-3">
-                Batatas Recheadas • Massas Artesanais • Bebidas
+                Batatas Recheadas • Macarrão • Bebidas
               </p>
 
               {/* Linha de Indicadores Operacionais iFood */}

@@ -13,7 +13,7 @@ export const revalidate = 60
 
 export default async function Home() {
   // Busca em paralelo com tolerância a falhas
-  const [batatas, macarrao, mostRequestedData, totalCustomers, topBatatasNames, topMacarraoNames, homeCoupon] =
+  const [batatas, macarrao, mostRequestedData, totalCustomers, topBatatasNames, topMacarraoNames, allCoupons] =
     await Promise.all([
       productsManager.getBatatas().catch(() => [] as any[]),
       productsManager.getMacarrao().catch(() => [] as any[]),
@@ -31,8 +31,11 @@ export default async function Home() {
       productsManager.getTotalCustomers().catch(() => 5000),
       productsManager.getRealRankingByCategory("batata").catch(() => [] as string[]),
       productsManager.getRealRankingByCategory("macarrao").catch(() => [] as string[]),
-      couponsManager.getActiveHomeCoupon().catch(() => null),
+      couponsManager.getCoupons().catch(() => [] as any[]),
     ])
+
+  const activeCoupons = allCoupons.filter((c: any) => c.isActive)
+  const homeCoupon = activeCoupons.find((c: any) => c.showOnHome) || activeCoupons[0]
 
   // Ordena batatas pelo ranking real (top 3)
   const topBatatas = [...batatas]
@@ -77,12 +80,12 @@ export default async function Home() {
         {/* Barra de Categorias Rápidas (Chips estilo iFood) */}
         <CategoryBar />
 
-        {/* Banner de Cupom Promocional da Home (dinâmico configurado no Admin) */}
+        {/* Carrossel Rotativo de Cupons da Home (Estilo Mobile iFood) */}
         <HomeCouponBanner
+          coupons={activeCoupons}
           couponCode={homeCoupon?.code || "PRIMEIRACOMPRA"}
-          discountText={homeCoupon?.description || homeCoupon?.title || "Ganhe desconto especial no seu pedido!"}
+          discountText={homeCoupon?.description || homeCoupon?.title || "Desconto especial no seu pedido!"}
           badgeLabel={homeCoupon?.badgeLabel || "CUPOM EXCLUSIVO"}
-          bannerImageUrl={homeCoupon?.bannerImageUrl}
           discountValue={homeCoupon?.discount || 15}
           discountType={homeCoupon?.type || "percentage"}
           minOrderValue={homeCoupon?.minOrderValue}
