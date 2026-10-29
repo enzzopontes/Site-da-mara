@@ -122,56 +122,56 @@ export function ProductCard({ product, rank = null, isMostRequested = false }: P
             
             {/* Tag Discreta de Ranking / Mais Pedido (Estilo iFood) */}
             {rank === 1 && (
-              <div className="absolute top-2.5 left-2.5">
-                <span className="inline-flex items-center gap-1 bg-[#FEF8EC] text-[#8A6100] border border-[#FCE8C3] text-[10px] font-black px-2 py-0.5 rounded-full shadow-2xs">
-                  <Flame className="w-3 h-3 text-[#E3A008] fill-[#E3A008]" />
-                  Nº 1 Mais Pedido
+              <div className="absolute top-2 left-2 sm:top-2.5 sm:left-2.5">
+                <span className="inline-flex items-center gap-0.5 sm:gap-1 bg-[#FEF8EC] text-[#8A6100] border border-[#FCE8C3] text-[9px] sm:text-[10px] font-black px-1.5 sm:px-2 py-0.5 rounded-full shadow-2xs">
+                  <Flame className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#E3A008] fill-[#E3A008]" />
+                  Nº 1
                 </span>
               </div>
             )}
 
             {/* Tag de Oferta / Promoção */}
             {hasDiscount && (
-              <div className="absolute top-2.5 right-2.5">
-                <span className="inline-flex items-center gap-1 bg-[#C1440E] text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-2xs">
-                  <Tag className="w-2.5 h-2.5 fill-current" />
-                  PROMOÇÃO
+              <div className="absolute top-2 right-2 sm:top-2.5 sm:right-2.5">
+                <span className="inline-flex items-center gap-0.5 sm:gap-1 bg-[#C1440E] text-white text-[9px] sm:text-[10px] font-black px-1.5 sm:px-2 py-0.5 rounded-full shadow-2xs">
+                  <Tag className="w-2 h-2 sm:w-2.5 sm:h-2.5 fill-current" />
+                  PROMO
                 </span>
               </div>
             )}
           </div>
 
           {/* Conteúdo do Card */}
-          <div className="p-3.5 sm:p-4">
-            <h3 className="font-bold text-sm sm:text-base text-[#1F1B16] mb-1 line-clamp-1 leading-snug group-hover:text-[#C1440E] transition-colors">
+          <div className="p-2.5 sm:p-4">
+            <h3 className="font-bold text-xs sm:text-base text-[#1F1B16] mb-1 line-clamp-1 leading-snug group-hover:text-[#C1440E] transition-colors">
               {product.name}
             </h3>
 
-            <p className="text-xs text-[#6B6157] line-clamp-2 leading-relaxed mb-3">
+            <p className="text-[11px] sm:text-xs text-[#6B6157] line-clamp-2 leading-tight sm:leading-relaxed mb-2 sm:mb-3">
               {product.description}
             </p>
           </div>
         </div>
 
         {/* Rodapé: Preço e Botão Adicionar */}
-        <div className="p-3.5 sm:p-4 pt-0 flex items-center justify-between gap-2 border-t border-[#ECE7E0]/60 mt-1">
-          <div>
+        <div className="p-2.5 sm:p-4 pt-0 flex items-center justify-between gap-1 sm:gap-2 border-t border-[#ECE7E0]/60 mt-1">
+          <div className="min-w-0">
             {hasDiscount && (
-              <div className="text-[10px] text-[#9C9188] line-through font-semibold">
+              <div className="text-[9px] sm:text-[10px] text-[#9C9188] line-through font-semibold leading-none mb-0.5 truncate">
                 R$ {product.price.toFixed(2).replace('.', ',')}
               </div>
             )}
-            <div className={`text-sm sm:text-base font-bold ${hasDiscount ? 'text-[#C1440E]' : 'text-[#1F1B16]'}`}>
+            <div className={`text-xs sm:text-base font-extrabold truncate ${hasDiscount ? 'text-[#C1440E]' : 'text-[#1F1B16]'}`}>
               R$ {currentPrice.toFixed(2).replace('.', ',')}
             </div>
           </div>
 
           <button
             type="button"
-            className="h-8 px-3 rounded-lg bg-[#FEF8EC] border border-[#E3A008] text-[#A16207] hover:bg-[#E3A008] hover:text-white font-bold text-xs flex items-center gap-1 transition-all active:scale-95"
+            className="shrink-0 h-7 w-7 sm:h-8 sm:w-auto sm:px-3 rounded-full sm:rounded-lg bg-[#E3A008] text-white sm:bg-[#FEF8EC] sm:border sm:border-[#E3A008] sm:text-[#A16207] hover:bg-[#E3A008] hover:text-white font-bold text-xs flex items-center justify-center gap-1 transition-all active:scale-95 shadow-xs"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Adicionar</span>
+            <span className="hidden sm:inline">Adicionar</span>
           </button>
         </div>
       </div>

@@ -31,7 +31,7 @@ export function CardapioContent({
 }: CardapioContentProps) {
   const searchParams = useSearchParams()
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "")
-  const [activeTab, setActiveTab] = useState("batatas")
+  const [activeTab, setActiveTab] = useState(searchParams.get("category") || "todos")
   const [mounted, setMounted] = useState(false)
   
   const tabsContainerRef = useRef<HTMLDivElement>(null)
@@ -184,7 +184,7 @@ export function CardapioContent({
   const totalCount = filteredBatatas.length + filteredMacarrao.length + filteredBebidas.length
 
   const categories = [
-    { id: "todos", label: "Todos", iconSrc: "/assets/icones3d/icone cardapio.png", count: totalCount },
+    { id: "todos", label: "Todos", iconSrc: "/assets/icones3d/iconetodos.png", count: totalCount },
     { id: "batatas", label: "Batatas", iconSrc: "/assets/icones3d/icone batata.png", count: filteredBatatas.length },
     { id: "macarrao", label: "Macarrão", iconSrc: "/assets/icones3d/icone macarrao.png", count: filteredMacarrao.length },
     { id: "bebidas", label: "Bebidas", iconSrc: "/assets/icones3d/icone bebidas geladas.png", count: filteredBebidas.length },
@@ -202,20 +202,20 @@ export function CardapioContent({
               onMouseLeave={handleMouseLeave}
               onMouseUp={handleMouseUp}
               onMouseMove={handleMouseMove}
-              className={`flex items-center justify-center overflow-x-auto no-scrollbar pt-3 pb-0 gap-6 px-4 md:px-0 w-full ${isDragging ? 'cursor-grabbing select-none' : 'cursor-grab'}`}
-              style={{ WebkitOverflowScrolling: 'touch' }}
+              className={`flex items-center justify-start md:justify-center overflow-x-auto no-scrollbar pt-3 pb-0 gap-6 px-4 md:px-0 w-full ${isDragging ? 'cursor-grabbing select-none' : 'cursor-grab'}`}
+              style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
               {categories.map((cat) => (
                 <button
                   key={cat.id}
                   onClick={() => !isDragging && scrollToCategory(cat.id)}
-                  className={`flex items-center gap-1.5 xs:gap-2 whitespace-nowrap pb-3 border-b-[3px] -mb-[1px] transition-all font-bold text-[13px] xs:text-sm min-w-fit cursor-pointer ${
+                  className={`shrink-0 flex-shrink-0 flex items-center gap-1.5 xs:gap-2 whitespace-nowrap pb-3 border-b-[3px] -mb-[1px] transition-all font-bold text-[13px] xs:text-sm cursor-pointer ${
                     activeTab === cat.id 
                     ? "border-yellow-500 text-yellow-600" 
                     : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-200"
                   }`}
                 >
-                  <img src={cat.iconSrc} alt={cat.label} className="h-5 w-5 object-contain" />
+                  <img src={cat.iconSrc} alt={cat.label} className="h-6 w-6 sm:h-7 sm:w-7 object-contain shrink-0" />
                   <span>{cat.label}</span>
                   <span className={`px-1.5 xs:px-2 py-0.5 rounded-full text-[10px] xs:text-xs font-bold ${
                     activeTab === cat.id
@@ -264,7 +264,7 @@ export function CardapioContent({
                 </p>
               </div>
               {filteredBatatas.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                   {filteredBatatas.map((product) => (
                     <ProductCard key={product.id} product={product} rank={topBatatasNames.findIndex(name => name.toLowerCase() === product.name.toLowerCase()) !== -1 ? (topBatatasNames.findIndex(name => name.toLowerCase() === product.name.toLowerCase()) + 1) as 1 | 2 | 3 : null} />
                   ))}
@@ -295,7 +295,7 @@ export function CardapioContent({
                 </p>
               </div>
               {filteredMacarrao.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                   {filteredMacarrao.map((product) => (
                     <ProductCard key={product.id} product={product} rank={topMacarraoNames.findIndex(name => name.toLowerCase() === product.name.toLowerCase()) !== -1 ? (topMacarraoNames.findIndex(name => name.toLowerCase() === product.name.toLowerCase()) + 1) as 1 | 2 | 3 : null} />
                   ))}
@@ -323,7 +323,7 @@ export function CardapioContent({
                 <p className="text-sm text-gray-500">Complemente seu pedido!</p>
               </div>
               {filteredBebidas.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                   {filteredBebidas.map((product) => (
                     <ProductCard key={product.id} product={product} rank={null} />
                   ))}

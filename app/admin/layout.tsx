@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { isAdmin as checkIsAdmin } from "@/lib/supabase/admin"
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { storeStatusManager, StoreStatus } from "@/lib/store-status-manager"
 import { BusinessHours } from "@/components/business-hours"
 import {
@@ -62,6 +63,173 @@ export default function AdminLayout({
   const [storeStatus, setStoreStatus] = useState<StoreStatus | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isHoursModalOpen, setIsHoursModalOpen] = useState(false)
+  const processedOrdersRef = useRef<Set<string>>(new Set())
+  const isPlayingAudioRef = useRef(false)
+  const audioQueueRef = useRef(0)
+
+  // Destravamento automático do áudio na primeira interação do usuário (sem botão visível)
+  useEffect(() => {
+    localStorage.removeItem("admin-audio-enabled")
+
+    const unlockAudio = () => {
+      try {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+        if (AudioCtx) {
+          const ctx = new AudioCtx()
+          if (ctx.state === "suspended") {
+            ctx.resume()
+          }
+        }
+        // Áudio curto mudo para liberar política de autoplay no navegador
+        const dummy = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA")
+        dummy.volume = 0.01
+        dummy.play().catch(() => {})
+      } catch (err) {
+        // Silencioso
+      }
+      window.removeEventListener("pointerdown", unlockAudio)
+      window.removeEventListener("keydown", unlockAudio)
+      window.removeEventListener("touchstart", unlockAudio)
+      window.removeEventListener("click", unlockAudio)
+    }
+
+    window.addEventListener("pointerdown", unlockAudio, { passive: true })
+    window.addEventListener("keydown", unlockAudio, { passive: true })
+    window.addEventListener("touchstart", unlockAudio, { passive: true })
+    window.addEventListener("click", unlockAudio, { passive: true })
+
+    return () => {
+      window.removeEventListener("pointerdown", unlockAudio)
+      window.removeEventListener("keydown", unlockAudio)
+      window.removeEventListener("touchstart", unlockAudio)
+      window.removeEventListener("click", unlockAudio)
+    }
+  }, [])
+
+  // Tocar som 3 vezes em sequência (tanan, tanan, tanan) com ~300ms de pausa
+  const playThreeTimesSequence = async () => {
+    const playOnce = () =>
+      new Promise<void>((resolve) => {
+        try {
+          const audio = new Audio("/sounds/new_order.mp3")
+          audio.volume = 1.0
+          audio.onended = () => resolve()
+          audio.onerror = () => {
+            // Fallback para URL remota caso arquivo local falhe
+            try {
+              const fallback = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3")
+              fallback.volume = 1.0
+              fallback.onended = () => resolve()
+              fallback.onerror = () => resolve()
+              fallback.play().catch(() => resolve())
+            } catch {
+              resolve()
+            }
+          }
+          const p = audio.play()
+          if (p !== undefined) {
+            p.catch(() => resolve())
+          }
+        } catch {
+          resolve()
+        }
+      })
+
+    try {
+      if ("vibrate" in navigator) {
+        navigator.vibrate([400, 200, 400, 200, 400])
+      }
+      for (let i = 0; i < 3; i++) {
+        await playOnce()
+        if (i < 2) {
+          await new Promise((r) => setTimeout(r, 300))
+        }
+      }
+    } catch {
+      // Silencioso
+    }
+  }
+
+  // Fila de áudio concorrente segura (evita sobreposição se 2 pedidos chegarem juntos)
+  const triggerOrderAlert = async () => {
+    audioQueueRef.current += 1
+    if (isPlayingAudioRef.current) return
+    isPlayingAudioRef.current = true
+    while (audioQueueRef.current > 0) {
+      audioQueueRef.current -= 1
+      await playThreeTimesSequence()
+    }
+    isPlayingAudioRef.current = false
+  }
+
+  // Listener global do Supabase Realtime para novos pedidos (ativo em qualquer tela do admin)
+  useEffect(() => {
+    if (!isAdmin) return
+
+    let supabase: any
+    try {
+      supabase = getSupabaseBrowserClient()
+    } catch {
+      return
+    }
+
+    // Pré-carrega IDs de pedidos confirmados existentes para não disparar som em pedidos antigos
+    // (pedidos em 'awaiting_payment' NÃO são pré-carregados, para tocar quando o PIX for pago)
+    const preloadExistingOrders = async () => {
+      try {
+        const { data } = await supabase
+          .from("orders")
+          .select("id")
+          .in("status", ["pending", "preparing", "ready"])
+          .limit(100)
+        if (data) {
+          data.forEach((o: any) => processedOrdersRef.current.add(o.id))
+        }
+      } catch {
+        // Silencioso
+      }
+    }
+    preloadExistingOrders()
+
+    const channel = supabase
+      .channel("admin-global-new-orders")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "orders",
+        },
+        (payload: any) => {
+          const newOrder = payload.new
+          if (!newOrder?.id) return
+
+          const orderId = newOrder.id
+          const status = newOrder.status
+
+          // Já tocou som para este pedido -> deduplicar
+          if (processedOrdersRef.current.has(orderId)) return
+
+          // Pedido cancelado ou ainda aguardando pagamento do PIX -> NÃO toca
+          if (status === "awaiting_payment" || status === "cancelled") return
+
+          // Toca apenas quando o pedido é confirmado:
+          // 1. Dinheiro / Cartão na entrega (INSERT com status 'pending')
+          // 2. PIX aceito e pago (UPDATE com status passando para 'preparing' ou 'pending')
+          if (status === "pending" || status === "preparing") {
+            processedOrdersRef.current.add(orderId)
+            triggerOrderAlert()
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      if (supabase && channel) {
+        supabase.removeChannel(channel)
+      }
+    }
+  }, [isAdmin])
 
   // Auth check centralizado para todo o portal /admin
   useEffect(() => {

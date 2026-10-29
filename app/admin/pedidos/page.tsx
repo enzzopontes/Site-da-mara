@@ -24,8 +24,6 @@ import {
   Ticket,
   CreditCard,
   FileText,
-  Volume2,
-  VolumeX,
   BellRing,
   Bike,
   Store,
@@ -119,18 +117,11 @@ export default function AdminPedidosPage() {
   const [filter, setFilter] = useState<"all" | ExtendedStatus>("all")
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
-  const [audioEnabled, setAudioEnabled] = useState(false)
   const [permissionStatus, setPermissionStatus] = useState<string>("default")
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null)
   const lastOrdersCount = useRef<number>(0)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
-    const savedAudioPref = localStorage.getItem("admin-audio-enabled")
-    if (savedAudioPref === "true") {
-      setAudioEnabled(true)
-    }
-
     if ("Notification" in window) {
       setPermissionStatus(Notification.permission)
     }
@@ -152,38 +143,6 @@ export default function AdminPedidosPage() {
     }
   }, [user, loading, router])
 
-  const playNotificationSound = () => {
-    if (audioEnabled && audioRef.current) {
-      audioRef.current.volume = 1.0
-      audioRef.current.currentTime = 0
-      const playPromise = audioRef.current.play()
-
-      if (playPromise !== undefined) {
-        playPromise.catch((err) => {
-          console.error("Erro ao tocar som (bloqueio do navegador):", err)
-        })
-      }
-
-      if ("vibrate" in navigator) {
-        navigator.vibrate([500, 200, 500, 200, 500])
-      }
-
-      if ("Notification" in window && Notification.permission === "granted") {
-        const notification = new Notification("🚨 NOVO PEDIDO - Batata Top!", {
-          body: "Um novo pedido acaba de chegar! Abra o Gestor de Pedidos para conferir.",
-          icon: "/favicon.ico",
-          tag: "novo-pedido",
-          requireInteraction: true,
-        })
-
-        notification.onclick = () => {
-          window.focus()
-          notification.close()
-        }
-      }
-    }
-  }
-
   const loadOrders = async (isInitial = false) => {
     try {
       const todayOrders = await ordersManager.getTodayOrders()
@@ -192,10 +151,6 @@ export default function AdminPedidosPage() {
       const uniqueOrders = allOrders.filter(
         (order, index, self) => index === self.findIndex((t) => t.id === order.id)
       )
-
-      if (!isInitial && uniqueOrders.length > lastOrdersCount.current) {
-        playNotificationSound()
-      }
 
       lastOrdersCount.current = uniqueOrders.length
       setOrders(uniqueOrders)
@@ -230,27 +185,6 @@ export default function AdminPedidosPage() {
       await loadOrders()
     } catch (error) {
       alert("Erro ao deletar pedido")
-    }
-  }
-
-  const toggleAudio = () => {
-    const newState = !audioEnabled
-    setAudioEnabled(newState)
-    localStorage.setItem("admin-audio-enabled", String(newState))
-
-    if (newState) {
-      if ("Notification" in window) {
-        Notification.requestPermission().then((permission) => {
-          setPermissionStatus(permission)
-        })
-      }
-
-      if (audioRef.current) {
-        audioRef.current.volume = 1.0
-        audioRef.current.play().catch(() => {
-          alert("Clique em qualquer lugar da página para ativar o som de notificações.")
-        })
-      }
     }
   }
 
@@ -297,13 +231,6 @@ export default function AdminPedidosPage() {
   return (
     <div className="min-h-screen flex flex-col bg-[#F6F7F9]">
       <HeaderWrapper />
-
-      {/* Áudio de Notificação de Alto Impacto */}
-      <audio
-        ref={audioRef}
-        src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"
-        preload="auto"
-      />
 
       {/* Comanda Térmica invisível na tela, visível apenas na impressão */}
       {receiptOrder && (
@@ -395,19 +322,6 @@ export default function AdminPedidosPage() {
 
       <main className="flex-1 py-8 px-4 md:px-6">
         <div className="container mx-auto max-w-7xl">
-          {/* AVISO DE CONFIGURAÇÃO DE SOM */}
-          {!audioEnabled && (
-            <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-2xl flex items-center justify-between shadow-sm">
-              <div className="flex items-center gap-3 text-red-700">
-                <VolumeX className="h-6 w-6 shrink-0" />
-                <p className="font-black text-sm">O SOM ESTÁ DESATIVADO! Você não ouvirá quando chegar um novo pedido.</p>
-              </div>
-              <Button onClick={toggleAudio} className="bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-md">
-                ATIVAR AGORA
-              </Button>
-            </div>
-          )}
-
           {permissionStatus === "denied" && (
             <div className="mb-6 p-4 bg-amber-50 border-2 border-amber-200 rounded-2xl flex items-center gap-3 text-amber-800 shadow-sm">
               <BellRing className="h-6 w-6 shrink-0 text-amber-600" />
@@ -442,19 +356,6 @@ export default function AdminPedidosPage() {
               </div>
 
               <div className="flex items-center gap-3">
-                <Button
-                  onClick={toggleAudio}
-                  variant={audioEnabled ? "default" : "outline"}
-                  className={`font-black rounded-2xl gap-2 shadow-sm transition-all h-11 px-5 ${
-                    audioEnabled
-                      ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                      : "border-gray-200 text-gray-600 hover:bg-gray-100"
-                  }`}
-                >
-                  {audioEnabled ? <Volume2 className="h-5 w-5 animate-pulse" /> : <VolumeX className="h-5 w-5" />}
-                  {audioEnabled ? "SOM ATIVO" : "SOM MUDO"}
-                </Button>
-
                 <Button
                   onClick={handleRefresh}
                   disabled={isRefreshing}
