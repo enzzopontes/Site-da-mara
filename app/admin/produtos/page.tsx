@@ -45,47 +45,14 @@ const CATEGORIES = [
   { key: "adicionais", label: "Adicionais", icon: Layers, color: "text-purple-500 bg-purple-50" },
 ] as const
 
-export const ADICIONAL_CATEGORIAS = [
+const ADICIONAL_CATEGORIAS = [
   { key: "proteinas", label: "Proteínas Extra", icon: Flame, color: "bg-red-50 text-red-700 border-red-200" },
   { key: "queijos", label: "Queijos e Recheios", icon: Sparkles, color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   { key: "molhos", label: "Molhos e Cremes", icon: Droplets, color: "bg-amber-50 text-amber-700 border-amber-200" },
   { key: "complementos", label: "Complementos", icon: Layers, color: "bg-purple-50 text-purple-700 border-purple-200" },
 ]
 
-export function getAdicionalCategory(a: { name: string; adicional_categoria?: string | null }) {
-  if (a.adicional_categoria) return a.adicional_categoria
-  const lower = (a.name || "").toLowerCase()
-  if (
-    lower.includes("bacon") ||
-    lower.includes("frango") ||
-    lower.includes("carne") ||
-    lower.includes("alcatra") ||
-    lower.includes("calabresa") ||
-    lower.includes("costela") ||
-    lower.includes("camarão")
-  )
-    return "proteinas"
-  if (
-    lower.includes("catupiry") ||
-    lower.includes("cheddar") ||
-    lower.includes("mussarela") ||
-    lower.includes("queijo") ||
-    lower.includes("parmesão") ||
-    lower.includes("provolone") ||
-    lower.includes("gorgonzola")
-  )
-    return "queijos"
-  if (
-    lower.includes("molho") ||
-    lower.includes("maionese") ||
-    lower.includes("barbecue") ||
-    lower.includes("creme") ||
-    lower.includes("alho") ||
-    lower.includes("rosé")
-  )
-    return "molhos"
-  return "complementos"
-}
+import { getAdicionalCategory } from "./adicionalUtils"
 
 export default function AdminProdutosPage() {
   const { user, loading } = useAuth()
