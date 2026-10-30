@@ -33,30 +33,11 @@ export async function POST(req: NextRequest) {
   try {
     const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
     if (!secret) {
-      console.error('[webhook] MERCADO_PAGO_WEBHOOK_SECRET ausente');
+      console.error('[webhook] MERCADO_PAGO_WEBHOOK_SECRET não configurado');
       return NextResponse.json({ error: 'MERCADO_PAGO_WEBHOOK_SECRET não configurado' }, { status: 500 });
     }
 
-    const url = req.nextUrl;
-    let dataId = url.searchParams.get('data.id') || url.searchParams.get('id') || '';
-    let type = url.searchParams.get('type') || url.searchParams.get('topic') || '';
-
-    let body: any = null;
-    if (!dataId || !type) {
-      try {
-        body = await req.json();
-        dataId = dataId || body?.data?.id || body?.id || '';
-        type = type || body?.type || (body?.action?.startsWith('payment') ? 'payment' : '');
-      } catch {
-        // Body não é JSON ou está vazio
-      }
-    }
-
-    if (!dataId) {
-      return NextResponse.json({ received: true, ignored: 'missing_data_id' }, { status: 200 });
-    }
-
-    // Assinatura x-signature OBRIGATÓRIA
+    // 1. Assinatura x-signature OBRIGATÓRIA antes de qualquer checagem de dados
     const signatureHeader = req.headers.get('x-signature');
     const requestId = req.headers.get('x-request-id') || '';
     const { ts, v1 } = parseXSignature(signatureHeader);
@@ -73,6 +54,26 @@ export async function POST(req: NextRequest) {
     if (!Number.isFinite(tsSeconds) || Math.abs(nowSeconds - tsSeconds) > 600) {
       console.error('[webhook] Timestamp expirado ou fora da janela de tolerância');
       return NextResponse.json({ error: 'Assinatura expirada' }, { status: 401 });
+    }
+
+    // 2. Extração de dataId e type
+    const url = req.nextUrl;
+    let dataId = url.searchParams.get('data.id') || url.searchParams.get('id') || '';
+    let type = url.searchParams.get('type') || url.searchParams.get('topic') || '';
+
+    let body: any = null;
+    if (!dataId || !type) {
+      try {
+        body = await req.json();
+        dataId = dataId || body?.data?.id || body?.id || '';
+        type = type || body?.type || (body?.action?.startsWith('payment') ? 'payment' : '');
+      } catch {
+        // Body não é JSON ou está vazio
+      }
+    }
+
+    if (!dataId) {
+      return NextResponse.json({ error: 'Identificador do evento ausente' }, { status: 401 });
     }
 
     const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
