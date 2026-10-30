@@ -87,6 +87,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Assinatura inválida' }, { status: 401 });
     }
 
+    // Simulação ou teste disparado pelo painel do Mercado Pago (id 123456)
+    if (dataId === '123456') {
+      return NextResponse.json({ received: true, ignored: 'test_simulation_event' }, { status: 200 });
+    }
+
     // Processar apenas type === 'payment'
     if (type !== 'payment') {
       return NextResponse.json({ received: true, ignored: 'not_payment_event' }, { status: 200 });
