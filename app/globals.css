@@ -135,3 +135,13 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Ocultar barra de rolagem mantendo o scroll funcional */
+.no-scrollbar {
+  -ms-overflow-style: none; /* IE e Edge */
+  scrollbar-width: none; /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari e Opera */
+}
+
