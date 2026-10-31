@@ -57,7 +57,7 @@ export function FeaturedProducts({
         </div>
 
         {/* Grid de Pratos no Padrão iFood (1 col no mobile estilo lista, 2 ou 3 cols em desktop) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-4 mb-8">
           {sortedProducts.map((product) => {
             const rankIndex = topBatatasNames.findIndex(
               (name) => name.toLowerCase() === product.name.toLowerCase()

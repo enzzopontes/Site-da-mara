@@ -130,9 +130,9 @@ export function Header({ variant = "default" }: HeaderProps) {
 
   if (!user) {
     return (
-      <header className={`sticky top-0 z-40 w-full transition-all duration-200 bg-white ${
-        isScrolled ? "py-2" : "py-4 sm:py-6"
-      }`}>
+      <header className="sticky top-0 z-40 w-full bg-white border-b border-[#ECE7E0] h-16 flex items-center">
+
+
         <div className="container mx-auto px-4 sm:px-8">
           <div className="flex items-center justify-between relative">
             <div className="flex items-center lg:hidden gap-1">
@@ -297,8 +297,8 @@ export function Header({ variant = "default" }: HeaderProps) {
 
   return (
     <>
-      <header className="sticky top-0 z-40 w-full bg-white border-b lg:hidden">
-        <div className="px-4 py-4 sm:py-6 max-w-4xl mx-auto">
+      <header className="sticky top-0 z-40 w-full bg-white border-b border-[#ECE7E0] h-16 flex items-center lg:hidden">
+        <div className="px-4 w-full max-w-4xl mx-auto">
           <div className="flex items-center justify-between gap-3">
             <Link href="/" className="block flex-shrink-0 relative w-10 h-10 sm:w-12 sm:h-12">
               <Image
@@ -347,9 +347,9 @@ export function Header({ variant = "default" }: HeaderProps) {
         </div>
       </header>
 
-      <header className={`sticky top-0 z-40 w-full transition-all duration-200 bg-white hidden lg:block ${
-        isScrolled ? "py-2" : "border-b py-4"
-      }`}>
+      <header className="sticky top-0 z-40 w-full bg-white border-b border-[#ECE7E0] h-16 hidden lg:flex items-center">
+
+
         <div className="w-full px-4 sm:px-8">
           <div className="flex items-center justify-between w-full gap-4">
             <div className="flex items-center gap-6 flex-shrink-0">
