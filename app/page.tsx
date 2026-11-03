@@ -37,7 +37,7 @@ export default async function Home() {
   const activeCoupons = allCoupons.filter((c: any) => c.isActive)
   const homeCoupon = activeCoupons.find((c: any) => c.showOnHome) || activeCoupons[0]
 
-  // Ordena batatas pelo ranking real (top 3)
+  // Ordena batatas pelo ranking real (exibe até 8 no destaque)
   const topBatatas = [...batatas]
     .sort((a, b) => {
       const indexA = topBatatasNames.indexOf(a.name)
@@ -47,9 +47,9 @@ export default async function Home() {
       if (indexB === -1) return -1
       return indexA - indexB
     })
-    .slice(0, 3)
+    .slice(0, 8)
 
-  // Ordena macarrão pelo ranking real (top 3)
+  // Ordena macarrão pelo ranking real (exibe até 4 no destaque)
   const topMacarrao = [...macarrao]
     .sort((a, b) => {
       const indexA = topMacarraoNames.indexOf(a.name)
@@ -59,10 +59,7 @@ export default async function Home() {
       if (indexB === -1) return -1
       return indexA - indexB
     })
-    .slice(0, 3)
-
-  const allTopNames = [...topBatatasNames, ...topMacarraoNames]
-  const topProducts = [...topBatatas, ...topMacarrao]
+    .slice(0, 4)
 
   return (
     <div className="min-h-screen flex flex-col bg-white">
@@ -91,14 +88,15 @@ export default async function Home() {
           minOrderValue={homeCoupon?.minOrderValue}
         />
 
-        {/* Grid de Produtos em Destaque (2 colunas mobile) e Pilares de Confiança */}
+        {/* Blocos de Produtos em Destaque divididos por categoria */}
         <FeaturedProducts
-          products={topProducts}
+          topBatatas={topBatatas}
+          topMacarrao={topMacarrao}
           mostRequestedProductId={mostRequestedData.product.id}
-          topBatatasNames={allTopNames}
+          topBatatasNames={topBatatasNames}
+          topMacarraoNames={topMacarraoNames}
         />
       </main>
-
 
       <Footer />
       <OrderSummary />

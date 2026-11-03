@@ -4,39 +4,50 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --background: #F7F4EF;
+  --foreground: #1F1B16;
+  --card: #ffffff;
+  --card-foreground: #1F1B16;
+  --popover: #ffffff;
+  --popover-foreground: #1F1B16;
+  --primary: #E3A008;
+  --primary-foreground: #ffffff;
+  --secondary: #C1440E;
+  --secondary-foreground: #ffffff;
+  --muted: #F7F4EF;
+  --muted-foreground: #6B6157;
+  --accent: #B5860A;
+  --accent-foreground: #ffffff;
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
+  --border: #ECE7E0;
+  --input: #ECE7E0;
+  --ring: #E3A008;
+  --chart-1: #E3A008;
+  --chart-2: #C1440E;
+  --chart-3: #B5860A;
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: #ffffff;
+  --sidebar-foreground: #1F1B16;
+  --sidebar-primary: #E3A008;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #FEF8EC;
+  --sidebar-accent-foreground: #A16207;
+  --sidebar-border: #ECE7E0;
+  --sidebar-ring: #E3A008;
+
+  /* ifood-design Batata Top Tokens */
+  --amber-primary: #E3A008;
+  --terracotta: #C1440E;
+  --accent-amber: #B5860A;
+  --warm-bg: #F7F4EF;
+  --dark-text: #1F1B16;
+  --muted-text: #6B6157;
+  --border-warm: #ECE7E0;
+  --soft-amber-bg: #FEF8EC;
+  --soft-amber-text: #A16207;
 }
 
 .dark {
@@ -46,19 +57,19 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.145 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
+  --primary: #E3A008;
+  --primary-foreground: #1F1B16;
+  --secondary: #C1440E;
+  --secondary-foreground: #ffffff;
   --muted: oklch(0.269 0 0);
   --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --accent: #B5860A;
+  --accent-foreground: #ffffff;
   --destructive: oklch(0.396 0.141 25.723);
   --destructive-foreground: oklch(0.637 0.237 25.331);
   --border: oklch(0.269 0 0);
   --input: oklch(0.269 0 0);
-  --ring: oklch(0.439 0 0);
+  --ring: #E3A008;
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -66,12 +77,12 @@
   --chart-5: oklch(0.645 0.246 16.439);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-primary: #E3A008;
+  --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.439 0 0);
+  --sidebar-ring: #E3A008;
 }
 
 @theme inline {
@@ -113,6 +124,17 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Batata Top - iFood Design tokens */
+  --color-amber-primary: var(--amber-primary);
+  --color-terracotta: var(--terracotta);
+  --color-accent-amber: var(--accent-amber);
+  --color-warm-bg: var(--warm-bg);
+  --color-dark-text: var(--dark-text);
+  --color-muted-text: var(--muted-text);
+  --color-border-warm: var(--border-warm);
+  --color-soft-amber-bg: var(--soft-amber-bg);
+  --color-soft-amber-text: var(--soft-amber-text);
 }
 
 @layer base {

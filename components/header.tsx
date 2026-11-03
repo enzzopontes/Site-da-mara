@@ -1,7 +1,22 @@
 "use client"
 
 import Link from "next/link"
-import { ShoppingCart, Menu, X, ShieldAlert, Search, User, ChevronDown, MapPin, LogOut, Clock, UserPlus, LogIn, Utensils, ArrowLeft } from "lucide-react"
+import {
+  ShoppingCart,
+  Menu,
+  X,
+  ShieldAlert,
+  Search,
+  User,
+  ChevronDown,
+  MapPin,
+  LogOut,
+  Clock,
+  UserPlus,
+  LogIn,
+  Utensils,
+  ShoppingBag
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useCart } from "@/lib/cart-context"
 import { useAuth } from "@/lib/auth-context"
@@ -18,6 +33,14 @@ interface HeaderProps {
   variant?: "default" | "simple"
 }
 
+const SEARCH_PLACEHOLDERS = [
+  "Buscar batata recheada...",
+  "Buscar macarrão cremoso...",
+  "Buscar bebidas e refrigerantes...",
+  "Buscar adicionais de bacon...",
+  "Buscar sobremesas doces...",
+]
+
 export function Header({ variant = "default" }: HeaderProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -28,13 +51,28 @@ export function Header({ variant = "default" }: HeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
   const [searchTerm, setSearchTerm] = useState(searchParams.get("q") || "")
-  const [defaultAddress, setDefaultAddress] = useState<string>("Selecione o endereço")
+  const [defaultAddress, setDefaultAddress] = useState<string>("Iacanga - SP")
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false)
   const [waitTime, setWaitTime] = useState({ min: 15, max: 22 })
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  // Animated rotating placeholder state
+  const [placeholderIndex, setPlaceholderIndex] = useState(0)
+  const [placeholderFade, setPlaceholderFade] = useState<"visible" | "fading">("visible")
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0)
   const totalPrice = getTotalPrice()
-  const [isAdmin, setIsAdmin] = useState(false)
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setPlaceholderFade("fading")
+      setTimeout(() => {
+        setPlaceholderIndex((prev) => (prev + 1) % SEARCH_PLACEHOLDERS.length)
+        setPlaceholderFade("visible")
+      }, 200)
+    }, 2500)
+    return () => clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     if (!user) {
@@ -57,10 +95,10 @@ export function Header({ variant = "default" }: HeaderProps) {
       if (def) {
         setDefaultAddress(`${def.street}, ${def.number}`)
       } else {
-        setDefaultAddress("Cadastrar endereço")
+        setDefaultAddress("Iacanga - SP")
       }
     } else {
-      setDefaultAddress("Entre para ver endereços")
+      setDefaultAddress("Iacanga - SP")
     }
   }
 
@@ -94,17 +132,9 @@ export function Header({ variant = "default" }: HeaderProps) {
     }
   }
 
-  const handleMobileSearchClick = () => {
-    if (pathname === "/cardapio") {
-      window.dispatchEvent(new CustomEvent("focus-search"))
-      router.replace(`/cardapio?focus=search&t=${Date.now()}`)
-    } else {
-      router.push("/cardapio?focus=search")
-    }
-  }
-
   const handleSignOut = async () => {
     await signOut()
+    setMobileMenuOpen(false)
     router.push("/")
   }
 
@@ -112,7 +142,7 @@ export function Header({ variant = "default" }: HeaderProps) {
 
   if (variant === "simple") {
     return (
-      <header className="w-full bg-white border-b py-6 sticky top-0 z-40">
+      <header className="w-full bg-white border-b border-[#ECE7E0] py-4 sticky top-0 z-40">
         <div className="container mx-auto px-4 flex justify-center">
           <Link href="/" className="relative w-12 h-12 sm:w-14 sm:h-14 transition-transform hover:scale-105">
             <Image
@@ -128,21 +158,23 @@ export function Header({ variant = "default" }: HeaderProps) {
     )
   }
 
-  if (!user) {
-    return (
-      <header className="sticky top-0 z-40 w-full bg-white border-b border-[#ECE7E0] h-16 flex items-center">
-
-
-        <div className="container mx-auto px-4 sm:px-8">
-          <div className="flex items-center justify-between relative">
-            <div className="flex items-center lg:hidden gap-1">
+  return (
+    <>
+      <header className="sticky top-0 z-40 w-full bg-white border-b border-[#ECE7E0] transition-shadow">
+        {/* Mobile View */}
+        <div className="lg:hidden px-3 sm:px-4 pt-2 pb-2.5 space-y-2">
+          {/* Top Bar: Menu + Logo + Location Pill + Cart + Auth */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 flex-shrink-0">
               <button
+                type="button"
                 onClick={() => setMobileMenuOpen(true)}
-                className="p-2 -ml-2 hover:bg-gray-50 rounded-full transition-colors"
+                className="p-1.5 -ml-1 hover:bg-[#FEF8EC] rounded-lg transition-colors text-[#1F1B16]"
+                aria-label="Abrir menu"
               >
-                <Menu className="h-7 w-7 text-gray-900" />
+                <Menu className="h-6 w-6" />
               </button>
-              <Link href="/" className="relative w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0">
+              <Link href="/" className="relative w-9 h-9 sm:w-10 sm:h-10 flex-shrink-0">
                 <Image
                   src="/logo.png"
                   alt="batata top Delivery"
@@ -153,71 +185,273 @@ export function Header({ variant = "default" }: HeaderProps) {
               </Link>
             </div>
 
-            <div className="hidden lg:flex items-center lg:mr-4">
-              <Link href="/" className="relative w-12 h-12 sm:w-14 sm:h-14 flex-shrink-0">
-                <Image
-                  src="/logo.png"
-                  alt="batata top Delivery"
-                  fill
-                  className="rounded-full object-contain pointer-events-none"
-                  priority
-                />
-              </Link>
-            </div>
-
-            <nav className="hidden lg:flex items-center gap-8 text-[15px] font-bold text-gray-600 lg:ml-4">
-              <Link href="/" className="hover:text-yellow-500 transition-colors">Início</Link>
-              <Link href="/cardapio" className="hover:text-yellow-500 transition-colors">Cardápio</Link>
-              <Link href="/sobre" className="hover:text-yellow-500 transition-colors">Nossa História</Link>
-              <Link href="/contato" className="hover:text-yellow-500 transition-colors">Fale Conosco</Link>
-            </nav>
-
-            <div className="flex items-center gap-2 sm:gap-3 lg:gap-6">
-              {/* Ícone de pesquisa removido do mobile conforme solicitado */}
-              <div className="hidden lg:block">
-                <button onClick={handleMobileSearchClick} className="p-2 hover:bg-gray-50 rounded-full transition-colors">
-                  <Search className="h-6 w-6 text-gray-900" />
-                </button>
+            {/* Location Pill */}
+            <button
+              type="button"
+              onClick={() => setIsAddressModalOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#FEF8EC] border border-[#ECE7E0] hover:bg-amber-100/40 transition-colors min-w-0 max-w-[190px] xs:max-w-[230px] text-left"
+              title="Alterar endereço de entrega"
+            >
+              <MapPin className="h-3.5 w-3.5 text-[#E3A008] flex-shrink-0" />
+              <div className="flex flex-col min-w-0 leading-none">
+                <span className="text-[9px] uppercase font-bold text-[#6B6157] tracking-tight truncate">
+                  Entregar em
+                </span>
+                <span className="text-xs font-black text-[#1F1B16] truncate flex items-center gap-0.5">
+                  {defaultAddress}
+                  <ChevronDown className="h-3 w-3 text-[#E3A008] flex-shrink-0" />
+                </span>
               </div>
+            </button>
 
-              <Link href="/carrinho" className="flex items-center gap-2 bg-yellow-50 hover:bg-yellow-100 px-2 py-1.5 sm:px-3 sm:py-2 rounded-xl border border-yellow-200 transition-all active:scale-95">
+            {/* Right: Cart + Auth Avatar / Login */}
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+              <Link
+                href="/carrinho"
+                className="flex items-center gap-1.5 bg-[#FEF8EC] hover:bg-amber-100/60 px-2 py-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border border-[#ECE7E0] transition-all active:scale-95"
+                aria-label="Ver carrinho"
+              >
                 <div className="relative">
-                  <ShoppingCart className="h-5 w-5 sm:h-6 sm:w-6 text-yellow-600" />
+                  <ShoppingCart className="h-5 w-5 text-[#E3A008]" />
                   {totalItems > 0 && (
-                    <span className="absolute -top-2.5 -right-2.5 bg-red-500 text-white text-[10px] font-black h-4.5 w-4.5 flex items-center justify-center rounded-full border-2 border-white shadow-sm">
+                    <span className="absolute -top-2 -right-2 bg-[#C1440E] text-white text-[10px] font-black h-4 w-4 flex items-center justify-center rounded-full border border-white shadow-sm">
                       {totalItems}
                     </span>
                   )}
                 </div>
-                <div className="flex flex-col leading-none">
-                  <span className="text-[11px] sm:text-[14px] font-black text-gray-900">
-                    R$ {totalPrice.toFixed(2).replace('.', ',')}
-                  </span>
-                </div>
+                <span className="text-xs font-black text-[#1F1B16] hidden xs:inline">
+                  R$ {totalPrice.toFixed(2).replace('.', ',')}
+                </span>
               </Link>
 
-              <Link href="/cadastro" className="hidden sm:block text-[15px] font-bold text-yellow-600 hover:text-yellow-700 transition-colors">
-                criar conta
-              </Link>
-              <Link href="/login">
-                <Button className="bg-yellow-500 hover:bg-yellow-600 text-white font-black text-xs sm:text-sm px-3 sm:px-6 h-9 sm:h-11 rounded-xl shadow-lg shadow-yellow-100 transition-all active:scale-95">
-                  Entrar
-                </Button>
-              </Link>
+              {user ? (
+                <Link
+                  href="/perfil"
+                  className="p-1 hover:bg-[#FEF8EC] rounded-full transition-colors"
+                  aria-label="Perfil do usuário"
+                >
+                  {user?.user_metadata?.avatar_url ? (
+                    <img
+                      src={user.user_metadata.avatar_url}
+                      alt="Perfil"
+                      className="h-7 w-7 rounded-full object-cover border border-[#ECE7E0]"
+                    />
+                  ) : (
+                    <div className="h-7 w-7 rounded-full bg-[#FEF8EC] border border-[#ECE7E0] flex items-center justify-center">
+                      <User className="h-3.5 w-3.5 text-[#E3A008]" />
+                    </div>
+                  )}
+                </Link>
+              ) : (
+                <Link href="/login" aria-label="Entrar na conta">
+                  <Button className="bg-[#E3A008] hover:bg-[#B5860A] text-white font-black text-xs px-2.5 h-8 rounded-xl shadow-sm transition-all active:scale-95">
+                    Entrar
+                  </Button>
+                </Link>
+              )}
             </div>
+          </div>
+
+          {/* Row 2: Mobile Search Bar with Animated Placeholder */}
+          <form onSubmit={handleSearch} className="w-full">
+            <div className="relative flex items-center w-full">
+              <Search className="absolute left-3.5 h-4 w-4 text-[#E3A008] pointer-events-none z-10" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                aria-label="Buscar produtos no cardápio"
+                className="w-full h-10 pl-10 pr-4 bg-[#F7F4EF] hover:bg-[#F7F4EF]/80 focus:bg-white border border-[#ECE7E0] focus:border-[#E3A008] focus:ring-1 focus:ring-[#E3A008] rounded-xl text-xs text-[#1F1B16] outline-none transition-all placeholder-transparent"
+              />
+              {!searchTerm && (
+                <span
+                  className={`pointer-events-none absolute left-10 text-xs text-[#6B6157] select-none truncate transition-all duration-300 ease-out ${
+                    placeholderFade === "visible"
+                      ? "opacity-100 translate-y-0"
+                      : "opacity-0 -translate-y-1.5"
+                  }`}
+                >
+                  {SEARCH_PLACEHOLDERS[placeholderIndex]}
+                </span>
+              )}
+            </div>
+          </form>
+        </div>
+
+        {/* Desktop View */}
+        <div className="hidden lg:flex items-center justify-between w-full h-16 px-4 sm:px-8 max-w-7xl mx-auto gap-4">
+          <div className="flex items-center gap-6 flex-shrink-0">
+            <Link href="/" className="block relative w-12 h-12 flex-shrink-0 transition-transform hover:scale-105">
+              <Image
+                src="/logo.png"
+                alt="batata top Delivery"
+                fill
+                className="rounded-full object-contain pointer-events-none"
+                priority
+              />
+            </Link>
+
+            <nav className="flex items-center gap-5 text-sm font-bold">
+              <Link
+                href="/"
+                className={`transition-colors hover:text-[#E3A008] ${isActive("/") ? "text-[#E3A008]" : "text-[#6B6157]"}`}
+              >
+                Início
+              </Link>
+              <Link
+                href="/cardapio"
+                className={`transition-colors hover:text-[#E3A008] ${isActive("/cardapio") ? "text-[#E3A008]" : "text-[#6B6157]"}`}
+              >
+                Cardápio
+              </Link>
+              <Link
+                href="/sobre"
+                className={`transition-colors hover:text-[#E3A008] ${isActive("/sobre") ? "text-[#E3A008]" : "text-[#6B6157]"}`}
+              >
+                Sobre
+              </Link>
+              <Link
+                href="/contato"
+                className={`transition-colors hover:text-[#E3A008] ${isActive("/contato") ? "text-[#E3A008]" : "text-[#6B6157]"}`}
+              >
+                Contato
+              </Link>
+
+              <div className="h-4 w-[1px] bg-[#ECE7E0] mx-1" />
+              <StoreStatusBadge />
+              <div className="h-4 w-[1px] bg-[#ECE7E0] mx-1" />
+              <div className="flex items-center gap-1.5 text-[#6B6157] bg-[#F7F4EF] px-2.5 py-1 rounded-md border border-[#ECE7E0]">
+                <Clock className="h-3.5 w-3.5 text-[#E3A008]" />
+                <span className="text-xs font-bold">{waitTime.min}-{waitTime.max} min</span>
+              </div>
+            </nav>
+          </div>
+
+          {/* Desktop Search Bar with Animated Placeholder */}
+          <form onSubmit={handleSearch} className="flex-1 max-w-md mx-2">
+            <div className="relative flex items-center w-full">
+              <Search className="absolute left-3.5 h-4 w-4 text-[#E3A008] pointer-events-none z-10" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                aria-label="Buscar produtos"
+                className="w-full h-11 pl-10 pr-4 bg-[#F7F4EF] hover:bg-[#F7F4EF]/80 focus:bg-white border border-[#ECE7E0] focus:border-[#E3A008] focus:ring-1 focus:ring-[#E3A008] rounded-xl text-sm text-[#1F1B16] outline-none transition-all placeholder-transparent"
+              />
+              {!searchTerm && (
+                <span
+                  className={`pointer-events-none absolute left-10 text-sm text-[#6B6157] select-none truncate transition-all duration-300 ease-out ${
+                    placeholderFade === "visible"
+                      ? "opacity-100 translate-y-0"
+                      : "opacity-0 -translate-y-1.5"
+                  }`}
+                >
+                  {SEARCH_PLACEHOLDERS[placeholderIndex]}
+                </span>
+              )}
+            </div>
+          </form>
+
+          {/* Desktop Right Controls: Location + Auth/Profile + Cart */}
+          <div className="flex items-center gap-3 xl:gap-4 flex-shrink-0">
+            {/* Location Pill */}
+            <div
+              onClick={() => setIsAddressModalOpen(true)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-[#FEF8EC] hover:bg-amber-100/50 border border-[#ECE7E0] rounded-full cursor-pointer transition-colors max-w-[210px]"
+              title="Alterar endereço de entrega"
+            >
+              <MapPin className="h-4 w-4 text-[#E3A008] flex-shrink-0" />
+              <div className="flex flex-col min-w-0 leading-none">
+                <span className="text-[9px] uppercase font-bold text-[#6B6157] tracking-tight">
+                  Entregar em
+                </span>
+                <div className="flex items-center gap-1 text-xs font-black text-[#1F1B16]">
+                  <span className="truncate">{defaultAddress}</span>
+                  <ChevronDown className="h-3 w-3 text-[#E3A008] flex-shrink-0" />
+                </div>
+              </div>
+            </div>
+
+            {isAdmin && (
+              <Link
+                href="/admin"
+                className="p-2 hover:bg-amber-50 rounded-full text-[#C1440E] transition-colors"
+                title="Painel Administrativo"
+              >
+                <ShieldAlert className="h-5 w-5" />
+              </Link>
+            )}
+
+            {/* Cart Link */}
+            <Link href="/carrinho">
+              <div className="flex items-center gap-2 px-3 py-2 bg-[#FEF8EC] hover:bg-amber-100/60 rounded-xl border border-[#ECE7E0] transition-all cursor-pointer group active:scale-95">
+                <div className="relative">
+                  <ShoppingCart className="h-5.5 w-5.5 text-[#E3A008]" />
+                  {totalItems > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-[#C1440E] text-white text-[10px] font-black rounded-full h-4 w-4 flex items-center justify-center border border-white shadow-sm">
+                      {totalItems}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-col leading-tight">
+                  <span className="text-sm font-black text-[#1F1B16]">R$ {totalPrice.toFixed(2).replace('.', ',')}</span>
+                  <span className="text-[10px] text-[#6B6157] font-bold">{totalItems} {totalItems === 1 ? 'item' : 'itens'}</span>
+                </div>
+              </div>
+            </Link>
+
+            {user ? (
+              <Link
+                href="/perfil"
+                className="flex items-center gap-2 p-1.5 hover:bg-[#FEF8EC] rounded-full transition-all"
+                title="Meu Perfil"
+              >
+                {user?.user_metadata?.avatar_url ? (
+                  <img
+                    src={user.user_metadata.avatar_url}
+                    alt={user.user_metadata?.full_name || "Perfil"}
+                    className="h-8 w-8 rounded-full object-cover border border-[#ECE7E0]"
+                  />
+                ) : (
+                  <div className="h-8 w-8 rounded-full bg-[#FEF8EC] flex items-center justify-center border border-[#ECE7E0]">
+                    <User className="h-4 w-4 text-[#E3A008]" />
+                  </div>
+                )}
+              </Link>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/cadastro"
+                  className="text-sm font-bold text-[#E3A008] hover:text-[#B5860A] transition-colors"
+                >
+                  Criar conta
+                </Link>
+                <Link href="/login">
+                  <Button className="bg-[#E3A008] hover:bg-[#B5860A] text-white font-black text-sm px-4 h-9 rounded-xl shadow-md transition-all active:scale-95">
+                    Entrar
+                  </Button>
+                </Link>
+              </div>
+            )}
           </div>
         </div>
 
+        {/* Mobile Menu Drawer */}
         {mobileMenuOpen && (
           <div className="fixed inset-0 z-[100] lg:hidden">
-            <div className="absolute inset-0 bg-black/40 animate-in fade-in duration-300" onClick={() => setMobileMenuOpen(false)} />
-            <div className="absolute inset-y-0 left-0 w-[85%] bg-white shadow-2xl animate-in slide-in-from-left duration-500 flex flex-col overflow-hidden rounded-r-[40px]">
-              <div className="bg-gradient-to-b from-yellow-50 to-white p-8 pt-12 flex flex-col items-center relative">
+            <div
+              className="absolute inset-0 bg-black/40 animate-in fade-in duration-300"
+              onClick={() => setMobileMenuOpen(false)}
+            />
+            <div className="absolute inset-y-0 left-0 w-[85%] max-w-sm bg-white shadow-2xl animate-in slide-in-from-left duration-300 flex flex-col overflow-hidden rounded-r-[32px]">
+              <div className="bg-gradient-to-b from-[#FEF8EC] to-white p-6 pt-10 flex flex-col items-center relative">
                 <button
+                  type="button"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="absolute top-6 right-6 p-2.5 bg-white/80 backdrop-blur-sm hover:bg-white rounded-full shadow-sm transition-all active:scale-90"
+                  className="absolute top-5 right-5 p-2 bg-white/80 backdrop-blur-sm hover:bg-white rounded-full shadow-sm transition-all active:scale-90"
+                  aria-label="Fechar menu"
                 >
-                  <X className="h-6 w-6 text-gray-400" />
+                  <X className="h-5 w-5 text-[#6B6157]" />
                 </button>
 
                 <div className="w-14 h-14 relative">
@@ -229,216 +463,130 @@ export function Header({ variant = "default" }: HeaderProps) {
                     priority
                   />
                 </div>
-                <h2 className="text-2xl font-black text-gray-800 mt-4">Bem-vindo!</h2>
+                <h2 className="text-xl font-black text-[#1F1B16] mt-3">
+                  {user ? (user.user_metadata?.full_name || "Olá, Cliente!") : "Bem-vindo!"}
+                </h2>
 
-                <div className="flex items-center gap-3 mt-4">
+                <div className="flex items-center gap-2.5 mt-3">
                   <StoreStatusBadge />
-                  <div className="flex items-center gap-1.5 text-gray-500 bg-white px-3 py-1.5 rounded-xl border border-gray-100 shadow-sm">
-                    <Clock className="h-4 w-4 text-yellow-500" />
+                  <div className="flex items-center gap-1.5 text-[#6B6157] bg-white px-2.5 py-1 rounded-xl border border-[#ECE7E0] shadow-sm">
+                    <Clock className="h-3.5 w-3.5 text-[#E3A008]" />
                     <span className="text-xs font-black">{waitTime.min}-{waitTime.max} min</span>
                   </div>
                 </div>
 
-                <p className="text-sm text-gray-500 mt-4">Faça login para continuar</p>
+                {!user && (
+                  <p className="text-xs text-[#6B6157] mt-3">Faça login para continuar</p>
+                )}
               </div>
 
-              <div className="p-6 space-y-3 border-b border-gray-100">
-                <Link href="/login" onClick={() => setMobileMenuOpen(false)}>
-                  <Button className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-black h-12 rounded-xl shadow-lg shadow-yellow-100 transition-all active:scale-95">
-                    <LogIn className="h-5 w-5 mr-2" /> Entrar
-                  </Button>
-                </Link>
-                <Link href="/cadastro" onClick={() => setMobileMenuOpen(false)}>
-                  <Button variant="outline" className="w-full border-2 border-yellow-500 text-yellow-600 font-black h-12 rounded-xl hover:bg-yellow-50 transition-all active:scale-95">
-                    <UserPlus className="h-5 w-5 mr-2" /> Criar Conta
-                  </Button>
-                </Link>
-              </div>
+              {!user ? (
+                <div className="p-5 space-y-2.5 border-b border-[#ECE7E0]">
+                  <Link href="/login" onClick={() => setMobileMenuOpen(false)}>
+                    <Button className="w-full bg-[#E3A008] hover:bg-[#B5860A] text-white font-black h-11 rounded-xl shadow-md transition-all active:scale-95">
+                      <LogIn className="h-4 w-4 mr-2" /> Entrar
+                    </Button>
+                  </Link>
+                  <Link href="/cadastro" onClick={() => setMobileMenuOpen(false)}>
+                    <Button variant="outline" className="w-full border-2 border-[#E3A008] text-[#A16207] font-black h-11 rounded-xl hover:bg-[#FEF8EC] transition-all active:scale-95">
+                      <UserPlus className="h-4 w-4 mr-2" /> Criar Conta
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                <div className="p-4 border-b border-[#ECE7E0] space-y-1">
+                  <Link
+                    href="/perfil"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 p-3 rounded-xl hover:bg-[#FEF8EC] transition-colors"
+                  >
+                    <User className="h-5 w-5 text-[#E3A008]" />
+                    <span className="font-bold text-sm text-[#1F1B16]">Meu Perfil</span>
+                  </Link>
+                  <Link
+                    href="/pedidos"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 p-3 rounded-xl hover:bg-[#FEF8EC] transition-colors"
+                  >
+                    <ShoppingBag className="h-5 w-5 text-[#E3A008]" />
+                    <span className="font-bold text-sm text-[#1F1B16]">Meus Pedidos</span>
+                  </Link>
+                  {isAdmin && (
+                    <Link
+                      href="/admin"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-red-50 text-[#C1440E] transition-colors"
+                    >
+                      <ShieldAlert className="h-5 w-5" />
+                      <span className="font-bold text-sm">Painel Administrativo</span>
+                    </Link>
+                  )}
+                </div>
+              )}
 
-              <nav className="flex-1 p-6 space-y-2 overflow-y-auto">
-                <Link href="/" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-4 p-4 hover:bg-yellow-50 rounded-2xl transition-all group">
-                  <div className="h-12 w-12 rounded-xl bg-yellow-100 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <Utensils className="h-6 w-6 text-yellow-600" />
+              <nav className="flex-1 p-5 space-y-2 overflow-y-auto">
+                <Link
+                  href="/"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3.5 p-3 hover:bg-[#FEF8EC] rounded-2xl transition-all group"
+                >
+                  <div className="h-10 w-10 rounded-xl bg-amber-100 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <Utensils className="h-5 w-5 text-[#E3A008]" />
                   </div>
                   <div>
-                    <p className="font-black text-gray-800">Início</p>
-                    <p className="text-xs text-gray-400">Página principal</p>
+                    <p className="font-black text-sm text-[#1F1B16]">Início</p>
+                    <p className="text-xs text-[#6B6157]">Página principal</p>
                   </div>
                 </Link>
-                <Link href="/cardapio" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-4 p-4 hover:bg-yellow-50 rounded-2xl transition-all group">
-                  <div className="h-12 w-12 rounded-xl bg-red-100 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <Search className="h-6 w-6 text-red-600" />
+                <Link
+                  href="/cardapio"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3.5 p-3 hover:bg-[#FEF8EC] rounded-2xl transition-all group"
+                >
+                  <div className="h-10 w-10 rounded-xl bg-orange-100 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <Search className="h-5 w-5 text-[#C1440E]" />
                   </div>
                   <div>
-                    <p className="font-black text-gray-800">Cardápio</p>
-                    <p className="text-xs text-gray-400">Veja nossas batatas</p>
+                    <p className="font-black text-sm text-[#1F1B16]">Cardápio</p>
+                    <p className="text-xs text-[#6B6157]">Veja nossas opções</p>
                   </div>
                 </Link>
-                <Link href="/sobre" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-4 p-4 hover:bg-yellow-50 rounded-2xl transition-all group">
-                  <div className="h-12 w-12 rounded-xl bg-blue-100 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <User className="h-6 w-6 text-blue-600" />
+                <Link
+                  href="/sobre"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3.5 p-3 hover:bg-[#FEF8EC] rounded-2xl transition-all group"
+                >
+                  <div className="h-10 w-10 rounded-xl bg-yellow-100 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <User className="h-5 w-5 text-[#A16207]" />
                   </div>
                   <div>
-                    <p className="font-black text-gray-800">Nossa História</p>
-                    <p className="text-xs text-gray-400">Conheça o batata top</p>
+                    <p className="font-black text-sm text-[#1F1B16]">Nossa História</p>
+                    <p className="text-xs text-[#6B6157]">Conheça o batata top</p>
                   </div>
                 </Link>
               </nav>
 
-              <div className="p-8 bg-gray-50 text-center">
-                <p className="text-[10px] font-bold text-gray-300 uppercase tracking-[0.3em]">batata top © 2026</p>
+              {user && (
+                <div className="p-4 border-t border-[#ECE7E0]">
+                  <button
+                    type="button"
+                    onClick={handleSignOut}
+                    className="flex items-center gap-2 w-full p-2.5 rounded-xl hover:bg-red-50 text-red-600 font-bold text-sm transition-colors"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>Sair da conta</span>
+                  </button>
+                </div>
+              )}
+
+              <div className="p-4 bg-[#F7F4EF] text-center border-t border-[#ECE7E0]">
+                <p className="text-[10px] font-bold text-[#6B6157] uppercase tracking-[0.2em]">
+                  batata top © 2026
+                </p>
               </div>
             </div>
           </div>
         )}
-      </header>
-    )
-  }
-
-  return (
-    <>
-      <header className="sticky top-0 z-40 w-full bg-white border-b border-[#ECE7E0] h-16 flex items-center lg:hidden">
-        <div className="px-4 w-full max-w-4xl mx-auto">
-          <div className="flex items-center justify-between gap-3">
-            <Link href="/" className="block flex-shrink-0 relative w-10 h-10 sm:w-12 sm:h-12">
-              <Image
-                src="/logo.png"
-                alt="batata top Delivery"
-                fill
-                className="rounded-full object-contain pointer-events-none"
-                priority
-              />
-            </Link>
-
-            <div
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsAddressModalOpen(true);
-              }}
-              className="flex-1 min-w-0 cursor-pointer group px-1"
-            >
-              <p className="text-[10px] sm:text-[12px] font-bold text-gray-400 uppercase tracking-tighter truncate">Entrega em</p>
-              <div className="flex items-center text-[13px] sm:text-[16px] font-black text-yellow-500 group-active:text-yellow-600 transition-colors">
-                <span className="truncate max-w-[250px] xs:max-w-fit">{defaultAddress}</span>
-                <ChevronDown className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-500 flex-shrink-0 ml-0.5" />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 flex-shrink-0">
-              {/* Ícone de pesquisa removido do mobile conforme solicitado */}
-
-              <Link href="/carrinho" className="flex items-center gap-2 sm:gap-3 bg-yellow-50 hover:bg-yellow-100 px-3 py-2 sm:px-4 sm:py-3 rounded-xl border border-yellow-200 transition-all active:scale-95 flex-shrink-0">
-                <div className="relative">
-                  <ShoppingCart className="h-5.5 w-5.5 sm:h-7 sm:w-7 text-yellow-500" />
-                  {totalItems > 0 && (
-                    <span className="absolute -top-2.5 -right-2.5 bg-red-500 text-white text-[10px] sm:text-[12px] font-black h-4.5 w-4.5 sm:h-5.5 sm:w-5.5 flex items-center justify-center rounded-full border-2 border-white shadow-sm">
-                      {totalItems}
-                    </span>
-                  )}
-                </div>
-                <div className="flex flex-col leading-none">
-                  <span className="text-[12px] sm:text-[15px] font-black text-gray-900">
-                    R$ {totalPrice.toFixed(2).replace('.', ',')}
-                  </span>
-                </div>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <header className="sticky top-0 z-40 w-full bg-white border-b border-[#ECE7E0] h-16 hidden lg:flex items-center">
-
-
-        <div className="w-full px-4 sm:px-8">
-          <div className="flex items-center justify-between w-full gap-4">
-            <div className="flex items-center gap-6 flex-shrink-0">
-              <Link href="/" className="block flex-shrink-0 relative w-12 h-12 sm:w-14 sm:h-14">
-                <Image
-                  src="/logo.png"
-                  alt="batata top Delivery"
-                  fill
-                  className="rounded-full object-contain pointer-events-none"
-                  priority
-                />
-              </Link>
-
-              <nav className="hidden xl:flex items-center gap-5 text-[14px] font-bold">
-                <Link href="/" className={`transition-colors hover:text-yellow-500 ${isActive("/") ? "text-yellow-500" : "text-gray-500"}`}>Início</Link>
-                <Link href="/cardapio" className={`transition-colors hover:text-yellow-500 ${isActive("/cardapio") ? "text-yellow-500" : "text-gray-500"}`}>Cardápio</Link>
-                <Link href="/sobre" className={`transition-colors hover:text-yellow-500 ${isActive("/sobre") ? "text-yellow-500" : "text-gray-500"}`}>Sobre</Link>
-                <div className="h-4 w-[1px] bg-gray-200 mx-1" />
-                <StoreStatusBadge />
-                <div className="h-4 w-[1px] bg-gray-200 mx-1" />
-                <div className="flex items-center gap-1.5 text-gray-500 bg-gray-50 px-2 py-1 rounded-md border border-gray-100">
-                  <Clock className="h-3.5 w-3.5 text-yellow-500" />
-                  <span className="text-[13px] font-bold">{waitTime.min}-{waitTime.max} min</span>
-                </div>
-              </nav>
-            </div>
-
-            <form onSubmit={handleSearch} className="hidden md:flex flex-1 max-w-xl">
-              <div className="relative w-full group">
-                <div className="absolute inset-y-0 left-4 flex items-center justify-center pointer-events-none">
-                  <Search className="h-5 w-5 text-yellow-500" />
-                </div>
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Busque por batatas ou bebidas"
-                  className="w-full h-11 pl-12 pr-4 bg-gray-100 border-2 border-transparent focus:bg-white focus:border-yellow-200 focus:ring-0 rounded-xl text-sm transition-all outline-none"
-                />
-              </div>
-            </form>
-
-            <div className="flex items-center gap-2 lg:gap-4 flex-shrink-0">
-              <div onClick={() => setIsAddressModalOpen(true)} className="hidden lg:flex flex-col items-end cursor-pointer group px-2 py-1 rounded-lg hover:bg-yellow-50 transition-colors">
-                <span className="text-[9px] uppercase font-black text-black-600 tracking-tighter">Entrega em</span>
-                <div className="flex items-center gap-1 text-sm font-black text-yellow-500 transition-colors">
-                  <span className="max-w-[140px] truncate">{defaultAddress}</span>
-                  <ChevronDown className="h-4 w-4 text-yellow-500" />
-                </div>
-              </div>
-
-              <div className="h-8 w-[1px] bg-gray-200 hidden lg:block mx-1" />
-
-              <Link
-                href="/perfil"
-                className="flex items-center gap-2 p-2 hover:bg-yellow-50 rounded-full transition-all"
-              >
-                {user?.user_metadata?.avatar_url ? (
-                  <img
-                    src={user.user_metadata.avatar_url}
-                    alt={user.user_metadata?.full_name || "Perfil"}
-                    className="h-8 w-8 rounded-full object-cover border-2 border-yellow-200"
-                  />
-                ) : (
-                  <div className="h-8 w-8 rounded-full bg-yellow-100 flex items-center justify-center border-2 border-yellow-200">
-                    <User className="h-4 w-4 text-yellow-600" />
-                  </div>
-                )}
-              </Link>
-
-              <Link href="/carrinho">
-                <div className="flex items-center gap-2 p-2 hover:bg-yellow-50 rounded-xl transition-all cursor-pointer group border border-transparent hover:border-yellow-100">
-                  <div className="relative">
-                    <ShoppingCart className="h-6 w-6 text-yellow-500" />
-                    {totalItems > 0 && (
-                      <span className="absolute -top-2 -right-2 bg-yellow-500 text-white text-[10px] font-black rounded-full h-4 w-4 flex items-center justify-center border-2 border-white shadow-sm">
-                        {totalItems}
-                      </span>
-                    )}
-                  </div>
-                  <div className="hidden lg:flex flex-col leading-tight">
-                    <span className="text-sm font-black text-gray-800">R$ {totalPrice.toFixed(2)}</span>
-                    <span className="text-[10px] text-gray-500 font-bold">{totalItems} itens</span>
-                  </div>
-                </div>
-              </Link>
-            </div>
-          </div>
-        </div>
       </header>
 
       <AddressModal

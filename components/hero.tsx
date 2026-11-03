@@ -83,7 +83,7 @@ export function Hero({
   return (
     <section className="bg-white border-b border-[#ECE7E0]">
       {/* Capa de Restaurante Estilo iFood */}
-      <div className="relative h-36 sm:h-52 md:h-64 w-full bg-[#1F1B16] overflow-hidden">
+      <div className="relative h-24 sm:h-52 md:h-64 w-full bg-[#1F1B16] overflow-hidden">
         <img
           src="/products/costela.jpg"
           alt="Batata Top Capa"
@@ -92,28 +92,47 @@ export function Hero({
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
       </div>
 
-      <div className="container mx-auto px-4 max-w-5xl">
+      <div className="container mx-auto px-3 sm:px-4 max-w-5xl">
         {/* Card de Identidade do Restaurante iFood */}
-        <div className="relative -mt-12 sm:-mt-16 bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm border border-[#ECE7E0] mb-6">
-          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 text-center sm:text-left">
-            {/* Logo Oficial Redonda com Borda de Destaque */}
-            <div className="relative shrink-0">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-white p-1.5 shadow-md border-2 border-[#E3A008] flex items-center justify-center overflow-hidden">
-                <img
-                  src="/logo.png"
-                  alt="Batata Top Logo"
-                  className="w-full h-full object-contain"
-                />
+        <div className="relative -mt-8 sm:-mt-16 bg-white rounded-2xl sm:rounded-3xl p-3 sm:p-6 shadow-sm border border-[#ECE7E0] mb-3 sm:mb-6">
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-3 sm:gap-6 text-center sm:text-left">
+            {/* Top row mobile / logo desktop */}
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              {/* Logo Oficial Redonda com Borda de Destaque */}
+              <div className="relative shrink-0">
+                <div className="w-14 h-14 sm:w-24 sm:h-24 rounded-xl sm:rounded-2xl bg-white p-1 sm:p-1.5 shadow-md border-2 border-[#E3A008] flex items-center justify-center overflow-hidden">
+                  <img
+                    src="/logo.png"
+                    alt="Batata Top Logo"
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <div className="absolute -bottom-1 -right-1 bg-[#27AE60] text-white p-0.5 sm:p-1 rounded-full shadow-xs" title="Restaurante Verificado">
+                  <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                </div>
               </div>
-              <div className="absolute -bottom-1 -right-1 bg-[#27AE60] text-white p-1 rounded-full shadow-xs" title="Restaurante Verificado">
-                <CheckCircle2 className="w-4 h-4" />
+
+              {/* Informações de cabeçalho no mobile */}
+              <div className="flex-1 min-w-0 text-left sm:hidden">
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <h1 className="text-lg font-black text-[#1F1B16] tracking-tight truncate">
+                    Batata Top
+                  </h1>
+                  <span className="inline-flex items-center gap-0.5 bg-[#FEF8EC] text-[#8A6100] text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-[#FCE8C3] shrink-0">
+                    <Sparkles className="w-2.5 h-2.5 text-[#E3A008]" />
+                    Super
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#6B6157] font-medium truncate">
+                  Batatas Recheadas • Macarrão • Bebidas
+                </p>
               </div>
             </div>
 
-            {/* Dados do Restaurante */}
-            <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mb-1">
-                <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-[#1F1B16] tracking-tight">
+            {/* Dados do Restaurante no Desktop */}
+            <div className="flex-1 min-w-0 w-full">
+              <div className="hidden sm:flex flex-wrap items-center justify-start gap-2 mb-1">
+                <h1 className="text-2xl md:text-3xl font-black text-[#1F1B16] tracking-tight">
                   Batata Top
                 </h1>
                 <span className="inline-flex items-center gap-1 bg-[#FEF8EC] text-[#8A6100] text-xs font-bold px-2 py-0.5 rounded-full border border-[#FCE8C3]">
@@ -122,23 +141,37 @@ export function Hero({
                 </span>
               </div>
 
-              <p className="text-xs sm:text-sm text-[#6B6157] font-medium mb-3">
+              <p className="hidden sm:block text-xs sm:text-sm text-[#6B6157] font-medium mb-3">
                 Batatas Recheadas • Macarrão • Bebidas
               </p>
 
-              {/* Linha de Indicadores Operacionais iFood */}
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 sm:gap-4 text-xs">
-                {/* Nota e Avaliação */}
-                <div className="flex items-center gap-1 font-bold text-[#1F1B16]">
-                  <Star className="w-4 h-4 fill-[#FCBB00] text-[#FCBB00]" />
-                  <span>4.9</span>
-                  <span className="text-[#9C9188] font-normal">(500+ avaliações)</span>
+              {/* Linha de Indicadores Operacionais iFood - Faixa de Badges Deslizável no Mobile */}
+              <div className="flex items-center gap-1.5 sm:gap-4 overflow-x-auto no-scrollbar py-1 sm:py-0 sm:flex-wrap text-xs">
+                {/* Status Aberto com Ponto Pulsante */}
+                <div
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-bold border shrink-0 ${
+                    isStoreOpen
+                      ? "bg-[#27AE60]/10 text-[#27AE60] border-[#27AE60]/30"
+                      : "bg-red-50 text-red-700 border-red-200"
+                  }`}
+                >
+                  <span className="relative flex h-2 w-2">
+                    <span
+                      className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                        isStoreOpen ? "bg-[#27AE60]" : "bg-red-500"
+                      }`}
+                    />
+                    <span
+                      className={`relative inline-flex rounded-full h-2 w-2 ${
+                        isStoreOpen ? "bg-[#27AE60]" : "bg-red-500"
+                      }`}
+                    />
+                  </span>
+                  <span>{isStoreOpen ? "Loja aberta" : "Fechada"}</span>
                 </div>
 
-                <span className="text-[#ECE7E0] hidden sm:inline">•</span>
-
                 {/* Tempo de Espera */}
-                <div className="flex items-center gap-1 font-medium text-[#6B6157]">
+                <div className="inline-flex items-center gap-1 bg-[#F5F2ED] sm:bg-transparent px-2.5 sm:px-0 py-1 sm:py-0 rounded-full sm:rounded-none font-medium text-[#6B6157] shrink-0 text-[11px] sm:text-xs">
                   <Clock className="w-3.5 h-3.5 text-[#E3A008]" />
                   <span>{waitTime.min}-{waitTime.max} min</span>
                 </div>
@@ -146,13 +179,13 @@ export function Hero({
                 <span className="text-[#ECE7E0] hidden sm:inline">•</span>
 
                 {/* Taxa de Entrega */}
-                <div className="flex items-center gap-1 font-bold">
+                <div className="inline-flex items-center gap-1 bg-[#F5F2ED] sm:bg-transparent px-2.5 sm:px-0 py-1 sm:py-0 rounded-full sm:rounded-none font-bold shrink-0 text-[11px] sm:text-xs">
                   {isDeliveryFeeEnabled ? (
                     <span className="text-[#1F1B16]">
                       Entrega R$ {deliveryFee.toFixed(2).replace(".", ",")}
                     </span>
                   ) : (
-                    <span className="text-[#27AE60] bg-[#27AE60]/10 px-2 py-0.5 rounded">
+                    <span className="text-[#27AE60] sm:bg-[#27AE60]/10 sm:px-2 sm:py-0.5 sm:rounded">
                       Entrega Grátis
                     </span>
                   )}
@@ -160,41 +193,28 @@ export function Hero({
 
                 <span className="text-[#ECE7E0] hidden sm:inline">•</span>
 
+                {/* Avaliação */}
+                <div className="inline-flex items-center gap-1 bg-[#F5F2ED] sm:bg-transparent px-2.5 sm:px-0 py-1 sm:py-0 rounded-full sm:rounded-none font-bold text-[#1F1B16] shrink-0 text-[11px] sm:text-xs">
+                  <Star className="w-3.5 h-3.5 fill-[#FCBB00] text-[#FCBB00]" />
+                  <span>4.9</span>
+                  <span className="text-[#9C9188] font-normal">(500+)</span>
+                </div>
+
+                <span className="text-[#ECE7E0] hidden sm:inline">•</span>
+
                 {/* Localização */}
-                <div className="flex items-center gap-1 text-[#6B6157]">
+                <div className="inline-flex items-center gap-1 bg-[#F5F2ED] sm:bg-transparent px-2.5 sm:px-0 py-1 sm:py-0 rounded-full sm:rounded-none text-[#6B6157] shrink-0 text-[11px] sm:text-xs">
                   <MapPin className="w-3.5 h-3.5 text-[#C1440E]" />
                   <span>Iacanga - SP</span>
                 </div>
               </div>
             </div>
 
-            {/* Status da Loja e Botão Primário */}
-            <div className="shrink-0 flex flex-col items-center sm:items-end gap-2.5 w-full sm:w-auto pt-2 sm:pt-0">
-              <div
-                className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border ${
-                  isStoreOpen
-                    ? "bg-[#27AE60]/10 text-[#27AE60] border-[#27AE60]/30"
-                    : "bg-red-50 text-red-700 border-red-200"
-                }`}
-              >
-                <span className="relative flex h-2 w-2">
-                  <span
-                    className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                      isStoreOpen ? "bg-[#27AE60]" : "bg-red-500"
-                    }`}
-                  />
-                  <span
-                    className={`relative inline-flex rounded-full h-2 w-2 ${
-                      isStoreOpen ? "bg-[#27AE60]" : "bg-red-500"
-                    }`}
-                  />
-                </span>
-                <span>{isStoreOpen ? "Loja aberta agora" : "Fechada no momento"}</span>
-              </div>
-
-              <Link href="/cardapio" className="w-full sm:w-auto">
+            {/* Status da Loja e Botão Primário no Desktop */}
+            <div className="shrink-0 hidden sm:flex flex-col items-end gap-2.5 w-auto">
+              <Link href="/cardapio">
                 <Button
-                  className="w-full sm:w-auto h-11 bg-[#E3A008] hover:bg-[#B5860A] text-white font-bold text-sm px-6 rounded-xl shadow-xs transition-all flex items-center justify-center gap-2"
+                  className="h-11 bg-[#E3A008] hover:bg-[#B5860A] text-white font-bold text-sm px-6 rounded-xl shadow-xs transition-all flex items-center justify-center gap-2"
                 >
                   <span>Fazer pedido</span>
                   <ChevronRight className="w-4 h-4" />
@@ -206,13 +226,13 @@ export function Hero({
 
         {/* Banner de Oferta Especial (se houver configurada) */}
         {(superPromoActive || itemPromoActive) && (superPromoImage || itemPromoImage) && (
-          <div className="mb-6">
+          <div className="mb-3 sm:mb-6">
             <Link href="/cardapio">
-              <div className="relative overflow-hidden rounded-2xl border border-[#ECE7E0] shadow-xs cursor-pointer hover:opacity-95 transition-opacity">
+              <div className="relative overflow-hidden rounded-xl sm:rounded-2xl border border-[#ECE7E0] shadow-xs cursor-pointer hover:opacity-95 transition-opacity">
                 <img
                   src={superPromoImage || itemPromoImage}
                   alt="Promoção Batata Top"
-                  className="w-full h-36 sm:h-48 md:h-56 object-cover"
+                  className="w-full h-24 sm:h-48 md:h-56 object-cover"
                 />
               </div>
             </Link>
