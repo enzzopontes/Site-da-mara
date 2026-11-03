@@ -37,7 +37,7 @@ const CATEGORIES = [
 
 export function CategoryBar() {
   return (
-    <div className="sticky top-16 z-30 bg-white border-b border-[#ECE7E0] py-2.5">
+    <div className="sticky top-14 sm:top-16 z-30 bg-white border-b border-[#ECE7E0] py-2.5">
       <div className="container mx-auto px-4 max-w-5xl">
         <div 
           className="flex items-center justify-start md:justify-center gap-2 overflow-x-auto no-scrollbar py-0.5 px-1 mx-auto"

@@ -160,112 +160,65 @@ export function Header({ variant = "default" }: HeaderProps) {
 
   return (
     <>
-      <header className="sticky top-0 z-40 w-full bg-white border-b border-[#ECE7E0] transition-shadow">
-        {/* Mobile View */}
-        <div className="lg:hidden px-3 sm:px-4 pt-2 pb-2.5 space-y-2">
-          {/* Top Bar: Menu + Logo + Location Pill + Cart + Auth */}
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 flex-shrink-0">
+      <header className="sticky top-0 z-40 w-full bg-white border-b border-[#ECE7E0] transition-shadow h-14 sm:h-16">
+        {/* Mobile View: Single Line */}
+        <div className="lg:hidden flex items-center justify-between h-14 sm:h-16 px-2.5 sm:px-4 gap-1.5 sm:gap-2 w-full">
+          {/* Left: Hamburger (only when logged out) + Logo + Location */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {!user && (
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(true)}
-                className="p-1.5 -ml-1 hover:bg-[#FEF8EC] rounded-lg transition-colors text-[#1F1B16]"
+                className="p-1 -ml-1 hover:bg-[#FEF8EC] rounded-lg transition-colors text-[#1F1B16] flex-shrink-0"
                 aria-label="Abrir menu"
               >
-                <Menu className="h-6 w-6" />
+                <Menu className="h-5 w-5" />
               </button>
-              <Link href="/" className="relative w-9 h-9 sm:w-10 sm:h-10 flex-shrink-0">
-                <Image
-                  src="/logo.png"
-                  alt="batata top Delivery"
-                  fill
-                  className="rounded-full object-contain pointer-events-none"
-                  priority
-                />
-              </Link>
-            </div>
+            )}
+            <Link href="/" className="relative w-8 h-8 flex-shrink-0">
+              <Image
+                src="/logo.png"
+                alt="batata top Delivery"
+                fill
+                className="rounded-full object-contain pointer-events-none"
+                priority
+              />
+            </Link>
 
             {/* Location Pill */}
             <button
               type="button"
               onClick={() => setIsAddressModalOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#FEF8EC] border border-[#ECE7E0] hover:bg-amber-100/40 transition-colors min-w-0 max-w-[190px] xs:max-w-[230px] text-left"
+              className="flex items-center gap-1 px-2 py-1 rounded-full bg-[#FEF8EC] border border-[#ECE7E0] hover:bg-amber-100/40 transition-colors text-left min-w-0 max-w-[105px] xs:max-w-[135px]"
               title="Alterar endereço de entrega"
             >
-              <MapPin className="h-3.5 w-3.5 text-[#E3A008] flex-shrink-0" />
+              <MapPin className="h-3 w-3 text-[#E3A008] flex-shrink-0" />
               <div className="flex flex-col min-w-0 leading-none">
-                <span className="text-[9px] uppercase font-bold text-[#6B6157] tracking-tight truncate">
-                  Entregar em
+                <span className="text-[8px] uppercase font-bold text-[#6B6157] tracking-tight truncate">
+                  Entrega em
                 </span>
-                <span className="text-xs font-black text-[#1F1B16] truncate flex items-center gap-0.5">
+                <span className="text-[10px] font-black text-[#1F1B16] truncate flex items-center gap-0.5">
                   {defaultAddress}
-                  <ChevronDown className="h-3 w-3 text-[#E3A008] flex-shrink-0" />
+                  <ChevronDown className="h-2.5 w-2.5 text-[#E3A008] flex-shrink-0" />
                 </span>
               </div>
             </button>
-
-            {/* Right: Cart + Auth Avatar / Login */}
-            <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-              <Link
-                href="/carrinho"
-                className="flex items-center gap-1.5 bg-[#FEF8EC] hover:bg-amber-100/60 px-2 py-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border border-[#ECE7E0] transition-all active:scale-95"
-                aria-label="Ver carrinho"
-              >
-                <div className="relative">
-                  <ShoppingCart className="h-5 w-5 text-[#E3A008]" />
-                  {totalItems > 0 && (
-                    <span className="absolute -top-2 -right-2 bg-[#C1440E] text-white text-[10px] font-black h-4 w-4 flex items-center justify-center rounded-full border border-white shadow-sm">
-                      {totalItems}
-                    </span>
-                  )}
-                </div>
-                <span className="text-xs font-black text-[#1F1B16] hidden xs:inline">
-                  R$ {totalPrice.toFixed(2).replace('.', ',')}
-                </span>
-              </Link>
-
-              {user ? (
-                <Link
-                  href="/perfil"
-                  className="p-1 hover:bg-[#FEF8EC] rounded-full transition-colors"
-                  aria-label="Perfil do usuário"
-                >
-                  {user?.user_metadata?.avatar_url ? (
-                    <img
-                      src={user.user_metadata.avatar_url}
-                      alt="Perfil"
-                      className="h-7 w-7 rounded-full object-cover border border-[#ECE7E0]"
-                    />
-                  ) : (
-                    <div className="h-7 w-7 rounded-full bg-[#FEF8EC] border border-[#ECE7E0] flex items-center justify-center">
-                      <User className="h-3.5 w-3.5 text-[#E3A008]" />
-                    </div>
-                  )}
-                </Link>
-              ) : (
-                <Link href="/login" aria-label="Entrar na conta">
-                  <Button className="bg-[#E3A008] hover:bg-[#B5860A] text-white font-black text-xs px-2.5 h-8 rounded-xl shadow-sm transition-all active:scale-95">
-                    Entrar
-                  </Button>
-                </Link>
-              )}
-            </div>
           </div>
 
-          {/* Row 2: Mobile Search Bar with Animated Placeholder */}
-          <form onSubmit={handleSearch} className="w-full">
+          {/* Center: Search Bar with Animated Placeholder */}
+          <form onSubmit={handleSearch} className="flex-1 min-w-0 mx-1">
             <div className="relative flex items-center w-full">
-              <Search className="absolute left-3.5 h-4 w-4 text-[#E3A008] pointer-events-none z-10" />
+              <Search className="absolute left-2.5 h-3.5 w-3.5 text-[#E3A008] pointer-events-none z-10" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 aria-label="Buscar produtos no cardápio"
-                className="w-full h-10 pl-10 pr-4 bg-[#F7F4EF] hover:bg-[#F7F4EF]/80 focus:bg-white border border-[#ECE7E0] focus:border-[#E3A008] focus:ring-1 focus:ring-[#E3A008] rounded-xl text-xs text-[#1F1B16] outline-none transition-all placeholder-transparent"
+                className="w-full h-8 pl-8 pr-3 bg-[#F7F4EF] hover:bg-[#F7F4EF]/80 focus:bg-white border border-[#ECE7E0] focus:border-[#E3A008] focus:ring-1 focus:ring-[#E3A008] rounded-full text-xs text-[#1F1B16] outline-none transition-all placeholder-transparent"
               />
               {!searchTerm && (
                 <span
-                  className={`pointer-events-none absolute left-10 text-xs text-[#6B6157] select-none truncate transition-all duration-300 ease-out ${
+                  className={`pointer-events-none absolute left-8 right-2 text-xs text-[#6B6157] select-none truncate transition-all duration-300 ease-out ${
                     placeholderFade === "visible"
                       ? "opacity-100 translate-y-0"
                       : "opacity-0 -translate-y-1.5"
@@ -276,6 +229,48 @@ export function Header({ variant = "default" }: HeaderProps) {
               )}
             </div>
           </form>
+
+          {/* Right: Cart + Auth Avatar / Login */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <Link
+              href="/carrinho"
+              className="relative p-1.5 bg-[#FEF8EC] hover:bg-amber-100/60 rounded-full border border-[#ECE7E0] transition-all active:scale-95 flex items-center justify-center"
+              aria-label="Ver carrinho"
+            >
+              <ShoppingCart className="h-4 w-4 text-[#E3A008]" />
+              {totalItems > 0 && (
+                <span className="absolute -top-1 -right-1 bg-[#C1440E] text-white text-[9px] font-black h-4 w-4 flex items-center justify-center rounded-full border border-white shadow-sm">
+                  {totalItems}
+                </span>
+              )}
+            </Link>
+
+            {user ? (
+              <Link
+                href="/perfil"
+                className="p-0.5 hover:bg-[#FEF8EC] rounded-full transition-colors flex-shrink-0"
+                aria-label="Perfil do usuário"
+              >
+                {user?.user_metadata?.avatar_url ? (
+                  <img
+                    src={user.user_metadata.avatar_url}
+                    alt="Perfil"
+                    className="h-7 w-7 rounded-full object-cover border border-[#ECE7E0]"
+                  />
+                ) : (
+                  <div className="h-7 w-7 rounded-full bg-[#FEF8EC] border border-[#ECE7E0] flex items-center justify-center">
+                    <User className="h-3.5 w-3.5 text-[#E3A008]" />
+                  </div>
+                )}
+              </Link>
+            ) : (
+              <Link href="/login" aria-label="Entrar na conta" className="flex-shrink-0">
+                <Button className="bg-[#E3A008] hover:bg-[#B5860A] text-white font-black text-xs px-2.5 h-7 rounded-full shadow-sm transition-all active:scale-95">
+                  Entrar
+                </Button>
+              </Link>
+            )}
+          </div>
         </div>
 
         {/* Desktop View */}

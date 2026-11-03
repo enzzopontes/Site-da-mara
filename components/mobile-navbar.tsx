@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
 import {
   Home,
@@ -74,7 +75,7 @@ export function MobileNavbar() {
   // Não exibir no checkout para garantir fluxo focado e rodapé desobstruído
   if (pathname === "/checkout" || pathname?.startsWith("/checkout")) return null
 
-  const showFloatingCart = items.length > 0 && pathname !== "/carrinho"
+  const showFloatingCart = totalCartItems > 0 && pathname !== "/carrinho" && !pathname?.startsWith("/checkout")
 
   const isActive = (path: string) => {
     if (!pathname) return false
@@ -112,32 +113,43 @@ export function MobileNavbar() {
     <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden pointer-events-none">
       {/* Floating Cart Bar */}
       {showFloatingCart && (
-        <div className="pointer-events-auto px-3 pb-2 max-w-lg mx-auto animate-in slide-in-from-bottom-2 duration-200">
-          <Link
-            href="/carrinho"
-            className="flex items-center justify-between bg-[#E3A008] hover:bg-[#c88d07] active:scale-[0.98] transition-all text-white px-4 py-3 rounded-2xl shadow-xl"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <span className="flex items-center justify-center bg-black/20 text-white text-xs font-black px-2 py-0.5 rounded-full min-w-[22px]">
-                {totalCartItems}
-              </span>
-              <div className="flex flex-col text-left truncate">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-amber-100">Ver sacola</span>
-                <span className="text-sm font-extrabold text-white">
-                  {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalCartPrice)}
+        <div className="pointer-events-auto border-t border-[#ECE7E0] bg-white py-2.5 px-4 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] animate-in slide-in-from-bottom-2 duration-200">
+          <div className="flex items-center justify-between gap-3 max-w-lg mx-auto">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <Image
+                src="/logo.png"
+                alt="Batata Top"
+                width={40}
+                height={40}
+                className="w-10 h-10 object-contain rounded-full flex-shrink-0"
+              />
+              <div className="flex flex-col min-w-0">
+                <span className="text-[11px] text-[#6B6157] truncate">
+                  Total com <strong className="font-bold text-[#1F1B16]">entrega grátis</strong>
                 </span>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-base font-bold text-[#1F1B16]">
+                    R$ {totalCartPrice.toFixed(2).replace('.', ',')}
+                  </span>
+                  <span className="text-xs text-[#9C9188]">
+                    / {totalCartItems} {totalCartItems === 1 ? 'item' : 'itens'}
+                  </span>
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-1.5 font-black text-xs sm:text-sm bg-black/20 hover:bg-black/30 px-3 py-1.5 rounded-xl text-white transition-colors flex-shrink-0">
-              <span>Finalizar</span>
-              <ShoppingCart className="h-4 w-4 ml-0.5" />
-            </div>
-          </Link>
+
+            <Link
+              href="/carrinho"
+              className="w-1/2 max-w-[180px] h-10 bg-[#E3A008] hover:bg-[#B5860A] text-white font-bold text-sm rounded-lg flex items-center justify-center shadow-xs active:scale-[0.98] transition-all"
+            >
+              Ver sacola
+            </Link>
+          </div>
         </div>
       )}
 
       {/* Bottom Navigation */}
-      <nav className="pointer-events-auto bg-white border-t border-gray-100 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+      <nav className="pointer-events-auto bg-white border-t border-[#ECE7E0] pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
         <div className="flex items-center justify-around h-16 relative max-w-lg mx-auto px-2">
           {navItems.map((item) => {
             const Icon = item.icon

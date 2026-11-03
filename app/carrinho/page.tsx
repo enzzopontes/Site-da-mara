@@ -50,17 +50,24 @@ export default function CarrinhoPage() {
       <div className="min-h-screen flex flex-col bg-gray-50">
         <HeaderWrapper />
         <main className="flex-1 flex items-center justify-center">
-          <div className="text-center py-16 px-4 max-w-md">
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
-              <ShoppingBag className="h-20 w-20 mx-auto text-gray-200 mb-6" />
-              <h1 className="text-2xl font-black text-gray-800 mb-2">Seu carrinho está vazio</h1>
-              <p className="text-gray-500 mb-8 font-medium">Que tal dar uma olhada nas nossas batatas recheadas?</p>
-              <Link href="/cardapio">
-                <Button size="lg" className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-black h-14 rounded-2xl shadow-lg shadow-yellow-100">
-                  Ver Cardápio
-                </Button>
-              </Link>
-            </div>
+          <div className="text-center py-16 px-4 max-w-md flex flex-col items-center">
+            <img
+              src="/assets/pedidos.png"
+              alt="Sua sacola está vazia"
+              className="w-48 h-48 object-contain mx-auto mb-4"
+            />
+            <h1 className="text-2xl font-bold text-[#1F1B16] text-center mb-2">
+              Sua sacola está vazia
+            </h1>
+            <p className="text-sm text-[#6B6157] text-center max-w-sm mb-6">
+              Que tal adicionar algumas deliciosas batatas recheadas para começar?
+            </p>
+            <Button
+              onClick={() => router.push("/cardapio")}
+              className="bg-[#E3A008] hover:bg-[#B5860A] text-white font-bold px-8 py-3 rounded-xl shadow-none transition-colors h-auto"
+            >
+              Ver cardápio
+            </Button>
           </div>
         </main>
         <Footer />

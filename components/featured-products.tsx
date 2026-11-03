@@ -44,9 +44,8 @@ export function FeaturedProducts({
           <div className="mb-10 sm:mb-14">
             <div className="flex items-center justify-between gap-4 mb-4 sm:mb-6 pb-3 border-b border-[#ECE7E0]">
               <div>
-                <h2 className="text-lg sm:text-xl font-bold text-[#1F1B16] tracking-tight flex items-center gap-2">
-                  <span>🥔</span>
-                  <span>Batatas Recheadas Mais Pedidas</span>
+                <h2 className="text-lg sm:text-xl font-bold text-[#1F1B16] tracking-tight">
+                  Batatas Recheadas Mais Pedidas
                 </h2>
                 <p className="text-xs text-[#6B6157] mt-0.5">
                   As queridinhas de Iacanga, recheadas na medida certa com muito sabor
@@ -98,9 +97,8 @@ export function FeaturedProducts({
           <div className="mb-10 sm:mb-14">
             <div className="flex items-center justify-between gap-4 mb-4 sm:mb-6 pb-3 border-b border-[#ECE7E0]">
               <div>
-                <h2 className="text-lg sm:text-xl font-bold text-[#1F1B16] tracking-tight flex items-center gap-2">
-                  <span>🍝</span>
-                  <span>Massas e Macarrão Mais Pedidos</span>
+                <h2 className="text-lg sm:text-xl font-bold text-[#1F1B16] tracking-tight">
+                  Massas e Macarrão Mais Pedidos
                 </h2>
                 <p className="text-xs text-[#6B6157] mt-0.5">
                   Macarrão artesanal preparado na hora com molhos especiais e queijo derretido

@@ -113,18 +113,30 @@ export function Hero({
               </div>
 
               {/* Informações de cabeçalho no mobile */}
-              <div className="flex-1 min-w-0 text-left sm:hidden">
-                <div className="flex items-center gap-1.5 mb-0.5">
-                  <h1 className="text-lg font-black text-[#1F1B16] tracking-tight truncate">
-                    Batata Top
-                  </h1>
-                  <span className="inline-flex items-center gap-0.5 bg-[#FEF8EC] text-[#8A6100] text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-[#FCE8C3] shrink-0">
-                    <Sparkles className="w-2.5 h-2.5 text-[#E3A008]" />
-                    Super
-                  </span>
+              <div className="flex-1 min-w-0 sm:hidden">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <h1 className="text-lg font-black text-[#1F1B16] tracking-tight truncate">
+                      Batata Top
+                    </h1>
+                    <span className="inline-flex items-center gap-0.5 bg-[#FEF8EC] text-[#8A6100] text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-[#FCE8C3] shrink-0">
+                      <Sparkles className="w-2.5 h-2.5 text-[#E3A008]" />
+                      Super
+                    </span>
+                  </div>
+
+                  {/* Rating badge no topo direito preenchendo o espaço vazio */}
+                  <div className="shrink-0 inline-flex items-center gap-1 bg-[#FEF8EC] border border-[#FCE8C3] px-2 py-0.5 rounded-full text-[11px] font-bold text-[#1F1B16]">
+                    <Star className="w-3 h-3 fill-[#FCBB00] text-[#FCBB00]" />
+                    <span>4.9</span>
+                    <span className="text-[#9C9188] font-normal text-[10px]">(500+)</span>
+                  </div>
                 </div>
-                <p className="text-[11px] text-[#6B6157] font-medium truncate">
-                  Batatas Recheadas • Macarrão • Bebidas
+
+                <p className="text-[11px] text-[#6B6157] font-medium min-w-0 flex items-center gap-1">
+                  <span className="truncate min-w-0">Batatas Recheadas • Macarrão • Bebidas</span>
+                  <span className="text-[#ECE7E0] shrink-0">•</span>
+                  <span className="text-[#C1440E] font-semibold shrink-0">Iacanga - SP</span>
                 </p>
               </div>
             </div>
@@ -145,8 +157,8 @@ export function Hero({
                 Batatas Recheadas • Macarrão • Bebidas
               </p>
 
-              {/* Linha de Indicadores Operacionais iFood - Faixa de Badges Deslizável no Mobile */}
-              <div className="flex items-center gap-1.5 sm:gap-4 overflow-x-auto no-scrollbar py-1 sm:py-0 sm:flex-wrap text-xs">
+              {/* Linha de Indicadores Operacionais iFood - 3 indicadores principais no mobile */}
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-4 text-xs pt-1 sm:pt-0">
                 {/* Status Aberto com Ponto Pulsante */}
                 <div
                   className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-bold border shrink-0 ${
@@ -193,8 +205,8 @@ export function Hero({
 
                 <span className="text-[#ECE7E0] hidden sm:inline">•</span>
 
-                {/* Avaliação */}
-                <div className="inline-flex items-center gap-1 bg-[#F5F2ED] sm:bg-transparent px-2.5 sm:px-0 py-1 sm:py-0 rounded-full sm:rounded-none font-bold text-[#1F1B16] shrink-0 text-[11px] sm:text-xs">
+                {/* Avaliação (Desktop) */}
+                <div className="hidden sm:inline-flex items-center gap-1 bg-transparent py-0 font-bold text-[#1F1B16] shrink-0 text-xs">
                   <Star className="w-3.5 h-3.5 fill-[#FCBB00] text-[#FCBB00]" />
                   <span>4.9</span>
                   <span className="text-[#9C9188] font-normal">(500+)</span>
@@ -202,8 +214,8 @@ export function Hero({
 
                 <span className="text-[#ECE7E0] hidden sm:inline">•</span>
 
-                {/* Localização */}
-                <div className="inline-flex items-center gap-1 bg-[#F5F2ED] sm:bg-transparent px-2.5 sm:px-0 py-1 sm:py-0 rounded-full sm:rounded-none text-[#6B6157] shrink-0 text-[11px] sm:text-xs">
+                {/* Localização (Desktop) */}
+                <div className="hidden sm:inline-flex items-center gap-1 bg-transparent py-0 text-[#6B6157] shrink-0 text-xs">
                   <MapPin className="w-3.5 h-3.5 text-[#C1440E]" />
                   <span>Iacanga - SP</span>
                 </div>

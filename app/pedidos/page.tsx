@@ -21,17 +21,13 @@ export default function PedidosPage() {
   const [evaluatedOrders, setEvaluatedOrders] = useState<string[]>([])
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.push("/login")
-    }
-  }, [user, loading, router])
-
-  useEffect(() => {
     if (user) {
       loadOrders()
       loadEvaluatedOrders()
+    } else if (!loading) {
+      setIsLoadingOrders(false)
     }
-  }, [user])
+  }, [user, loading])
 
   const loadEvaluatedOrders = () => {
     const evaluated = JSON.parse(localStorage.getItem("evaluated-orders") || "[]")
@@ -106,8 +102,6 @@ export default function PedidosPage() {
     )
   }
 
-  if (!user) return null
-
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <HeaderWrapper />
@@ -131,15 +125,36 @@ export default function PedidosPage() {
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500"></div>
             </div>
-          ) : orders.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 lg:py-20">
-              <div className="w-48 h-48 mb-6 bg-yellow-50 rounded-full flex items-center justify-center">
-                <ShoppingBag className="h-24 w-24 text-yellow-200" />
+          ) : !user || orders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 lg:py-20 text-center">
+              <img
+                src="/assets/batatadormindo.png"
+                alt="Poxa, você não tem nenhum pedido"
+                className="w-48 h-48 object-contain mx-auto mb-4"
+              />
+              <h2 className="text-xl font-bold text-[#1F1B16] text-center mb-2">
+                Poxa, você não tem nenhum pedido
+              </h2>
+              <p className="text-sm text-[#6B6157] text-center max-w-sm mb-6">
+                Seus pedidos vão aparecer aqui quando você fizer. Que tal aproveitar as ofertas pra pedir agora?
+              </p>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <Button
+                  onClick={() => router.push("/cardapio")}
+                  className="bg-[#E3A008] hover:bg-[#B5860A] text-white font-bold px-8 py-3 rounded-xl transition-colors h-auto"
+                >
+                  Fazer pedido
+                </Button>
+                {!user && (
+                  <Button
+                    variant="outline"
+                    onClick={() => router.push("/login")}
+                    className="border-[#E3A008] text-[#E3A008] hover:bg-[#E3A008]/10 font-bold px-6 py-3 rounded-xl h-auto"
+                  >
+                    Entrar na conta
+                  </Button>
+                )}
               </div>
-              <h2 className="text-xl font-black text-gray-800 text-center mb-2">Você ainda não pediu</h2>
-              <Button onClick={() => router.push("/cardapio")} className="bg-yellow-500 hover:bg-yellow-600 text-white font-black px-8 py-3 rounded-xl shadow-lg shadow-yellow-100 transition-all active:scale-95">
-                Ir para o Cardápio
-              </Button>
             </div>
           ) : (
             <div className="space-y-4">
