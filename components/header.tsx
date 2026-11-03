@@ -54,6 +54,7 @@ export function Header({ variant = "default" }: HeaderProps) {
   const [defaultAddress, setDefaultAddress] = useState<string>("Iacanga - SP")
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false)
   const [waitTime, setWaitTime] = useState({ min: 15, max: 22 })
+  const [isOpen, setIsOpen] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
 
   // Animated rotating placeholder state
@@ -110,13 +111,22 @@ export function Header({ variant = "default" }: HeaderProps) {
   }, [user])
 
   useEffect(() => {
-    const updateWaitTime = async () => {
-      const status = await storeStatusManager.getStatus()
-      setWaitTime({ min: status.waitTimeMin, max: status.waitTimeMax })
+    const updateStoreStatus = async () => {
+      try {
+        const status = await storeStatusManager.getStatus()
+        setWaitTime({ min: status.waitTimeMin, max: status.waitTimeMax })
+        setIsOpen(status.isOpen)
+      } catch (err) {
+        console.error("Erro ao carregar status da loja:", err)
+      }
     }
-    updateWaitTime()
-    const interval = setInterval(updateWaitTime, 10000)
-    return () => clearInterval(interval)
+    updateStoreStatus()
+    window.addEventListener("store-status-changed", updateStoreStatus)
+    const interval = setInterval(updateStoreStatus, 10000)
+    return () => {
+      window.removeEventListener("store-status-changed", updateStoreStatus)
+      clearInterval(interval)
+    }
   }, [])
 
   useEffect(() => {
@@ -164,7 +174,7 @@ export function Header({ variant = "default" }: HeaderProps) {
         {/* Mobile View: Single Line */}
         <div className="lg:hidden flex items-center justify-between h-14 sm:h-16 px-2.5 sm:px-4 gap-1.5 sm:gap-2 w-full">
           {/* Left: Hamburger (only when logged out) + Logo + Location */}
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 min-w-0">
             {!user && (
               <button
                 type="button"
@@ -175,7 +185,7 @@ export function Header({ variant = "default" }: HeaderProps) {
                 <Menu className="h-5 w-5" />
               </button>
             )}
-            <Link href="/" className="relative w-8 h-8 flex-shrink-0">
+            <Link href="/" className="relative w-10 h-10 sm:w-11 sm:h-11 flex-shrink-0">
               <Image
                 src="/logo.png"
                 alt="batata top Delivery"
@@ -189,57 +199,43 @@ export function Header({ variant = "default" }: HeaderProps) {
             <button
               type="button"
               onClick={() => setIsAddressModalOpen(true)}
-              className="flex items-center gap-1 px-2 py-1 rounded-full bg-[#FEF8EC] border border-[#ECE7E0] hover:bg-amber-100/40 transition-colors text-left min-w-0 max-w-[105px] xs:max-w-[135px]"
+              className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-[#FEF8EC] border border-[#ECE7E0] hover:bg-amber-100/40 transition-colors text-left min-w-0"
               title="Alterar endereço de entrega"
             >
-              <MapPin className="h-3 w-3 text-[#E3A008] flex-shrink-0" />
+              <MapPin className="h-4 w-4 text-[#E3A008] flex-shrink-0" />
               <div className="flex flex-col min-w-0 leading-none">
                 <span className="text-[8px] uppercase font-bold text-[#6B6157] tracking-tight truncate">
                   Entrega em
                 </span>
-                <span className="text-[10px] font-black text-[#1F1B16] truncate flex items-center gap-0.5">
+                <span className="text-xs font-black text-[#1F1B16] max-w-[120px] xs:max-w-[160px] truncate flex items-center gap-0.5">
                   {defaultAddress}
-                  <ChevronDown className="h-2.5 w-2.5 text-[#E3A008] flex-shrink-0" />
+                  <ChevronDown className="h-3 w-3 text-[#E3A008] flex-shrink-0" />
                 </span>
               </div>
             </button>
           </div>
 
-          {/* Center: Search Bar with Animated Placeholder */}
-          <form onSubmit={handleSearch} className="flex-1 min-w-0 mx-1">
-            <div className="relative flex items-center w-full">
-              <Search className="absolute left-2.5 h-3.5 w-3.5 text-[#E3A008] pointer-events-none z-10" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                aria-label="Buscar produtos no cardápio"
-                className="w-full h-8 pl-8 pr-3 bg-[#F7F4EF] hover:bg-[#F7F4EF]/80 focus:bg-white border border-[#ECE7E0] focus:border-[#E3A008] focus:ring-1 focus:ring-[#E3A008] rounded-full text-xs text-[#1F1B16] outline-none transition-all placeholder-transparent"
-              />
-              {!searchTerm && (
-                <span
-                  className={`pointer-events-none absolute left-8 right-2 text-xs text-[#6B6157] select-none truncate transition-all duration-300 ease-out ${
-                    placeholderFade === "visible"
-                      ? "opacity-100 translate-y-0"
-                      : "opacity-0 -translate-y-1.5"
-                  }`}
-                >
-                  {SEARCH_PLACEHOLDERS[placeholderIndex]}
-                </span>
-              )}
+          {/* Center: Store Status & Wait Time Pill */}
+          <div className="bg-[#F7F4EF] border border-[#ECE7E0] px-2.5 py-1 rounded-full text-[11px] font-bold text-[#1F1B16] flex items-center gap-1.5 shadow-2xs flex-shrink-0">
+            <span className={`inline-block h-2 w-2 rounded-full ${isOpen ? "bg-green-500 animate-pulse" : "bg-red-500"}`} />
+            <span className={isOpen ? "text-green-700" : "text-red-600"}>{isOpen ? "Aberto" : "Fechado"}</span>
+            <span className="text-[#ECE7E0]">•</span>
+            <div className="flex items-center gap-1 text-[#6B6157]">
+              <Clock className="h-3 w-3 text-[#E3A008]" />
+              <span>{waitTime.min}-{waitTime.max} min</span>
             </div>
-          </form>
+          </div>
 
           {/* Right: Cart + Auth Avatar / Login */}
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
             <Link
               href="/carrinho"
-              className="relative p-1.5 bg-[#FEF8EC] hover:bg-amber-100/60 rounded-full border border-[#ECE7E0] transition-all active:scale-95 flex items-center justify-center"
+              className="relative h-9 w-9 bg-[#FEF8EC] hover:bg-amber-100/60 rounded-full border border-[#ECE7E0] transition-all active:scale-95 flex items-center justify-center flex-shrink-0"
               aria-label="Ver carrinho"
             >
-              <ShoppingCart className="h-4 w-4 text-[#E3A008]" />
+              <ShoppingCart className="h-5 w-5 text-[#E3A008]" />
               {totalItems > 0 && (
-                <span className="absolute -top-1 -right-1 bg-[#C1440E] text-white text-[9px] font-black h-4 w-4 flex items-center justify-center rounded-full border border-white shadow-sm">
+                <span className="absolute -top-1 -right-1 bg-[#C1440E] text-white text-[10px] font-black h-4.5 w-4.5 flex items-center justify-center rounded-full border border-white shadow-sm">
                   {totalItems}
                 </span>
               )}
@@ -255,17 +251,17 @@ export function Header({ variant = "default" }: HeaderProps) {
                   <img
                     src={user.user_metadata.avatar_url}
                     alt="Perfil"
-                    className="h-7 w-7 rounded-full object-cover border border-[#ECE7E0]"
+                    className="h-8 w-8 sm:h-9 sm:w-9 rounded-full object-cover border border-[#ECE7E0]"
                   />
                 ) : (
-                  <div className="h-7 w-7 rounded-full bg-[#FEF8EC] border border-[#ECE7E0] flex items-center justify-center">
-                    <User className="h-3.5 w-3.5 text-[#E3A008]" />
+                  <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-[#FEF8EC] border border-[#ECE7E0] flex items-center justify-center">
+                    <User className="h-4 w-4 sm:h-4.5 sm:w-4.5 text-[#E3A008]" />
                   </div>
                 )}
               </Link>
             ) : (
               <Link href="/login" aria-label="Entrar na conta" className="flex-shrink-0">
-                <Button className="bg-[#E3A008] hover:bg-[#B5860A] text-white font-black text-xs px-2.5 h-7 rounded-full shadow-sm transition-all active:scale-95">
+                <Button className="bg-[#E3A008] hover:bg-[#B5860A] text-white font-bold text-xs px-3 h-8 rounded-full shadow-sm transition-all active:scale-95">
                   Entrar
                 </Button>
               </Link>

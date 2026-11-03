@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import { ProductCard } from "@/components/product-card"
-import { Search, Utensils, GlassWater, Soup, Sparkles, Flame, Layers } from "lucide-react"
+import { Search, Utensils, GlassWater, Soup, Sparkles, Flame, Layers, X } from "lucide-react"
 
 interface Product {
   id: string
@@ -31,7 +31,13 @@ export function CardapioContent({
 }: CardapioContentProps) {
   const searchParams = useSearchParams()
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "")
-  const [activeTab, setActiveTab] = useState(searchParams.get("category") || "todos")
+  const [activeTab, setActiveTab] = useState(() => {
+    const cat = searchParams.get("category")
+    if (cat === "batata" || cat === "batatas") return "batatas"
+    if (cat === "macarrao") return "macarrao"
+    if (cat === "bebida" || cat === "bebidas") return "bebidas"
+    return "todos"
+  })
   const [mounted, setMounted] = useState(false)
   
   const tabsContainerRef = useRef<HTMLDivElement>(null)
@@ -90,6 +96,20 @@ export function CardapioContent({
     }
 
     return () => window.removeEventListener("focus-search", handleFocusSearch);
+  }, [searchParams]);
+
+  useEffect(() => {
+    const q = searchParams.get("q")
+    if (q !== null && q !== searchQuery) {
+      setSearchQuery(q)
+    }
+    const cat = searchParams.get("category")
+    if (cat) {
+      if (cat === "batata" || cat === "batatas") setActiveTab("batatas")
+      else if (cat === "macarrao") setActiveTab("macarrao")
+      else if (cat === "bebida" || cat === "bebidas") setActiveTab("bebidas")
+      else setActiveTab("todos")
+    }
   }, [searchParams]);
 
   useEffect(() => {
@@ -193,8 +213,8 @@ export function CardapioContent({
   return (
     <main className="flex-1 bg-gray-50 pb-20">
       {/* Header Sticky Travado Flush no Scroll (sem espaço em branco e sem sombras) */}
-      <div className="bg-white border-b border-[#ECE7E0] sticky top-16 z-30">
-        <div className="container mx-auto px-4">
+      <div className="bg-white border-b border-[#ECE7E0] sticky top-14 sm:top-16 z-30 py-2.5">
+        <div className="container mx-auto px-4 max-w-5xl">
           <div className="relative flex items-center justify-center">
             <div
               ref={tabsContainerRef}
@@ -202,30 +222,33 @@ export function CardapioContent({
               onMouseLeave={handleMouseLeave}
               onMouseUp={handleMouseUp}
               onMouseMove={handleMouseMove}
-              className={`flex items-center justify-start md:justify-center overflow-x-auto no-scrollbar pt-3 pb-0 gap-6 px-4 md:px-0 w-full ${isDragging ? 'cursor-grabbing select-none' : 'cursor-grab'}`}
+              className={`flex items-center justify-start md:justify-center overflow-x-auto no-scrollbar gap-2 py-0.5 px-1 w-full ${isDragging ? 'cursor-grabbing select-none' : 'cursor-grab'}`}
               style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
-              {categories.map((cat) => (
+              {categories.map((cat) => {
+                const isActive = activeTab === cat.id
+                return (
                 <button
                   key={cat.id}
                   onClick={() => !isDragging && scrollToCategory(cat.id)}
-                  className={`shrink-0 flex-shrink-0 flex items-center gap-1.5 xs:gap-2 whitespace-nowrap pb-3 border-b-[3px] -mb-[1px] transition-all font-bold text-[13px] xs:text-sm cursor-pointer ${
-                    activeTab === cat.id 
-                    ? "border-yellow-500 text-yellow-600" 
-                    : "border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-200"
+                  className={`shrink-0 flex-shrink-0 h-10 px-3.5 rounded-full flex items-center gap-2 text-xs font-bold transition-all border cursor-pointer whitespace-nowrap ${
+                    isActive 
+                      ? "bg-[#FEF8EC] border-[#E3A008] text-[#A16207] shadow-2xs" 
+                      : "bg-white border-[#ECE7E0] text-[#1F1B16] hover:bg-[#F7F4EF]"
                   }`}
                 >
-                  <img src={cat.iconSrc} alt={cat.label} className="h-6 w-6 sm:h-7 sm:w-7 object-contain shrink-0" />
+                  <img src={cat.iconSrc} alt={cat.label} className="h-6 w-6 object-contain shrink-0" />
                   <span>{cat.label}</span>
-                  <span className={`px-1.5 xs:px-2 py-0.5 rounded-full text-[10px] xs:text-xs font-bold ${
-                    activeTab === cat.id
-                      ? "bg-yellow-100 text-yellow-700"
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    isActive
+                      ? "bg-[#FDE68A] text-[#854D0E]"
                       : "bg-gray-100 text-gray-500"
                   }`}>
                     {cat.count}
                   </span>
                 </button>
-              ))}
+                )
+              })}
             </div>
           </div>
         </div>
@@ -234,15 +257,25 @@ export function CardapioContent({
       <div className="container mx-auto px-4 py-6">
         <div className="mb-6 lg:hidden">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-yellow-500" />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#E3A008]" />
             <input
               ref={searchInputRef}
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Busque por batatas, macarrão ou bebidas..."
-              className="w-full h-11 pl-10 pr-4 bg-white border-2 border-gray-100 focus:border-yellow-300 rounded-xl text-sm outline-none"
+              className="w-full h-11 pl-10 pr-10 bg-white border border-[#ECE7E0] focus:border-[#E3A008] focus:ring-2 focus:ring-[#E3A008]/20 rounded-xl text-sm outline-none transition-all placeholder:text-gray-400 text-gray-800"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                aria-label="Limpar busca"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
 

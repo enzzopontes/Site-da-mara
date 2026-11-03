@@ -154,7 +154,7 @@ export function ProductCard({ product, rank = null, isMostRequested = false }: P
         </div>
 
         {/* Rodapé: Preço e Botão Adicionar */}
-        <div className="p-2.5 sm:p-4 pt-0 flex items-center justify-between gap-1 sm:gap-2 border-t border-[#ECE7E0]/60 mt-1">
+        <div className="p-2.5 sm:p-4 pt-2.5 sm:pt-3 flex items-center justify-between gap-1 sm:gap-2 border-t border-[#ECE7E0]/70 mt-auto">
           <div className="min-w-0">
             {hasDiscount && (
               <div className="text-[9px] sm:text-[10px] text-[#9C9188] line-through font-semibold leading-none mb-0.5 truncate">
