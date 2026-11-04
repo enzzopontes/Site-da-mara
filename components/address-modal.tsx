@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { X, MapPin, Plus, Search, Check, Trash2, Loader2 } from "lucide-react"
+import Link from "next/link"
+import { X, MapPin, Plus, Check, Trash2, Loader2, LogIn } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -15,8 +16,10 @@ interface AddressModalProps {
   onAddressSelect?: (address: Address) => void
 }
 
+const GUEST_STORAGE_KEY = "batata_top_guest_address"
+
 export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalProps) {
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const { toast } = useToast()
   const [addresses, setAddresses] = useState<Address[]>([])
   const [loading, setLoading] = useState(true)
@@ -32,17 +35,47 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
   const [naoSeiCep, setNaoSeiCep] = useState(false)
 
   useEffect(() => {
-    if (isOpen && user) {
-      loadAddresses()
-    }
-  }, [isOpen, user])
+    if (!isOpen || authLoading) return
+    loadAddresses()
+  }, [isOpen, user, authLoading])
 
   const loadAddresses = async () => {
-    if (!user) return
     setLoading(true)
-    const data = await addressesManager.getUserAddresses(user.id)
-    setAddresses(data)
-    setLoading(false)
+    try {
+      if (user) {
+        const data = await addressesManager.getUserAddresses(user.id)
+        setAddresses(data)
+      } else {
+        const raw = typeof window !== "undefined" ? localStorage.getItem(GUEST_STORAGE_KEY) : null
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw)
+            if (parsed?.street && parsed?.number) {
+              setAddresses([{
+                id: parsed.id || "guest-default",
+                user_id: "guest",
+                street: parsed.street,
+                number: parsed.number,
+                complement: parsed.complement || "",
+                neighborhood: parsed.neighborhood || "",
+                city: parsed.city || "Iacanga",
+                state: parsed.state || "SP",
+                cep: parsed.cep || "17150-000",
+                is_default: true,
+              }])
+            } else {
+              setAddresses([])
+            }
+          } catch {
+            setAddresses([])
+          }
+        } else {
+          setAddresses([])
+        }
+      }
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleCepChange = async (value: string) => {
@@ -84,27 +117,56 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
 
   const handleAddAddress = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user) return
-    
     setIsSubmitting(true)
-    const newAddress = await addressesManager.addAddress({
-      user_id: user.id,
-      street: rua,
-      number: numero,
-      complement: complemento,
-      neighborhood: bairro,
-      city: "Iacanga",
-      state: "SP",
-      cep: cep,
-      is_default: addresses.length === 0 // Primeiro endereço vira padrão
-    })
 
-    if (newAddress) {
-      await loadAddresses()
-      setShowAddForm(false)
-      resetForm()
+    try {
+      if (user) {
+        const newAddress = await addressesManager.addAddress({
+          user_id: user.id,
+          street: rua,
+          number: numero,
+          complement: complemento,
+          neighborhood: bairro,
+          city: "Iacanga",
+          state: "SP",
+          cep: cep,
+          is_default: addresses.length === 0 // Primeiro endereço vira padrão
+        })
+
+        if (newAddress) {
+          await loadAddresses()
+          window.dispatchEvent(new Event("address-changed"))
+          onAddressSelect?.(newAddress)
+          setShowAddForm(false)
+          resetForm()
+        }
+      } else {
+        const guestAddress: Address = {
+          id: "guest-default",
+          user_id: "guest",
+          street: rua,
+          number: numero,
+          complement: complemento,
+          neighborhood: bairro,
+          city: "Iacanga",
+          state: "SP",
+          cep: cep || "17150-000",
+          is_default: true,
+        }
+        localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(guestAddress))
+        setAddresses([guestAddress])
+        window.dispatchEvent(new Event("address-changed"))
+        onAddressSelect?.(guestAddress)
+        setShowAddForm(false)
+        resetForm()
+        toast({
+          title: "Endereço salvo",
+          description: "Seu endereço de entrega em Iacanga foi atualizado.",
+        })
+      }
+    } finally {
+      setIsSubmitting(false)
     }
-    setIsSubmitting(false)
   }
 
   const resetForm = () => {
@@ -113,12 +175,22 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
     setNumero("")
     setComplemento("")
     setBairro("")
+    setNaoSeiCep(false)
   }
 
   const handleSelectDefault = async (addressId: string) => {
-    if (!user) return
+    const selected = addresses.find((a) => a.id === addressId)
+    if (!user) {
+      if (selected) {
+        onAddressSelect?.(selected)
+        window.dispatchEvent(new Event("address-changed"))
+      }
+      onClose()
+      return
+    }
     await addressesManager.setDefaultAddress(user.id, addressId)
     await loadAddresses()
+    if (selected) onAddressSelect?.(selected)
     // Dispara evento para o Header atualizar
     window.dispatchEvent(new Event("address-changed"))
   }
@@ -128,8 +200,13 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
     // Usando um confirm simples, mas poderíamos usar um modal customizado se necessário.
     // Para manter a agilidade, vamos manter o confirm mas adicionar um toast após a exclusão.
     if (confirm("Deseja excluir este endereço?")) {
-      await addressesManager.deleteAddress(id)
-      await loadAddresses()
+      if (user) {
+        await addressesManager.deleteAddress(id)
+        await loadAddresses()
+      } else {
+        localStorage.removeItem(GUEST_STORAGE_KEY)
+        setAddresses([])
+      }
       window.dispatchEvent(new Event("address-changed"))
       toast({
         title: "Endereço excluído",
@@ -142,16 +219,20 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-[#ECE7E0] overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
         
         {/* HEADER DO MODAL */}
-        <div className="p-6 border-b flex items-center justify-between bg-gray-50">
-          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-            <MapPin className="h-5 w-5 text-yellow-600" />
+        <div className="p-6 border-b border-[#ECE7E0] flex items-center justify-between bg-[#F7F5F0]">
+          <h2 className="text-lg sm:text-xl font-bold text-[#1A1A1A] flex items-center gap-2">
+            <MapPin className="h-5 w-5 text-[#E3A008] shrink-0" />
             Onde você quer receber seu pedido?
           </h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
-            <X className="h-6 w-6 text-gray-500" />
+          <button
+            onClick={onClose}
+            aria-label="Fechar modal"
+            className="p-2 hover:bg-[#ECE7E0] rounded-full transition-all active:scale-[0.98]"
+          >
+            <X className="h-5 w-5 text-[#717171]" />
           </button>
         </div>
 
@@ -160,40 +241,43 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
             <div className="space-y-4">
               {/* LISTA DE ENDEREÇOS */}
               {loading ? (
-                <div className="flex flex-col items-center justify-center py-12 text-gray-400">
-                  <Loader2 className="h-8 w-8 animate-spin mb-2" />
-                  <p>Carregando seus endereços...</p>
+                <div className="flex flex-col items-center justify-center py-12 text-[#717171]">
+                  <Loader2 className="h-8 w-8 animate-spin mb-2 text-[#E3A008]" />
+                  <p className="text-sm font-medium">Carregando seus endereços...</p>
                 </div>
               ) : addresses.length > 0 ? (
                 <div className="space-y-3">
-                  <p className="text-sm font-bold text-gray-500 uppercase tracking-wider">Meus Endereços</p>
+                  <p className="text-xs font-bold text-[#717171] uppercase tracking-wider">
+                    {user ? "Meus Endereços" : "Endereço Salvo"}
+                  </p>
                   {addresses.map((addr) => (
                     <div 
                       key={addr.id}
                       onClick={() => handleSelectDefault(addr.id)}
-                      className={`group relative p-4 border-2 rounded-xl cursor-pointer transition-all ${
+                      className={`group relative p-4 border-2 rounded-xl cursor-pointer transition-all active:scale-[0.98] ${
                         addr.is_default 
-                        ? "border-yellow-600 bg-yellow-50/30" 
-                        : "border-gray-100 hover:border-yellow-200 hover:bg-gray-50"
+                        ? "border-[#E3A008] bg-[#E3A008]/10" 
+                        : "border-[#ECE7E0] hover:border-[#E3A008]/50 hover:bg-[#F7F5F0]"
                       }`}
                     >
                       <div className="flex items-start gap-3">
-                        <div className={`mt-1 p-2 rounded-full ${addr.is_default ? "bg-yellow-600 text-white" : "bg-gray-100 text-gray-400"}`}>
+                        <div className={`mt-1 p-2 rounded-full ${addr.is_default ? "bg-[#E3A008] text-[#1A1A1A]" : "bg-[#F7F5F0] text-[#717171]"}`}>
                           <MapPin className="h-4 w-4" />
                         </div>
                         <div className="flex-1 pr-8">
-                          <p className="font-bold text-gray-800">{addr.street}, {addr.number}</p>
-                          <p className="text-sm text-gray-500">{addr.neighborhood} - {addr.city}/{addr.state}</p>
-                          {addr.complement && <p className="text-xs text-gray-400 mt-1 italic">{addr.complement}</p>}
+                          <p className="font-bold text-[#1A1A1A]">{addr.street}, {addr.number}</p>
+                          <p className="text-sm text-[#717171]">{addr.neighborhood} - {addr.city}/{addr.state}</p>
+                          {addr.complement && <p className="text-xs text-[#717171] mt-1 italic">{addr.complement}</p>}
                         </div>
                         {addr.is_default && (
                           <div className="absolute top-4 right-4">
-                            <Check className="h-5 w-5 text-yellow-600" />
+                            <Check className="h-5 w-5 text-[#E3A008]" />
                           </div>
                         )}
                         <button 
                           onClick={(e) => handleDelete(e, addr.id)}
-                          className="absolute bottom-4 right-4 p-2 text-gray-300 hover:text-yellow-600 opacity-0 group-hover:opacity-100 transition-all"
+                          aria-label="Excluir endereço"
+                          className="absolute bottom-4 right-4 p-2 text-[#717171] hover:text-[#D92D20] opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all active:scale-[0.98]"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -203,10 +287,11 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <MapPin className="h-8 w-8 text-gray-300" />
+                  <div className="bg-[#F7F5F0] border border-[#ECE7E0] w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <MapPin className="h-8 w-8 text-[#E3A008]" />
                   </div>
-                  <p className="text-gray-500 font-medium">Você ainda não tem endereços cadastrados.</p>
+                  <p className="text-[#1A1A1A] font-semibold">Você ainda não informou seu endereço.</p>
+                  <p className="text-xs text-[#717171] mt-1">Informe onde deseja receber seu pedido em Iacanga.</p>
                 </div>
               )}
 
@@ -214,11 +299,28 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
               <Button 
                 onClick={() => setShowAddForm(true)}
                 variant="outline" 
-                className="w-full h-14 border-dashed border-2 border-gray-200 hover:border-yellow-600 hover:text-yellow-600 hover:bg-yellow-50 rounded-xl flex items-center justify-center gap-2 font-bold transition-all"
+                className="w-full h-14 border-dashed border-2 border-[#ECE7E0] hover:border-[#E3A008] hover:text-[#1A1A1A] hover:bg-[#F7F5F0] text-[#1A1A1A] rounded-xl flex items-center justify-center gap-2 font-bold transition-transform active:scale-[0.98]"
               >
-                <Plus className="h-5 w-5" />
-                Adicionar novo endereço
+                <Plus className="h-5 w-5 text-[#E3A008]" />
+                {!user && addresses.length > 0 ? "Alterar endereço de entrega" : "Adicionar novo endereço"}
               </Button>
+
+              {!user && (
+                <div className="pt-3 border-t border-[#ECE7E0] flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#F7F5F0] p-4 rounded-xl">
+                  <div className="text-center sm:text-left">
+                    <p className="text-xs font-bold text-[#1A1A1A]">Já tem uma conta?</p>
+                    <p className="text-[11px] text-[#717171]">Entre para acessar seus endereços salvos.</p>
+                  </div>
+                  <Link
+                    href="/login"
+                    onClick={onClose}
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 h-10 rounded-lg bg-[#E3A008] hover:bg-[#C88B06] text-[#1A1A1A] text-xs font-bold transition-transform active:scale-[0.98] shrink-0"
+                  >
+                    <LogIn className="h-3.5 w-3.5" />
+                    Entrar na conta
+                  </Link>
+                </div>
+              )}
             </div>
           ) : (
             /* FORMULÁRIO DE ADIÇÃO */
@@ -227,7 +329,7 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
                 <button 
                   type="button" 
                   onClick={() => setShowAddForm(false)}
-                  className="text-sm font-bold text-yellow-600 hover:underline"
+                  className="text-sm font-bold text-[#1A1A1A] hover:text-[#E3A008] transition-transform active:scale-[0.98]"
                 >
                   ← Voltar para a lista
                 </button>
@@ -236,7 +338,7 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2 col-span-2">
                   <div className="flex items-center justify-between">
-                    <Label>CEP</Label>
+                    <Label className="text-[#1A1A1A] font-semibold">CEP</Label>
                     <div className="flex items-center gap-2">
                       <input 
                         type="checkbox" 
@@ -246,9 +348,9 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
                           setNaoSeiCep(e.target.checked)
                           if (e.target.checked) setCep("17150-000")
                         }}
-                        className="h-4 w-4 rounded border-gray-300 text-yellow-600 focus:ring-yellow-500"
+                        className="h-4 w-4 rounded border-[#ECE7E0] text-[#E3A008] focus:ring-[#E3A008]"
                       />
-                      <label htmlFor="naoSeiCep" className="text-xs font-bold text-gray-500 cursor-pointer">Não sei meu CEP</label>
+                      <label htmlFor="naoSeiCep" className="text-xs font-bold text-[#717171] cursor-pointer">Não sei meu CEP</label>
                     </div>
                   </div>
                   <Input 
@@ -258,31 +360,31 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
                     maxLength={9}
                     required
                     disabled={naoSeiCep}
-                    className={naoSeiCep ? "bg-gray-50 text-gray-400" : ""}
+                    className={`border-[#ECE7E0] text-[#1A1A1A] ${naoSeiCep ? "bg-[#F7F5F0] text-[#717171]" : ""}`}
                   />
                 </div>
                 <div className="space-y-2 col-span-2">
-                  <Label>Rua</Label>
-                  <Input value={rua} onChange={(e) => setRua(e.target.value)} placeholder="Nome da rua" required />
+                  <Label className="text-[#1A1A1A] font-semibold">Rua</Label>
+                  <Input value={rua} onChange={(e) => setRua(e.target.value)} placeholder="Nome da rua" required className="border-[#ECE7E0] text-[#1A1A1A]" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Número</Label>
-                  <Input value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="Ex: 123" required />
+                  <Label className="text-[#1A1A1A] font-semibold">Número</Label>
+                  <Input value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="Ex: 123" required className="border-[#ECE7E0] text-[#1A1A1A]" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Complemento</Label>
-                  <Input value={complemento} onChange={(e) => setComplemento(e.target.value)} placeholder="Apto, bloco..." />
+                  <Label className="text-[#1A1A1A] font-semibold">Complemento</Label>
+                  <Input value={complemento} onChange={(e) => setComplemento(e.target.value)} placeholder="Apto, bloco..." className="border-[#ECE7E0] text-[#1A1A1A]" />
                 </div>
                 <div className="space-y-2 col-span-2">
-                  <Label>Bairro</Label>
-                  <Input value={bairro} onChange={(e) => setBairro(e.target.value)} placeholder="Nome do bairro" required />
+                  <Label className="text-[#1A1A1A] font-semibold">Bairro</Label>
+                  <Input value={bairro} onChange={(e) => setBairro(e.target.value)} placeholder="Nome do bairro" required className="border-[#ECE7E0] text-[#1A1A1A]" />
                 </div>
               </div>
 
               <Button 
                 type="submit" 
                 disabled={isSubmitting}
-                className="w-full h-12 bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-xl mt-6"
+                className="w-full h-12 bg-[#E3A008] hover:bg-[#C88B06] text-[#1A1A1A] font-bold rounded-xl mt-6 transition-transform active:scale-[0.98]"
               >
                 {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Salvar Endereço"}
               </Button>
@@ -290,8 +392,8 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
           )}
         </div>
 
-        <div className="p-4 bg-gray-50 text-center">
-          <p className="text-[11px] text-gray-400 font-medium uppercase tracking-widest">
+        <div className="p-4 bg-[#F7F5F0] border-t border-[#ECE7E0] text-center">
+          <p className="text-[11px] text-[#717171] font-medium uppercase tracking-widest">
             Entregamos apenas em Iacanga, SP
           </p>
         </div>

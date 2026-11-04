@@ -10,24 +10,23 @@ interface HeaderProps {
 function HeaderFallback({ variant = "default" }: HeaderProps) {
   if (variant === "simple") {
     return (
-      <header className="w-full bg-white border-b py-6 sticky top-0 z-40">
+      <header className="w-full bg-[#FFFFFF] border-b border-[#ECE7E0] h-16 sticky top-0 z-40 flex items-center">
         <div className="container mx-auto px-4 flex justify-center">
-          <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gray-200 rounded-full animate-pulse"></div>
+          <div className="w-11 h-11 bg-[#F3F0EB] rounded-full animate-pulse" />
         </div>
       </header>
     )
   }
-  
+
   return (
-    <header className="sticky top-0 z-40 w-full bg-white py-4 sm:py-6">
-      <div className="container mx-auto px-4 sm:px-8">
-        <div className="flex items-center justify-between">
-          <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gray-200 rounded-full animate-pulse"></div>
-          <div className="flex items-center gap-2">
-            <div className="w-24 h-10 bg-gray-200 rounded-xl animate-pulse"></div>
-            <div className="w-20 h-10 bg-gray-200 rounded-xl animate-pulse"></div>
-          </div>
+    <header className="sticky top-0 z-40 w-full h-16 bg-[#FFFFFF] border-b border-[#ECE7E0]">
+      <div className="max-w-7xl mx-auto h-16 px-4 sm:px-8 flex items-center justify-between gap-3">
+        <div className="flex flex-col gap-1.5 py-0.5">
+          <div className="h-3 w-24 bg-[#F3F0EB] rounded animate-pulse" />
+          <div className="h-4 w-36 sm:w-44 bg-[#F3F0EB] rounded animate-pulse" />
         </div>
+        <div className="h-5 w-16 bg-[#F3F0EB] rounded-full animate-pulse" />
+        <div className="w-10 h-10 bg-[#F3F0EB] rounded-full animate-pulse" />
       </div>
     </header>
   )
@@ -40,3 +39,4 @@ export function HeaderWrapper(props: HeaderProps) {
     </Suspense>
   )
 }
+

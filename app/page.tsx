@@ -62,10 +62,10 @@ export default async function Home() {
     .slice(0, 4)
 
   return (
-    <div className="min-h-screen flex flex-col bg-white">
+    <div className="min-h-screen flex flex-col bg-[#F7F5F0] text-[#1A1A1A] antialiased">
       <HeaderWrapper />
 
-      <main className="flex-1">
+      <main className="flex-1 flex flex-col">
         {/* Hero com dados reais, status da loja e chamada de alta conversão */}
         <Hero
           mostRequestedProduct={mostRequestedData.product}
@@ -74,8 +74,10 @@ export default async function Home() {
           totalCustomers={totalCustomers}
         />
 
-        {/* Barra de Categorias Rápidas (Chips estilo iFood) */}
-        <CategoryBar />
+        {/* Barra de Categorias Rápidas (Chips estilo iFood com espaço reservado CLS = 0) */}
+        <section aria-label="Navegação por categorias" className="w-full min-h-[60px] h-[60px] bg-white">
+          <CategoryBar />
+        </section>
 
         {/* Carrossel Rotativo de Cupons da Home (Estilo Mobile iFood) */}
         <HomeCouponBanner
