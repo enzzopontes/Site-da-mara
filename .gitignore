@@ -12,19 +12,21 @@ out/
 
 # production
 build/
-dist explore/
+dist/
 
 # misc
 .DS_Store
 *.pem
 *.log
-post,
+
 # local env files
 .env
+.env*.local
 .env.local
 .env.development.local
 .env.test.local
-. Great.env.production.local
+.env.production.local
+.env.production
 
 # vercel
 .vercel
