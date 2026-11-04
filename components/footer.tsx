@@ -14,20 +14,18 @@ export function Footer() {
           <div className="space-y-6">
             <Link 
               href="/" 
-              className="flex items-center gap-3 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 rounded-lg p-1"
+              className="inline-block group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 rounded-xl p-1 transition-transform hover:scale-[1.02]"
               aria-label="Batata Top - Página Inicial"
             >
-              <div className="w-12 h-12 sm:w-14 sm:h-14 relative flex-shrink-0">
+              <div className="relative w-44 sm:w-52 h-16 sm:h-20">
                 <Image
-                  src="/logo.png"
+                  src="/images/batata-top-estendida.png"
                   alt="Batata Top Delivery"
                   fill
-                  className="rounded-full object-contain pointer-events-none"
+                  sizes="(max-width: 640px) 176px, 208px"
+                  className="object-contain object-left pointer-events-none"
                   priority
                 />
-              </div>
-              <div className="text-2xl font-black tracking-tighter text-gray-950">
-                BATA<span className="text-amber-600">TOP</span>
               </div>
             </Link>
             <p className="text-gray-600 text-sm leading-relaxed max-w-xs">
