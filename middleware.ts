@@ -8,6 +8,7 @@ export default async function proxy(request: NextRequest) {
 
   // 0. Rate Limiting por IP (Proteção contra força bruta, scraping e DDoS)
   const clientIp =
+    request.headers.get("x-vercel-ip") ||
     request.headers.get("x-real-ip") ||
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     "127.0.0.1"
