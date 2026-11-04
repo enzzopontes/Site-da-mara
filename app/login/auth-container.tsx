@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
+import { validatePassword, sanitizeAuthErrorMessage } from "@/lib/security-auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Eye, EyeOff, ArrowRight, Sparkles, MapPin, Star, ChevronLeft } from "lucide-react"
@@ -74,27 +75,21 @@ export function AuthContainer({ initialMode = "login" }: { initialMode?: "login"
           setLoading(false)
           return
         }
+        const passValidation = validatePassword(password)
+        if (!passValidation.isValid) {
+          setError(passValidation.error || "A senha deve conter no mínimo 8 caracteres, letra e número.")
+          setLoading(false)
+          return
+        }
         await signUpWithEmail(email, password)
       } else if (mode === "forgot-password") {
         await resetPassword(email)
-        setSuccessMessage("E-mail de recuperação enviado! Verifique sua caixa de entrada.")
+        setSuccessMessage("Se este e-mail estiver cadastrado, você receberá um link para redefinir sua senha.")
       }
     } catch (err: any) {
       console.error("Erro na autenticação:", err)
-      
-      let errorMessage = "Ocorreu um erro. Tente novamente."
-      
-      if (err.message?.includes("Invalid login credentials")) {
-        errorMessage = "E-mail ou senha incorretos."
-      } else if (err.message?.includes("User already registered")) {
-        errorMessage = "Este e-mail já está cadastrado. Tente fazer login."
-      } else if (err.message?.includes("Password should be at least 6 characters")) {
-        errorMessage = "A senha deve ter pelo menos 6 caracteres."
-      } else if (err.message?.includes("Email not confirmed")) {
-        errorMessage = "Por favor, confirme seu e-mail antes de entrar."
-      }
-      
-      setError(errorMessage)
+      const sanitized = sanitizeAuthErrorMessage(err?.message)
+      setError(sanitized)
     } finally {
       setLoading(false)
     }

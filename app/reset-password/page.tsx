@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
+import { validatePassword } from "@/lib/security-auth"
 import Link from "next/link"
 import { Eye, EyeOff, ArrowRight, Lock, CheckCircle2, ChevronLeft } from "lucide-react"
 import { Footer } from "@/components/footer"
@@ -69,8 +70,9 @@ function ResetPasswordContent() {
       return
     }
 
-    if (password.length < 6) {
-      setError("A senha deve ter pelo menos 6 caracteres")
+    const passCheck = validatePassword(password)
+    if (!passCheck.isValid) {
+      setError(passCheck.error || "A senha deve conter no mínimo 8 caracteres, letra e número.")
       return
     }
 

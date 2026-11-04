@@ -32,20 +32,17 @@ export default async function proxy(request: NextRequest) {
     if (!rl.success) {
       return new NextResponse(
         "Muitas tentativas de acesso. Por favor, aguarde um minuto e tente novamente.",
-        {
-          status: 429,
-          headers: { "Content-Type": "text/plain; charset=utf-8", "Retry-After": "60" },
-        }
+        { status: 429, headers: { "Retry-After": "60" } }
       )
     }
   }
 
+  // Proteção do Supabase
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  // If Supabase is not configured, allow all requests except admin routes
   if (!supabaseUrl || !supabaseKey) {
-    if (url.pathname.startsWith("/admin")) {
+    if (!url.pathname.startsWith("/setup-required")) {
       const redirectUrl = new URL("/setup-required", request.url)
       return NextResponse.redirect(redirectUrl)
     }
@@ -63,8 +60,13 @@ export default async function proxy(request: NextRequest) {
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value, options }) => {
+          const secureOptions = {
+            ...options,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: options?.sameSite || "lax",
+          }
           request.cookies.set(name, value)
-          supabaseResponse.cookies.set(name, value, options)
+          supabaseResponse.cookies.set(name, value, secureOptions)
         })
       },
     },
@@ -83,12 +85,9 @@ export default async function proxy(request: NextRequest) {
       return NextResponse.redirect(redirectUrl)
     }
 
-    // Verificação instantânea (e-mail exato, contém "admin" ou metadata)
+    // Verificação autoritária e segura de admin
     let isAdmin = isAdminUser(user)
 
-    // FIX: se a verificação instantânea falhar, consulta a coluna `role`
-    // na tabela `profiles` — é o que permite promover alguém a admin
-    // manualmente pelo painel do Supabase sem precisar mexer em código.
     if (!isAdmin) {
       const { data: profile } = await supabase
         .from("profiles")
@@ -97,15 +96,6 @@ export default async function proxy(request: NextRequest) {
         .single()
 
       if (profile?.role === "admin") {
-        isAdmin = true
-      }
-    }
-
-    // FIX: fallback extra pela variável de ambiente ADMIN_EMAILS ou NEXT_PUBLIC_ADMIN_EMAILS
-    if (!isAdmin) {
-      const adminEnv = process.env.ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAILS || ""
-      const adminEmails = adminEnv.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean)
-      if (user.email && adminEmails.includes(user.email.toLowerCase())) {
         isAdmin = true
       }
     }
@@ -125,14 +115,11 @@ export default async function proxy(request: NextRequest) {
     }
   }
 
-  // 3. Redirecionar usuários logados para longe da página de login/cadastro
-  if ((url.pathname === "/login" || url.pathname === "/cadastro") && user) {
-    return NextResponse.redirect(new URL("/", request.url))
-  }
-
   return supabaseResponse
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 }
