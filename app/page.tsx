@@ -75,7 +75,7 @@ export default async function Home() {
         />
 
         {/* Barra de Categorias Rápidas (Chips estilo iFood com espaço reservado CLS = 0) */}
-        <section aria-label="Navegação por categorias" className="w-full min-h-[60px] h-[60px] bg-white">
+        <section aria-label="Navegação por categorias" className="w-full min-h-[60px] bg-white">
           <CategoryBar />
         </section>
 

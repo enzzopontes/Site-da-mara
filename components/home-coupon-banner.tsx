@@ -219,7 +219,7 @@ export function HomeCouponBanner({
 
         {/* Trilha do Carrossel com Animação Direcional (Sai para esquerda, entra pela direita) */}
         <div
-          className={`grid grid-cols-1 sm:grid-cols-2 gap-3.5 transform ${
+          className={`grid grid-cols-1 md:grid-cols-2 gap-3.5 transform ${
             animPhase === "exit"
               ? animDirection === "next"
                 ? "-translate-x-12 opacity-0 scale-[0.98] transition-all duration-200 ease-in"
@@ -241,7 +241,7 @@ export function HomeCouponBanner({
             return (
               <div
                 key={`${c.id}-${i}`}
-                className="w-full flex flex-col justify-between h-full shadow-xs transition-transform hover:-translate-y-0.5"
+                className={`w-full ${i === 1 ? "hidden md:flex" : "flex"} flex-col justify-between h-full shadow-xs transition-transform hover:-translate-y-0.5`}
               >
                 {/* Parte Superior do Ticket (Idêntico ao HomeCouponCard.jsx do App) */}
                 <div className="bg-white rounded-t-2xl border-x-[1.5px] border-t-[1.5px] border-[#E5E7EB] px-3.5 pt-3 pb-2 flex-1">
