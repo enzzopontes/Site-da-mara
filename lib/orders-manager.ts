@@ -1,4 +1,5 @@
 import { getSupabaseBrowserClient } from "./supabase/client"
+import { validateOrder } from "./validation"
 
 export interface Order {
   id: string
@@ -33,15 +34,19 @@ class OrdersManager {
   }
 
   async createOrder(order: any): Promise<Order> {
+    const orderCheck = validateOrder(order)
+    if (!orderCheck.isValid) {
+      throw new Error(orderCheck.error || "Dados do pedido inválidos")
+    }
     const p_items = (order.items || []).map((item: any) => ({
       product_id: String(item.product_id || item.id || '').slice(0, 36),
-      quantity: item.quantity || 1,
-      notes: item.notes || null,
+      quantity: Math.max(1, Math.min(99, Math.floor(Number(item.quantity) || 1))),
+      notes: item.notes ? String(item.notes).slice(0, 300) : null,
       pasta_type: item.pastaType || item.pasta_type || null,
       adicionais: (item.adicionais || []).map((a: any) => ({
         id: a.id || undefined,
         name: a.name || a.nome || undefined,
-        quantity: a.quantity || 1,
+        quantity: Math.max(1, Math.min(20, Math.floor(Number(a.quantity) || 1))),
       })),
     }))
 

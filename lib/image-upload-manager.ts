@@ -1,4 +1,5 @@
 import { getSupabaseBrowserClient } from "./supabase/client"
+import { validateImagePayload, sanitizeFileName } from "./security-validation"
 
 export interface UploadedImage {
   id: string
@@ -42,16 +43,20 @@ class ImageUploadManager {
       console.log(`[ImageUploadManager] Iniciando upload - Arquivo: ${file.name}, Categoria: ${category}`);
       
       // Validação do arquivo
-      if (!file.type.startsWith("image/")) {
-        throw new Error("O arquivo deve ser uma imagem")
-      }
-
       if (file.size > 5 * 1024 * 1024) {
         throw new Error("A imagem não pode ser maior que 5MB")
       }
 
       // Converte para base64
       const base64Data = await this.fileToBase64(file)
+
+      // Validação profunda de assinatura binária (magic bytes) e bloqueio de SVG/scripts
+      const validation = validateImagePayload(file.type, base64Data)
+      if (!validation.isValid) {
+        throw new Error(validation.error || "Arquivo de imagem inválido")
+      }
+
+      const safeName = sanitizeFileName(file.name)
 
       // Cria um ID único
       const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
@@ -60,9 +65,9 @@ class ImageUploadManager {
       // Garantimos que o objeto de inserção tenha a categoria correta
       const insertData = {
         id,
-        name: file.name,
+        name: safeName,
         data: base64Data,
-        mime_type: file.type,
+        mime_type: file.type.toLowerCase().trim(),
         category: category, // Garantir que a categoria passada seja usada
         uploaded_at: new Date().toISOString(),
       };
