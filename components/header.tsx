@@ -56,7 +56,6 @@ export function Header({ variant = "default" }: HeaderProps) {
   const [isAdmin, setIsAdmin] = useState(false)
   const [isHeaderHidden, setIsHeaderHidden] = useState(false)
 
-  const lastScrollYRef = useRef(0)
   const hiddenRef = useRef(false)
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0)
@@ -144,49 +143,36 @@ export function Header({ variant = "default" }: HeaderProps) {
     }
   }, [])
 
-  // Scroll Swap mechanics on Home ("/") with hysteresis
+  // Sincronização de scroll suave entre Header e CategoryBar
   useEffect(() => {
-    const syncHeaderHidden = (shouldHide: boolean) => {
-      hiddenRef.current = shouldHide
-      setIsHeaderHidden(shouldHide)
-      if (typeof document !== "undefined") {
-        document.documentElement.dataset.headerHidden = shouldHide ? "true" : "false"
-      }
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(
-          new CustomEvent("header-scroll-swap", { detail: { headerHidden: shouldHide } })
-        )
-      }
-    }
-
     if (pathname !== "/") {
-      syncHeaderHidden(false)
+      hiddenRef.current = false
+      setIsHeaderHidden(false)
       return
     }
 
-    lastScrollYRef.current = window.scrollY
-
-    const handleScroll = () => {
-      const currentY = window.scrollY
-      const delta = currentY - lastScrollYRef.current
-      const currentlyHidden = hiddenRef.current
-      let shouldHide = currentlyHidden
-
-      if (!currentlyHidden && ((currentY > 64 && delta > 2) || (currentY > 120 && delta > 0))) {
-        shouldHide = true
-      } else if (currentlyHidden && (currentY <= 40 || delta < -6)) {
-        shouldHide = false
-      }
-
-      lastScrollYRef.current = currentY
-
-      if (shouldHide !== currentlyHidden) {
-        syncHeaderHidden(shouldHide)
+    const onHeaderScrollSwap = (event: Event) => {
+      const customEvent = event as CustomEvent<{ headerHidden?: boolean }>
+      if (typeof customEvent.detail?.headerHidden === "boolean") {
+        hiddenRef.current = customEvent.detail.headerHidden
+        setIsHeaderHidden(customEvent.detail.headerHidden)
       }
     }
 
+    const handleScroll = () => {
+      if (window.scrollY <= 40 && hiddenRef.current) {
+        hiddenRef.current = false
+        setIsHeaderHidden(false)
+      }
+    }
+
+    window.addEventListener("header-scroll-swap", onHeaderScrollSwap)
     window.addEventListener("scroll", handleScroll, { passive: true })
-    return () => window.removeEventListener("scroll", handleScroll)
+
+    return () => {
+      window.removeEventListener("header-scroll-swap", onHeaderScrollSwap)
+      window.removeEventListener("scroll", handleScroll)
+    }
   }, [pathname])
 
   const handleSearch = (e: React.FormEvent) => {
@@ -222,10 +208,10 @@ export function Header({ variant = "default" }: HeaderProps) {
   return (
     <>
       <header
-        className={`sticky top-0 z-40 w-full h-16 bg-[#FFFFFF] border-b border-[#ECE7E0] ${
+        className={`sticky top-0 z-40 w-full h-16 bg-[#FFFFFF] border-b border-[#ECE7E0] transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
           hideOnHome
-            ? "-translate-y-full opacity-0 pointer-events-none transition-all duration-300 ease-in-out"
-            : "translate-y-0 opacity-100 transition-all duration-300 ease-in-out"
+            ? "-translate-y-full pointer-events-none"
+            : "translate-y-0 opacity-100 pointer-events-auto"
         }`}
       >
         <div className="max-w-7xl mx-auto h-16 px-4 sm:px-8 flex items-center justify-between gap-3">
@@ -359,4 +345,3 @@ export function Header({ variant = "default" }: HeaderProps) {
     </>
   )
 }
-
