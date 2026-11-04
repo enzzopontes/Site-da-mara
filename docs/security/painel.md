@@ -10,11 +10,12 @@
 | **6. Cadeia de Suprimentos** | 🟢 Concluído | 🟢 Concluído | App: Correção de vulnerabilidade crítica no `shell-quote` via `npm audit fix`. Site: 0 vulnerabilidades de produção (`npm audit --omit=dev`), Dependabot ativado, workflow do GitHub Actions com `permissions: contents: read` e `npm ci`, 2 testes em `tests/phase6-supply-chain.test.mjs`. |
 | **7. Observabilidade e Resposta** | 🟢 Concluído | 🟢 Concluído | Sanitizador de logs contra vazamento de senhas, cartões de crédito e PII (`lib/security-logger.ts`), Runbook de Resposta a Incidentes (NIST), Plano de Manutenção e Patching (PMP) e `SECURITY.md` publicado na raiz, 3 testes em `tests/phase7-observability.test.mjs`. |
 | **PoLP (Transversal)** | 🟢 Concluído | 🟢 Concluído | Matriz completa de papéis e privilégios mínimos mapeada em `docs/security/matriz-de-acesso.md`. Nenhuma permissão sem justificativa. |
-| **8. Red Team (50 vetores)** | 🟡 Pronto para Disparo | 🟡 Pronto para Disparo | Aguardando liberação do usuário para início da bateria de 50 testes ofensivos paralelos. |
+| **8. Red Team (50 vetores)** | 🟢 Concluído | 🟢 Concluído | 50 missões ofensivas executadas em 5 lotes de 10 agentes (`tests/redteam-batch1` a `batch5`). 100% dos ataques bloqueados e mitigados com sucesso. Consolidação pelo Agente Juiz em `docs/security/relatorio-final.md`. |
 
 ---
 
 ### Resumo das Suítes Automatizadas
-- **Site (`c:\Dev\Sites\Site-da-mara`)**: 20 testes passando (100% de sucesso).
-- **App (`c:\Dev\batata-top`)**: 32 testes passando (100% de sucesso).
+- **Site (`c:\Dev\Sites\Site-da-mara`)**: 70 testes passando (100% de sucesso em `node --test`).
+- **App (`c:\Dev\batata-top`)**: 32 testes passando (100% de sucesso em `jest`).
+- **Total Geral**: 102 testes automatizados de segurança ativos.
 - **Design e UI**: 100% intactos (zero alterações visuais, layout ou CSS).
