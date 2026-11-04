@@ -9,10 +9,14 @@ const SENSITIVE_KEYS = new Set([
   'token',
   'secret',
   'key',
+  'apikey',
+  'api_key',
   'access_token',
   'cvv',
   'card_cvv',
   'card_number',
+  'creditcard',
+  'credit_card',
   'numero_cartao',
   'authorization',
   'service_role',
@@ -61,4 +65,20 @@ export function createSecurityLogEntry(eventType: string, details: Record<string
     environment: process.env.NODE_ENV || 'development',
     payload: sanitizeLogData(details),
   }
+}
+
+export function logSecurityEvent({ event, severity = 'INFO', ip = 'unknown', details = {} }: {
+  event: string
+  severity?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | 'INFO'
+  ip?: string
+  details?: Record<string, any>
+}) {
+  const entry = {
+    timestamp: new Date().toISOString(),
+    event,
+    severity,
+    ip,
+    details: sanitizeLogData(details),
+  }
+  return JSON.stringify(entry)
 }
