@@ -151,37 +151,60 @@ export function CategoryBar() {
             className="flex items-center justify-start md:justify-center gap-2.5 overflow-x-auto no-scrollbar py-1.5 px-1 mx-auto"
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
-            {CATEGORIES.map((cat) => {
-              const isActive = activeId === cat.id
-              return (
-                <Link
-                  key={cat.id}
-                  href={cat.href}
-                  onClick={() => setActiveId(cat.id)}
-                  className="group relative flex items-center shrink-0 py-1 active:scale-[0.98] transition-transform"
-                >
-                  <span
-                    className={`h-9 pl-11 pr-3.5 rounded-full flex items-center text-xs font-bold leading-none transition-colors border ${
-                      isActive
-                        ? "bg-[#FEF8EC] border-[#E3A008] text-[#A16207]"
-                        : "bg-[#F3F0EB] md:bg-white border-[#ECE7E0] text-[#1A1A1A] hover:border-[#E3A008]/50"
-                    }`}
+            {["todos", "cardapio", "batata", "macarrao", "bebida"]
+              .map((id) => CATEGORIES.find((c) => c.id === id)!)
+              .map((cat) => {
+                const isActive = activeId === cat.id
+                if (cat.id === "todos") {
+                  return (
+                    <Link
+                      key={cat.id}
+                      href={cat.href}
+                      aria-label="Ver mais"
+                      onClick={() => setActiveId(cat.id)}
+                      className={`group flex items-center justify-center shrink-0 w-10 h-10 rounded-full border transition-all active:scale-[0.98] ${
+                        isActive
+                          ? "bg-[#FEF8EC] border-[#E3A008]"
+                          : "bg-[#F3F0EB] md:bg-white border-[#ECE7E0] hover:border-[#E3A008]/50"
+                      }`}
+                    >
+                      <img
+                        src={cat.iconSrc}
+                        alt=""
+                        className="w-8 h-8 rounded-full object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.12)] transition-transform duration-200 group-hover:scale-105"
+                      />
+                    </Link>
+                  )
+                }
+                return (
+                  <Link
+                    key={cat.id}
+                    href={cat.href}
+                    onClick={() => setActiveId(cat.id)}
+                    className="group relative flex items-center shrink-0 py-1 active:scale-[0.98] transition-transform"
                   >
-                    {cat.name}
-                  </span>
-                  <span
-                    aria-hidden="true"
-                    className="pointer-events-none absolute left-0.5 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center"
-                  >
-                    <img
-                      src={cat.iconSrc}
-                      alt=""
-                      className="w-9 h-9 object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.12)] transition-transform duration-200 group-hover:scale-105"
-                    />
-                  </span>
-                </Link>
-              )
-            })}
+                    <span
+                      className={`h-9 pl-11 pr-3.5 rounded-full flex items-center text-xs font-bold leading-none transition-colors border ${
+                        isActive
+                          ? "bg-[#FEF8EC] border-[#E3A008] text-[#A16207]"
+                          : "bg-[#F3F0EB] md:bg-white border-[#ECE7E0] text-[#1A1A1A] hover:border-[#E3A008]/50"
+                      }`}
+                    >
+                      {cat.name}
+                    </span>
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute left-0.5 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center"
+                    >
+                      <img
+                        src={cat.iconSrc}
+                        alt=""
+                        className="w-9 h-9 object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.12)] transition-transform duration-200 group-hover:scale-105"
+                      />
+                    </span>
+                  </Link>
+                )
+              })}
           </div>
         </div>
       </nav>
