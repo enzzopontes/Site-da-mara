@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast"
 import { X, Minus, Plus, ShoppingCart, Tag } from "lucide-react"
 import type { Adicional } from "@/lib/products-db-client"
 import { storeStatusManager } from "@/lib/store-status-manager"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface Product {
   id: string
@@ -35,6 +36,7 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
   const [pastaType, setPastaType] = useState<"penne" | "parafuso" | "espaguete">("penne")
   const [isPromoActive, setIsPromoActive] = useState(false)
   const [promoPrice, setPromoPrice] = useState(24.99)
+  const [dialogImageLoaded, setDialogImageLoaded] = useState(false)
 
   const { addItem } = useCart()
   const { toast } = useToast()
@@ -54,7 +56,8 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
       setSelectedAdicionais({})
       setQuantity(1)
       setObservacoes("")
-      setPastaType("penne") // Resetar para penne ao abrir
+      setPastaType("penne")
+      setDialogImageLoaded(false)
     }
   }, [open, product.id, product.adicionais])
 
@@ -131,17 +134,21 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="fixed inset-x-0 bottom-0 top-auto left-0 translate-x-0 translate-y-0 w-full max-w-full rounded-t-[24px] rounded-b-none border-none p-0 flex flex-col max-h-[88vh] overflow-hidden shadow-2xl duration-300 data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom sm:top-[50%] sm:left-[50%] sm:bottom-auto sm:inset-x-auto sm:translate-x-[-50%] sm:translate-y-[-50%] sm:max-w-lg sm:rounded-2xl sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:zoom-out-95"
+        className="p-0 border-none flex flex-col max-h-[90vh] sm:max-h-[88vh] overflow-hidden shadow-2xl duration-200 w-full max-w-full rounded-t-[24px] rounded-b-none bottom-0 top-auto left-0 right-0 translate-x-0 translate-y-0 sm:bottom-auto sm:top-1/2 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:-translate-y-1/2 sm:max-w-lg sm:rounded-2xl data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:zoom-out-95"
       >
         {/* Visual drag handle / notch bar */}
         <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto my-2 sm:hidden shrink-0" />
         
         {/* HEADER COM IMAGEM */}
-        <div className="relative h-40 sm:h-56 w-full overflow-hidden shrink-0">
+        <div className="relative h-40 sm:h-56 w-full overflow-hidden shrink-0 bg-[#F7F4EF]">
+          {!dialogImageLoaded && (
+            <Skeleton className="absolute inset-0 w-full h-full rounded-none" />
+          )}
           <img 
             src={imageUrl} 
             alt={product.name} 
-            className="w-full h-full object-cover" 
+            onLoad={() => setDialogImageLoaded(true)}
+            className={`w-full h-full object-cover ${!dialogImageLoaded ? "opacity-0" : "opacity-100 transition-opacity duration-300"}`} 
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
           <button 

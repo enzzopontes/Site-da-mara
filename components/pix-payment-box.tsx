@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Copy, Check, QrCode, Clock, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 
@@ -216,9 +217,16 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
       </div>
 
       {loading && (
-        <div className="py-12 flex flex-col items-center justify-center text-center">
-          <RefreshCw className="w-8 h-8 text-amber-500 animate-spin mb-3" />
-          <p className="text-sm font-bold text-gray-600">Gerando QR Code seguro do Pix...</p>
+        <div
+          role="status"
+          aria-busy="true"
+          aria-live="polite"
+          aria-label="Gerando QR Code do Pix"
+          className="py-6 flex flex-col items-center justify-center space-y-4 select-none"
+        >
+          <Skeleton className="w-48 h-48 sm:w-56 sm:h-56 rounded-2xl mx-auto" />
+          <Skeleton className="h-5 w-32 rounded" />
+          <Skeleton className="h-14 w-full rounded-2xl" />
         </div>
       )}
 

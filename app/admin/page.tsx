@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { AdminDashboardSkeleton } from "@/components/skeletons/admin-skeleton"
 import { useAuth } from "@/lib/auth-context"
 import { ordersManager } from "@/lib/orders-manager"
 import { isAdmin as checkIsAdmin } from "@/lib/supabase/admin"
@@ -79,16 +80,7 @@ export default function AdminPage() {
   }
 
   if (loading || checking || !isAdmin) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-amber-200 border-t-[#E3A008] mx-auto mb-4" />
-          <p className="text-stone-600 text-sm font-semibold">
-            Carregando painel operacional...
-          </p>
-        </div>
-      </div>
-    )
+    return <AdminDashboardSkeleton />
   }
 
   const averageTicket =

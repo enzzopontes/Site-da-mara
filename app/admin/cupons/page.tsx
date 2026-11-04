@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
+import { AdminTableSkeleton } from "@/components/skeletons/admin-skeleton"
 import {
   Ticket,
   Plus,
@@ -371,14 +372,7 @@ export default function AdminCuponsPage() {
   }
 
   if (checkingAuth) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-[#F7F4EF]">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#E3A008] border-t-transparent" />
-          <p className="text-xs font-bold text-[#6B6157]">Verificando acesso...</p>
-        </div>
-      </div>
-    )
+    return <AdminTableSkeleton rows={6} />
   }
 
   if (!isAdmin) return null

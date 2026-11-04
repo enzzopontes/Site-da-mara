@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { useAuth } from "@/lib/auth-context"
 import { Lock, Key, Shield, ArrowLeft, Eye, EyeOff } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { MeusDadosSkeleton } from "@/components/skeletons/meus-dados-skeleton"
 import { useEffect, useState } from "react"
 import { OrderSummary } from "@/components/order-summary"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
@@ -66,16 +67,7 @@ export default function SegurancaPage() {
   }
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col">
-        <HeaderWrapper />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500"></div>
-        </main>
-        <Footer />
-        <OrderSummary />
-      </div>
-    )
+    return <MeusDadosSkeleton />
   }
 
   if (!user) return null

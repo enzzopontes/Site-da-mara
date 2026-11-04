@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { useAuth } from "@/lib/auth-context"
 import { MessageCircle, Phone, Clock, ArrowLeft, ChevronRight, Package, AlertCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { AjudaSkeleton } from "@/components/skeletons/ajuda-skeleton"
 import { useState } from "react"
 import { OrderSummary } from "@/components/order-summary"
 import Link from "next/link"
@@ -75,30 +76,7 @@ export default function AjudaPage() {
   ]
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col bg-[#F7F5F0]">
-        <HeaderWrapper />
-        <main className="flex-1 py-8 pb-24 lg:pb-8">
-          <div className="container mx-auto px-4 max-w-2xl space-y-6 animate-pulse">
-            <div className="flex items-center gap-4">
-              <div className="h-10 w-10 rounded-full bg-[#ECE7E0]" />
-              <div className="h-7 w-28 rounded-lg bg-[#ECE7E0]" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="h-18 rounded-xl bg-white border border-[#ECE7E0]" />
-              <div className="h-18 rounded-xl bg-white border border-[#ECE7E0]" />
-            </div>
-            <div className="space-y-3">
-              <div className="h-20 rounded-xl bg-white border border-[#ECE7E0]" />
-              <div className="h-20 rounded-xl bg-white border border-[#ECE7E0]" />
-            </div>
-            <div className="h-64 rounded-2xl bg-white border border-[#ECE7E0]" />
-          </div>
-        </main>
-        <Footer />
-        <OrderSummary />
-      </div>
-    )
+    return <AjudaSkeleton />
   }
 
   return (

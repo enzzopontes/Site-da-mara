@@ -1,3 +1,5 @@
+import { AuthSkeleton } from "@/components/skeletons/auth-skeleton"
+
 export default function Loading() {
-  return null
+  return <AuthSkeleton />
 }

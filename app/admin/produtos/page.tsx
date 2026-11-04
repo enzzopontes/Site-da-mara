@@ -4,6 +4,7 @@ import type React from "react"
 import { useEffect, useState, useMemo } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
+import { AdminTableSkeleton } from "@/components/skeletons/admin-skeleton"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -286,14 +287,7 @@ export default function AdminProdutosPage() {
   }, [products, adicionais])
 
   if (loading || !isAdmin) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-amber-200 border-t-amber-500 mx-auto mb-4"></div>
-          <p className="text-gray-600 font-medium">Verificando permissões...</p>
-        </div>
-      </div>
-    )
+    return <AdminTableSkeleton rows={8} />
   }
 
   return (

@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
+import { AdminTableSkeleton } from "@/components/skeletons/admin-skeleton"
 import {
   Clock,
   ChefHat,
@@ -205,14 +206,7 @@ export default function AdminPedidosPage() {
   }
 
   if (loading || !isAdmin) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#FFF9E6] to-white">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-amber-200 border-t-[#E3A008] mx-auto mb-6"></div>
-          <p className="text-gray-600 font-semibold">Verificando permissões...</p>
-        </div>
-      </div>
-    )
+    return <AdminTableSkeleton rows={8} />
   }
 
   const filteredOrders =

@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
+import { AdminTableSkeleton } from "@/components/skeletons/admin-skeleton"
 import { 
   ArrowLeft, Megaphone, Zap, Tag, Image as ImageIcon, Save, AlertCircle, 
   Trash2, Plus, Sparkles, CheckCircle2, Sliders, ExternalLink, RefreshCw, 
@@ -385,15 +386,7 @@ export default function AdminPromocoesPage() {
   const totalActivePromos = (superPromo.isActive ? 1 : 0) + (itemPromo.isActive ? 1 : 0)
 
   if (loading || !isAdmin) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F7F7F7]">
-        <div className="text-center p-8 bg-white rounded-3xl shadow-sm border border-gray-100 max-w-sm">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-amber-200 border-t-amber-500 mx-auto mb-4" />
-          <p className="text-gray-900 font-bold text-base">Verificando credenciais...</p>
-          <p className="text-gray-400 text-xs mt-1">Acessando portal de promoções</p>
-        </div>
-      </div>
-    )
+    return <AdminTableSkeleton rows={6} />
   }
 
   const superPromoPreview = getImagePreview(superPromo.imageId, superPromo.imageUrl, superPromo.useUrl)

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
+import { AdminTableSkeleton } from "@/components/skeletons/admin-skeleton"
 import {
   ArrowLeft,
   Star,
@@ -173,14 +174,7 @@ export default function AdminFeedbacksPage() {
   }
 
   if (loading || !isAdmin) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-stone-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-14 w-14 border-4 border-amber-200 border-t-amber-500 mx-auto mb-4" />
-          <p className="text-stone-600 font-bold">Verificando permissões...</p>
-        </div>
-      </div>
-    )
+    return <AdminTableSkeleton rows={6} />
   }
 
   return (

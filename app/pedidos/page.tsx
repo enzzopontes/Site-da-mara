@@ -5,6 +5,8 @@ import { Footer } from "@/components/footer"
 import { OrderSummary } from "@/components/order-summary"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
+import { PedidosSkeleton } from "@/components/skeletons/pedidos-skeleton"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useEffect, useState } from "react"
 import { ArrowLeft, Clock, MapPin, Phone, ChevronRight, Package, ShoppingBag, XCircle, Loader2, Ticket } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -88,18 +90,7 @@ export default function PedidosPage() {
   }
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col">
-        <HeaderWrapper />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500 mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Carregando...</p>
-          </div>
-        </main>
-        <Footer />
-      </div>
-    )
+    return <PedidosSkeleton />
   }
 
   return (
@@ -122,8 +113,25 @@ export default function PedidosPage() {
 
         <div className="container mx-auto px-4 max-w-2xl">
           {isLoadingOrders ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500"></div>
+            <div className="space-y-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="bg-white rounded-2xl border border-[#ECE7E0] p-4 sm:p-5 shadow-2xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="w-10 h-10 rounded-xl" />
+                      <div className="space-y-1">
+                        <Skeleton className="h-4 w-24 rounded" />
+                        <Skeleton className="h-3 w-32 rounded" />
+                      </div>
+                    </div>
+                    <Skeleton className="h-6 w-24 rounded-full" />
+                  </div>
+                  <div className="py-2 border-y border-[#ECE7E0]/70 space-y-1.5">
+                    <Skeleton className="h-3.5 w-4/5 rounded" />
+                    <Skeleton className="h-3.5 w-3/5 rounded" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : !user || orders.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 lg:py-20 text-center">

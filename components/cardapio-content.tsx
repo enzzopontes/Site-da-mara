@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import { ProductCard } from "@/components/product-card"
 import { Search, Utensils, GlassWater, Soup, Sparkles, Flame, Layers, X } from "lucide-react"
+import { CardapioSkeleton } from "@/components/skeletons/cardapio-skeleton"
 
 interface Product {
   id: string
@@ -199,7 +200,7 @@ export function CardapioContent({
   const filteredMacarrao = filterAndSortProducts(macarrao, topMacarraoNames)
   const filteredBebidas = filterAndSortProducts(bebidas, [])
 
-  if (!mounted) return null
+  if (!mounted) return <CardapioSkeleton />
 
   const totalCount = filteredBatatas.length + filteredMacarrao.length + filteredBebidas.length
 

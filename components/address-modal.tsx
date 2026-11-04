@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { addressesManager, type Address } from "@/lib/addresses-manager"
 import { useAuth } from "@/lib/auth-context"
 import { useToast } from "@/hooks/use-toast"
+import { AddressModalSkeleton } from "@/components/skeletons/address-skeleton"
 
 interface AddressModalProps {
   isOpen: boolean
@@ -241,10 +242,7 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
             <div className="space-y-4">
               {/* LISTA DE ENDEREÇOS */}
               {loading ? (
-                <div className="flex flex-col items-center justify-center py-12 text-[#717171]">
-                  <Loader2 className="h-8 w-8 animate-spin mb-2 text-[#E3A008]" />
-                  <p className="text-sm font-medium">Carregando seus endereços...</p>
-                </div>
+                <AddressModalSkeleton />
               ) : addresses.length > 0 ? (
                 <div className="space-y-3">
                   <p className="text-xs font-bold text-[#717171] uppercase tracking-wider">

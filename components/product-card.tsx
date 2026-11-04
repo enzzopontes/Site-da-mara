@@ -6,6 +6,7 @@ import { AddToCartDialog } from "@/components/add-to-cart-dialog"
 import { useCart } from "@/lib/cart-context"
 import { useToast } from "@/hooks/use-toast"
 import { storeStatusManager } from "@/lib/store-status-manager"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface Product {
   id: string
@@ -25,6 +26,7 @@ interface ProductCardProps {
 export function ProductCard({ product, rank = null, isMostRequested = false }: ProductCardProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [imageError, setImageError] = useState(false)
+  const [imageLoaded, setImageLoaded] = useState(false)
   const [isPromoActive, setIsPromoActive] = useState(false)
   const [promoPrice, setPromoPrice] = useState<number | null>(null)
   const { addItem } = useCart()
@@ -112,12 +114,18 @@ export function ProductCard({ product, rank = null, isMostRequested = false }: P
           {/* Imagem do Produto com Aspect Ratio Limpo */}
           <div className="relative aspect-[16/10] overflow-hidden bg-[#F7F4EF]">
             {imageUrl ? (
-              <img
-                src={imageUrl}
-                alt={product.name}
-                onError={() => setImageError(true)}
-                className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-300"
-              />
+              <>
+                {!imageLoaded && !imageError && (
+                  <Skeleton className="absolute inset-0 w-full h-full rounded-none" />
+                )}
+                <img
+                  src={imageUrl}
+                  alt={product.name}
+                  onLoad={() => setImageLoaded(true)}
+                  onError={() => setImageError(true)}
+                  className={`w-full h-full object-cover group-hover:scale-102 transition-transform duration-300 ${!imageLoaded ? "opacity-0" : "opacity-100 transition-opacity duration-300"}`}
+                />
+              </>
             ) : (
               <div className="w-full h-full flex items-center justify-center text-stone-300 text-sm">
                 Batata Top

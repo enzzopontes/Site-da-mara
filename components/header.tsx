@@ -8,6 +8,9 @@ import {
   User,
   ChevronDown,
   MapPin,
+  Home,
+  UtensilsCrossed,
+  Package,
 } from "lucide-react"
 import { useCart } from "@/lib/cart-context"
 import { useAuth } from "@/lib/auth-context"
@@ -182,7 +185,13 @@ export function Header({ variant = "default" }: HeaderProps) {
     }
   }
 
-  const isActive = (path: string) => pathname === path
+  const isActive = (path: string) => {
+    if (!pathname) return false
+    if (path === "/" && pathname === "/") return true
+    if (path === "/perfil") return pathname === "/perfil" || pathname.startsWith("/perfil/")
+    if (path !== "/" && path !== "#" && pathname.startsWith(path)) return true
+    return false
+  }
 
   if (variant === "simple") {
     return (
@@ -265,7 +274,7 @@ export function Header({ variant = "default" }: HeaderProps) {
               </div>
             )}
 
-            <form onSubmit={handleSearch} className="hidden lg:block w-64 xl:w-80">
+            <form onSubmit={handleSearch} className="hidden lg:block w-44 xl:w-72">
               <div className="relative flex items-center w-full">
                 <Search className="absolute left-3 h-4 w-4 text-[#717171] pointer-events-none" />
                 <input
@@ -282,18 +291,44 @@ export function Header({ variant = "default" }: HeaderProps) {
 
           {/* Right: Desktop Quick Links + Minimalist Circular Cart Button */}
           <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
-            <nav className="hidden lg:flex items-center gap-4 text-sm font-semibold">
+            <nav
+              aria-label="Navegação principal"
+              className="hidden lg:flex items-center gap-3 xl:gap-5 text-sm font-semibold"
+            >
+              <Link
+                href="/"
+                aria-current={isActive("/") ? "page" : undefined}
+                className={`flex items-center gap-1.5 transition-colors hover:text-[#E3A008] ${
+                  isActive("/") ? "text-[#E3A008]" : "text-[#1A1A1A]"
+                }`}
+              >
+                <Home className="h-4 w-4" />
+                <span>Início</span>
+              </Link>
               <Link
                 href="/cardapio"
-                className={`transition-colors hover:text-[#E3A008] ${
+                aria-current={isActive("/cardapio") ? "page" : undefined}
+                className={`flex items-center gap-1.5 transition-colors hover:text-[#E3A008] ${
                   isActive("/cardapio") ? "text-[#E3A008]" : "text-[#1A1A1A]"
                 }`}
               >
-                Cardápio
+                <UtensilsCrossed className="h-4 w-4" />
+                <span>Cardápio</span>
+              </Link>
+              <Link
+                href="/pedidos"
+                aria-current={isActive("/pedidos") ? "page" : undefined}
+                className={`flex items-center gap-1.5 transition-colors hover:text-[#E3A008] ${
+                  isActive("/pedidos") ? "text-[#E3A008]" : "text-[#1A1A1A]"
+                }`}
+              >
+                <Package className="h-4 w-4" />
+                <span>Pedidos</span>
               </Link>
               {user ? (
                 <Link
                   href="/perfil"
+                  aria-current={isActive("/perfil") ? "page" : undefined}
                   className={`flex items-center gap-1.5 transition-colors hover:text-[#E3A008] ${
                     isActive("/perfil") ? "text-[#E3A008]" : "text-[#1A1A1A]"
                   }`}
@@ -304,11 +339,13 @@ export function Header({ variant = "default" }: HeaderProps) {
               ) : (
                 <Link
                   href="/login"
-                  className={`transition-colors hover:text-[#E3A008] ${
+                  aria-current={isActive("/login") ? "page" : undefined}
+                  className={`flex items-center gap-1.5 transition-colors hover:text-[#E3A008] ${
                     isActive("/login") ? "text-[#E3A008]" : "text-[#1A1A1A]"
                   }`}
                 >
-                  Entrar
+                  <User className="h-4 w-4" />
+                  <span>Entrar</span>
                 </Link>
               )}
               {isAdmin && (

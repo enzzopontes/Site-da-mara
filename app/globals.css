@@ -145,3 +145,26 @@
   display: none; /* Chrome, Safari e Opera */
 }
 
+
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background-color: #EAE5DF;
+  background-image: linear-gradient(
+    90deg,
+    #EAE5DF 0%,
+    #F5F2EC 45%,
+    #DFD9D0 55%,
+    #EAE5DF 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}

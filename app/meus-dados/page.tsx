@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { useAuth } from "@/lib/auth-context"
 import { User, Mail, Phone, Calendar, ArrowLeft, Save, Download, Trash2, ShieldCheck } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { MeusDadosSkeleton } from "@/components/skeletons/meus-dados-skeleton"
 import { useEffect, useState } from "react"
 import { OrderSummary } from "@/components/order-summary"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
@@ -86,19 +87,7 @@ export default function MeusDadosPage() {
   }
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col">
-        <HeaderWrapper />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Carregando...</p>
-          </div>
-        </main>
-        <Footer />
-        <OrderSummary />
-      </div>
-    )
+    return <MeusDadosSkeleton />
   }
 
   if (!user) {

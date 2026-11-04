@@ -5,6 +5,7 @@ import { Footer } from "@/components/footer"
 import { OrderSummary } from "@/components/order-summary"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter, useParams } from "next/navigation"
+import { PedidoDetalheSkeleton } from "@/components/skeletons/pedido-detalhe-skeleton"
 import { useEffect, useState } from "react"
 import { ArrowLeft, Clock, MapPin, Phone, MessageSquare, Package, ShoppingBag, CheckCircle2, Truck, Timer, Ticket } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -74,15 +75,7 @@ export default function DetalhesPedidoPage() {
   }
 
   if (loading || isLoading) {
-    return (
-      <div className="min-h-screen flex flex-col">
-        <HeaderWrapper />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500"></div>
-        </main>
-        <Footer />
-      </div>
-    )
+    return <PedidoDetalheSkeleton />
   }
 
   if (!order) {

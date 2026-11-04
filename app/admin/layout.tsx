@@ -8,6 +8,7 @@ import { isAdmin as checkIsAdmin } from "@/lib/supabase/admin"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { storeStatusManager, StoreStatus } from "@/lib/store-status-manager"
 import { BusinessHours } from "@/components/business-hours"
+import { AdminLayoutSkeleton } from "@/components/skeletons/admin-skeleton"
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -284,16 +285,7 @@ export default function AdminLayout({
   }, [pathname])
 
   if (loading || checkingAuth) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#1F1B16] text-white">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-[#E3A008]/20 border-t-[#E3A008] mx-auto mb-4" />
-          <p className="text-stone-300 text-sm font-medium tracking-wide">
-            Carregando Portal Batata Top...
-          </p>
-        </div>
-      </div>
-    )
+    return <AdminLayoutSkeleton />
   }
 
   if (!isAdmin) {

@@ -6,6 +6,7 @@ import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
+import { AdminTableSkeleton } from "@/components/skeletons/admin-skeleton"
 import {
   ArrowLeft,
   Image as ImageIcon,
@@ -185,14 +186,7 @@ export default function AdminImagensPage() {
   }
 
   if (loading || !isAdmin) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-stone-50">
-        <div className="text-center p-8">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-amber-300 border-t-amber-600 mx-auto mb-4" />
-          <p className="text-stone-700 font-semibold text-sm">Verificando credenciais de acesso...</p>
-        </div>
-      </div>
-    )
+    return <AdminTableSkeleton rows={6} />
   }
 
   return (

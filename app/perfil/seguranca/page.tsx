@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
+import { Skeleton } from "@/components/ui/skeleton"
 import Link from "next/link"
 import { HeaderWrapper } from "@/components/header-wrapper"
 import { Footer } from "@/components/footer"
@@ -313,27 +314,33 @@ export default function SegurancaContaPage() {
   // Skeleton Loading State (Zero CLS)
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col bg-[#F7F5F0] antialiased">
+      <div
+        role="status"
+        aria-busy="true"
+        aria-live="polite"
+        aria-label="Carregando configurações de segurança"
+        className="min-h-screen flex flex-col bg-[#F7F5F0] antialiased select-none"
+      >
         <HeaderWrapper />
         <main className="flex-1 bg-[#F7F5F0] pb-24 lg:pb-12">
           <div className="max-w-2xl mx-auto md:py-8 px-4 space-y-5 pt-4">
-            <div className="h-12 bg-white rounded-2xl border border-[#ECE7E0] px-4 flex items-center gap-3 animate-pulse">
-              <div className="h-8 w-8 rounded-full bg-[#F3F0EB]" />
-              <div className="h-4 w-44 rounded bg-[#F3F0EB]" />
+            <div className="h-12 bg-white rounded-2xl border border-[#ECE7E0] px-4 flex items-center gap-3">
+              <Skeleton className="h-8 w-8 rounded-full" />
+              <Skeleton className="h-4 w-44 rounded" />
             </div>
-            <div className="bg-white rounded-2xl border border-[#ECE7E0] p-6 space-y-4 animate-pulse">
-              <div className="h-5 w-48 rounded bg-[#F3F0EB]" />
-              <div className="h-16 w-full rounded-xl bg-[#F3F0EB]" />
-              <div className="h-10 w-full rounded-xl bg-[#F3F0EB]" />
+            <div className="bg-white rounded-2xl border border-[#ECE7E0] p-6 space-y-4">
+              <Skeleton className="h-5 w-48 rounded" />
+              <Skeleton className="h-16 w-full rounded-xl" />
+              <Skeleton className="h-10 w-full rounded-xl" />
             </div>
-            <div className="bg-white rounded-2xl border border-[#ECE7E0] p-6 space-y-3 animate-pulse">
-              <div className="h-5 w-56 rounded bg-[#F3F0EB]" />
-              <div className="h-11 w-full rounded-xl bg-[#F3F0EB]" />
+            <div className="bg-white rounded-2xl border border-[#ECE7E0] p-6 space-y-3">
+              <Skeleton className="h-5 w-56 rounded" />
+              <Skeleton className="h-11 w-full rounded-xl" />
             </div>
-            <div className="bg-white rounded-2xl border border-[#ECE7E0] p-6 space-y-4 animate-pulse">
-              <div className="h-5 w-52 rounded bg-[#F3F0EB]" />
-              <div className="h-24 w-full rounded-xl bg-[#F3F0EB]" />
-              <div className="h-11 w-full rounded-xl bg-[#F3F0EB]" />
+            <div className="bg-white rounded-2xl border border-[#ECE7E0] p-6 space-y-4">
+              <Skeleton className="h-5 w-52 rounded" />
+              <Skeleton className="h-24 w-full rounded-xl" />
+              <Skeleton className="h-11 w-full rounded-xl" />
             </div>
           </div>
         </main>

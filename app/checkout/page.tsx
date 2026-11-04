@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { CheckoutSkeleton } from "@/components/skeletons/checkout-skeleton"
 import { HeaderWrapper } from "@/components/header-wrapper"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
@@ -411,18 +412,9 @@ export default function CheckoutPage() {
     }
   }
 
-  // ─── Renderização de Carregamento ───────────────────────────────────────────
+  // ─── Renderização de Carregamento (Zero CLS Skeleton) ─────────────────────
   if (loading || isLoadingData) {
-    return (
-      <div className="min-h-screen flex flex-col bg-gray-50">
-        <HeaderWrapper variant="simple" />
-        <main className="flex-1 flex flex-col items-center justify-center p-4">
-          <Loader2 className="w-10 h-10 text-amber-500 animate-spin mb-3" />
-          <p className="text-sm font-bold text-gray-600">Preparando seu checkout...</p>
-        </main>
-        <Footer />
-      </div>
-    )
+    return <CheckoutSkeleton />
   }
 
   // ─── Sacola Vazia ────────────────────────────────────────────────────────────

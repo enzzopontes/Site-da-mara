@@ -2,6 +2,9 @@
 
 import React, { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { PerfilSkeleton } from "@/components/skeletons/perfil-skeleton"
+import { Skeleton } from "@/components/ui/skeleton"
+import { AddressCardSkeleton } from "@/components/skeletons/address-skeleton"
 import Link from "next/link"
 import { HeaderWrapper } from "@/components/header-wrapper"
 import { Footer } from "@/components/footer"
@@ -179,48 +182,7 @@ function ProfileAccordionItem({
 }
 
 function ProfileSkeleton() {
-  return (
-    <div className="min-h-screen flex flex-col bg-white md:bg-[#F7F5F0] antialiased">
-      <HeaderWrapper />
-      <main className="flex-1 pb-24 lg:pb-12">
-        <div className="max-w-2xl mx-auto md:py-8 md:px-4">
-          <div className="bg-white md:rounded-2xl md:shadow-sm md:border md:border-[#ECE7E0] overflow-hidden px-5 py-6 space-y-6 animate-pulse">
-            {/* Header skeleton */}
-            <div className="flex items-center gap-4">
-              <div className="h-16 w-16 rounded-full bg-[#F3F0EB] shrink-0" />
-              <div className="flex-1 space-y-2">
-                <div className="h-5 w-44 rounded bg-[#F3F0EB]" />
-                <div className="h-3.5 w-52 rounded bg-[#F3F0EB]" />
-                <div className="h-5 w-36 rounded-full bg-[#F3F0EB]" />
-              </div>
-            </div>
-            {/* Coupons card skeleton */}
-            <div className="h-24 w-full rounded-2xl bg-[#F3F0EB]" />
-            {/* Accordion rows skeleton */}
-            <div className="space-y-4 pt-2">
-              {[1, 2, 3, 4].map((n) => (
-                <div
-                  key={n}
-                  className="py-3 border-b border-[#ECE7E0] flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className="h-6 w-6 rounded bg-[#F3F0EB]" />
-                    <div className="space-y-1.5">
-                      <div className="h-4 w-36 rounded bg-[#F3F0EB]" />
-                      <div className="h-3 w-52 rounded bg-[#F3F0EB]" />
-                    </div>
-                  </div>
-                  <div className="h-4 w-4 rounded bg-[#F3F0EB]" />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </main>
-      <Footer />
-      <OrderSummary />
-    </div>
-  )
+  return <PerfilSkeleton />
 }
 
 export default function PerfilPage() {
@@ -929,9 +891,11 @@ export default function PerfilPage() {
                         customContent: (
                           <div className="p-3.5 rounded-xl bg-[#F7F5F0] border border-[#ECE7E0] space-y-3">
                             {isLoadingCoupons ? (
-                              <div className="py-4 text-center text-xs text-[#717171] flex items-center justify-center gap-2">
-                                <Loader2 className="h-4 w-4 animate-spin text-[#E3A008]" />
-                                <span>Buscando cupons ativos...</span>
+                              <div className="space-y-2">
+                                <div className="p-3 rounded-xl bg-white border border-[#ECE7E0] space-y-2">
+                                  <Skeleton className="h-4 w-28 rounded" />
+                                  <Skeleton className="h-3 w-40 rounded" />
+                                </div>
                               </div>
                             ) : activeCoupons.length === 0 ? (
                               <div className="py-3 text-center space-y-2">
@@ -1068,9 +1032,8 @@ export default function PerfilPage() {
                             )}
 
                             {isLoadingAddresses ? (
-                              <div className="py-4 text-center text-xs text-[#717171] flex items-center justify-center gap-2">
-                                <Loader2 className="h-4 w-4 animate-spin text-[#E3A008]" />
-                                <span>Carregando endereços...</span>
+                              <div className="space-y-2">
+                                <AddressCardSkeleton />
                               </div>
                             ) : addresses.length === 0 && !showAddressForm ? (
                               <p className="text-xs text-[#717171] text-center py-3">

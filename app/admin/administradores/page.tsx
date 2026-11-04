@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
+import { AdminTableSkeleton } from "@/components/skeletons/admin-skeleton"
 import {
   ShieldCheck,
   ArrowLeft,
@@ -213,14 +214,7 @@ export default function AdminAdministradoresPage() {
   const teamCount = admins.length - ownersCount
 
   if (loading || checking || !isAdmin) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#FAF9F6]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-14 w-14 border-4 border-amber-200 border-t-[#C1440E] mx-auto mb-4" />
-          <p className="text-gray-600 font-semibold text-sm">Verificando permissões de acesso...</p>
-        </div>
-      </div>
-    )
+    return <AdminTableSkeleton rows={6} />
   }
 
   return (
