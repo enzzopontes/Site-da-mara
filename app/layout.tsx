@@ -1,12 +1,12 @@
 import type React from "react"
 import type { Metadata } from "next"
 import { Geist } from "next/font/google"
-import { Analytics } from "@vercel/analytics/next"
 import { Toaster } from "@/components/ui/toaster"
 import { CartProvider } from "@/lib/cart-context"
 import { AuthProvider } from "@/lib/auth-context"
 import { OfflineDetector } from "@/components/offline-detector"
 import { MobileNavbar } from "@/components/mobile-navbar"
+import { CookieConsent } from "@/components/cookie-consent"
 import "./globals.css"
 
 const geist = Geist({ subsets: ["latin"] })
@@ -48,10 +48,10 @@ export default function RootLayout({
               {children}
               <MobileNavbar />
               <Toaster />
+              <CookieConsent />
             </OfflineDetector>
           </CartProvider>
         </AuthProvider>
-        <Analytics />
       </body>
     </html>
   )

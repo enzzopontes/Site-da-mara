@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/lib/auth-context"
-import { User, Mail, Phone, Calendar, ArrowLeft, Save } from "lucide-react"
+import { User, Mail, Phone, Calendar, ArrowLeft, Save, Download, Trash2, ShieldCheck } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { OrderSummary } from "@/components/order-summary"
@@ -192,7 +192,7 @@ export default function MeusDadosPage() {
             <Button 
               onClick={handleSave}
               disabled={saving}
-              className="w-full h-12 bg-yellow-500 hover:bg-yellow-600 text-white font-black rounded-xl text-base shadow-lg shadow-yellow-100 transition-all active:scale-95"
+              className="w-full h-12 bg-amber-600 hover:bg-amber-700 text-white font-black rounded-xl text-base shadow-lg shadow-amber-200 transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
             >
               {saving ? (
                 <div className="flex items-center gap-2">
@@ -201,18 +201,51 @@ export default function MeusDadosPage() {
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <Save className="h-5 w-5" />
+                  <Save className="h-5 w-5" aria-hidden="true" />
                   Salvar Alterações
                 </div>
               )}
             </Button>
           </div>
 
+          {/* Seção LGPD & Direitos do Titular */}
+          <div className="mt-6 bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-4">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-amber-700" aria-hidden="true" />
+              <h2 className="text-base font-extrabold text-gray-900">
+                Seus Direitos de Privacidade (LGPD)
+              </h2>
+            </div>
+            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
+              Em conformidade com o Artigo 18 da Lei Federal nº 13.709/2018, você pode fazer o download dos seus dados pessoais em formato portável ou solicitar a eliminação definitiva de sua conta.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <a
+                href="/api/user/export-data"
+                download
+                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 font-bold rounded-xl text-xs sm:text-sm transition-colors border border-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+              >
+                <Download className="h-4 w-4 text-amber-700" aria-hidden="true" />
+                Exportar Meus Dados (JSON)
+              </a>
+
+              <Button
+                variant="outline"
+                onClick={() => router.push("/excluir-conta")}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 border border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800 font-bold rounded-xl text-xs sm:text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600"
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                Solicitar Exclusão de Conta
+              </Button>
+            </div>
+          </div>
+
           {/* Informações Adicionais */}
-          <div className="mt-6 bg-blue-50 border border-blue-100 rounded-2xl p-4">
-            <p className="text-sm text-blue-800 font-bold">💡 Dica</p>
-            <p className="text-xs text-blue-600 mt-1">
-              Mantenha seus dados atualizados para facilitar a entrega dos seus pedidos e receber promoções exclusivas!
+          <div className="mt-6 bg-amber-50/70 border border-amber-200 rounded-2xl p-4">
+            <p className="text-sm text-amber-900 font-bold">💡 Informação</p>
+            <p className="text-xs text-amber-800 mt-1">
+              Seus dados de entrega e telefone são utilizados exclusivamente para o preparo e despacho dos seus pedidos em Iacanga-SP.
             </p>
           </div>
         </div>

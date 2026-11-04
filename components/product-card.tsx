@@ -101,7 +101,11 @@ export function ProductCard({ product, rank = null, isMostRequested = false }: P
   return (
     <>
       <div 
+        role="button"
+        tabIndex={0}
         onClick={handleAddClick}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleAddClick(); } }}
+        aria-label={`Ver detalhes e adicionar ${product.name} ao pedido`}
         className="bg-white rounded-2xl overflow-hidden border border-[#ECE7E0] hover:border-[#E3A008]/60 transition-all duration-200 cursor-pointer group flex flex-col justify-between shadow-2xs hover:shadow-sm"
       >
         <div>
@@ -168,6 +172,7 @@ export function ProductCard({ product, rank = null, isMostRequested = false }: P
 
           <button
             type="button"
+            aria-label={`Adicionar ${product.name} ao pedido`}
             className="shrink-0 h-7 w-7 sm:h-8 sm:w-auto sm:px-3 rounded-full sm:rounded-lg bg-[#E3A008] text-white sm:bg-[#FEF8EC] sm:border sm:border-[#E3A008] sm:text-[#A16207] hover:bg-[#E3A008] hover:text-white font-bold text-xs flex items-center justify-center gap-1 transition-all active:scale-95 shadow-xs"
           >
             <Plus className="w-3.5 h-3.5" />

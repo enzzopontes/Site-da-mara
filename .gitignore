@@ -33,3 +33,6 @@ dist/
 
 # typescript
 *.tsbuildinfo
+
+# agent local checkpoints
+.agents/

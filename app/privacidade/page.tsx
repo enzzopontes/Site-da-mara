@@ -14,7 +14,10 @@ import {
   Mail, 
   Clock, 
   Calendar,
-  ExternalLink
+  ExternalLink,
+  Download,
+  Globe2,
+  CheckCircle2
 } from "lucide-react"
 
 export default function PrivacidadePage() {
@@ -24,19 +27,24 @@ export default function PrivacidadePage() {
       <div className="max-w-3xl w-full mx-auto mb-4">
         <Link 
           href="/" 
-          className="inline-flex items-center gap-2 text-sm font-bold text-[#6B635B] hover:text-[#1F1B16] transition-colors"
+          className="inline-flex items-center gap-2 text-sm font-bold text-[#4B453F] hover:text-[#1F1B16] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B45309] rounded-lg px-2 py-1"
+          aria-label="Voltar para a página inicial"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-4 h-4" aria-hidden="true" />
           Voltar para o Início
         </Link>
       </div>
 
-      <main className="w-full max-w-3xl mx-auto my-auto">
+      <main className="w-full max-w-3xl mx-auto my-auto" role="main">
         <div className="bg-white rounded-2xl shadow-lg border border-[#E8E2D9] p-6 sm:p-12 transition-all">
           
           {/* Cabeçalho */}
           <header className="text-center mb-10 pb-8 border-b border-[#E8E2D9]">
-            <Link href="/" className="inline-block relative w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-3">
+            <Link 
+              href="/" 
+              className="inline-block relative w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B45309] rounded-full"
+              aria-label="Ir para a página inicial da Batata Top"
+            >
               <Image
                 src="/logo.png"
                 alt="Batata Top Delivery"
@@ -46,198 +54,241 @@ export default function PrivacidadePage() {
               />
             </Link>
             <h1 className="text-2xl sm:text-4xl font-extrabold text-[#1F1B16] tracking-tight">
-              Declaração de Privacidade
+              Política de Privacidade e Proteção de Dados Pessoais
             </h1>
-            <p className="text-xs font-bold text-[#E3A008] uppercase tracking-wider mt-1.5">
-              Batata Top • Iacanga - SP
+            <p className="text-xs font-bold text-[#B45309] uppercase tracking-wider mt-1.5">
+              BatataTop Delivery • 66.599.795 QUEILA LAIS MARQUES DA SILVA • CNPJ: 66.599.795/0001-04
             </p>
-            <p className="text-sm text-[#6B635B] mt-2 font-medium">
-              Em estrita conformidade com a Lei Geral de Proteção de Dados (LGPD — Lei nº 13.709/2018)
+            <p className="text-sm text-[#4B453F] mt-2 font-medium">
+              Elaborada em estrita conformidade com a Lei Geral de Proteção de Dados (LGPD — Lei Federal nº 13.709/2018) e o Marco Civil da Internet (Lei Federal nº 12.965/2014)
             </p>
 
-            <div className="flex flex-wrap items-center justify-center gap-4 mt-4 text-xs text-[#6B635B] font-semibold">
+            <div className="flex flex-wrap items-center justify-center gap-4 mt-4 text-xs text-[#4B453F] font-semibold">
               <span className="inline-flex items-center gap-1.5 bg-[#F7F4EF] px-3 py-1.5 rounded-full border border-[#E8E2D9]">
-                <Calendar className="w-3.5 h-3.5 text-[#E3A008]" />
-                Atualizado em 16 de outubro de 2026
+                <Calendar className="w-3.5 h-3.5 text-[#B45309]" aria-hidden="true" />
+                Vigência: Atualizado em 4 de novembro de 2026
               </span>
               <span className="inline-flex items-center gap-1.5 bg-[#F7F4EF] px-3 py-1.5 rounded-full border border-[#E8E2D9]">
-                <Clock className="w-3.5 h-3.5 text-[#E3A008]" />
-                Tempo de leitura: 6 minutos
+                <Clock className="w-3.5 h-3.5 text-[#B45309]" aria-hidden="true" />
+                Tempo estimado de leitura: 7 minutos
               </span>
             </div>
           </header>
 
-          {/* Introdução */}
+          {/* Destaque Institucional */}
           <section className="mb-10 p-5 rounded-2xl bg-[#FFFBF0] border border-[#FDE68A] text-sm leading-relaxed text-[#1F1B16]">
             <div className="flex items-start gap-3">
-              <div className="p-2 bg-[#E3A008] text-white rounded-xl shrink-0 mt-0.5 shadow-sm">
+              <div className="p-2 bg-[#B45309] text-white rounded-xl shrink-0 mt-0.5 shadow-sm" aria-hidden="true">
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="font-extrabold text-base text-[#1F1B16] mb-1">Seus dados são seus.</h2>
-                <p className="text-[#6B635B] mb-2 leading-relaxed">
-                  A proteção da sua privacidade é prioridade absoluta no <strong>Batata Top</strong>. Assumimos o compromisso de tratar suas informações pessoais com total transparência, segurança e em conformidade com as diretrizes da legislação brasileira.
+                <h2 className="font-extrabold text-base text-[#1F1B16] mb-1">Compromisso com a sua Privacidade</h2>
+                <p className="text-[#4B453F] mb-2 leading-relaxed">
+                  Para o <strong>BatataTop Delivery</strong>, operado sob o nome empresarial <strong>66.599.795 QUEILA LAIS MARQUES DA SILVA</strong> (CNPJ <strong>66.599.795/0001-04</strong>), com sede na <strong>Rua Carlos Roberto Crepaldi, 120, Sala, Jardim Alvorada, Iacanga - SP, CEP 17187-074</strong> e domínio <strong>batatatopiacanga.com.br</strong>, a privacidade, a segurança da informação e a autodeterminação informativa de nossos clientes são princípios intransigíveis.
                 </p>
-                <p className="text-[#6B635B] leading-relaxed">
-                  Esta declaração descreve como coletamos, utilizamos, armazenamos, compartilhamos e protegemos os seus dados durante o uso do nosso aplicativo e plataforma web de delivery em Iacanga-SP.
+                <p className="text-[#4B453F] leading-relaxed">
+                  Este documento esclarece quais dados pessoais coletamos, as bases legais que legitimam o tratamento, com quem compartilhamos, os prazos de guarda e como você pode exercer livremente seus direitos de titular.
                 </p>
               </div>
             </div>
           </section>
 
-          {/* Conteúdo das Seções */}
-          <div className="space-y-10 text-sm leading-relaxed text-[#6B635B]">
+          {/* Seções de Conteúdo */}
+          <div className="space-y-10 text-sm leading-relaxed text-[#4B453F]">
 
-            {/* 1. Que dados coletamos? */}
-            <section className="space-y-3">
+            {/* 1. Bases Legais e Finalidades (Art. 7º e 9º LGPD) */}
+            <section className="space-y-4">
               <div className="flex items-center gap-2.5">
-                <div className="p-1.5 rounded-lg bg-[#F7F4EF] text-[#E3A008] border border-[#E8E2D9]">
+                <div className="p-1.5 rounded-lg bg-[#F7F4EF] text-[#B45309] border border-[#E8E2D9]" aria-hidden="true">
                   <Database className="w-4 h-4" />
                 </div>
-                <h3 className="text-lg font-bold text-[#1F1B16]">
-                  1. Que dados coletamos?
-                </h3>
+                <h2 className="text-lg font-bold text-[#1F1B16]">
+                  1. Dados Coletados, Finalidades e Bases Legais (Art. 7º da LGPD)
+                </h2>
               </div>
-              <p>Coletamos apenas as informações necessárias para operar o serviço de delivery e cumprir exigências legais:</p>
-              <ul className="list-disc pl-5 space-y-2 marker:text-[#E3A008]">
-                <li><strong className="text-[#1F1B16]">Dados cadastrais:</strong> Nome completo, endereço de e-mail e número de telefone celular com DDD (utilizado para confirmação da conta e contato operacional sobre o pedido).</li>
-                <li><strong className="text-[#1F1B16]">CPF (opcional):</strong> Coletado somente caso você opte por incluí-lo na emissão do documento fiscal ou para cumprimento de obrigações tributárias.</li>
-                <li><strong className="text-[#1F1B16]">Dados de entrega e endereço:</strong> Rua, número, complemento, bairro, cidade (Iacanga-SP) e referências fornecidas para a localização exata do imóvel.</li>
-                <li><strong className="text-[#1F1B16]">Localização e GPS (opcional):</strong> Coordenadas obtidas quando você autoriza a permissão no aparelho, utilizadas exclusivamente em primeiro plano para agilizar a seleção do endereço e exibir a estimativa de entrega no mapa.</li>
-                <li><strong className="text-[#1F1B16]">Dados de pagamento:</strong> Todas as cobranças online por PIX e cartão de crédito ou débito são processadas de forma criptografada pelo Mercado Pago. O Batata Top não armazena números de cartão, códigos de segurança (CVV) ou senhas bancárias em seus servidores.</li>
-                <li><strong className="text-[#1F1B16]">Histórico de pedidos:</strong> Produtos adquiridos, complementos, valores, cupons aplicados, datas e horários das compras.</li>
-                <li><strong className="text-[#1F1B16]">Identificadores de dispositivo e acesso:</strong> Versão do aplicativo, modelo do dispositivo, endereço IP, logs de acesso (conforme o Marco Civil da Internet) e token de notificação para entrega de avisos no aparelho.</li>
-              </ul>
+              <p>
+                Coletamos unicamente os dados necessários à viabilização do serviço de delivery gastronômico e obrigações legais, conforme a tabela descritiva:
+              </p>
+
+              <div className="overflow-x-auto border border-[#E8E2D9] rounded-xl">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-[#F7F4EF] text-[#1F1B16] font-bold border-b border-[#E8E2D9]">
+                      <th className="p-3">Categoria de Dados</th>
+                      <th className="p-3">Finalidade Específica</th>
+                      <th className="p-3">Base Legal (Art. 7º LGPD)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E8E2D9]">
+                    <tr>
+                      <td className="p-3 font-semibold text-[#1F1B16]">Identificação e Contato (Nome, E-mail, Celular/WhatsApp)</td>
+                      <td className="p-3">Criação da conta de acesso, autenticação segura e comunicação direta sobre o andamento e entrega do pedido.</td>
+                      <td className="p-3">Execução de Contrato (Art. 7º, V)</td>
+                    </tr>
+                    <tr>
+                      <td className="p-3 font-semibold text-[#1F1B16]">Endereço de Entrega (Logradouro, número, bairro, complemento, referência)</td>
+                      <td className="p-3">Deslocamento logístico do entregador parceiro até o local exato do destinatário em Iacanga-SP.</td>
+                      <td className="p-3">Execução de Contrato (Art. 7º, V)</td>
+                    </tr>
+                    <tr>
+                      <td className="p-3 font-semibold text-[#1F1B16]">Transação Financeira e Pagamento (PIX, Cartão)</td>
+                      <td className="p-3">Processamento do pagamento criptografado via Mercado Pago. Não armazenamos números ou códigos CVV em nossos servidores.</td>
+                      <td className="p-3">Execução de Contrato (Art. 7º, V) e Prevenção à Fraude (Art. 11, II, g)</td>
+                    </tr>
+                    <tr>
+                      <td className="p-3 font-semibold text-[#1F1B16]">Registros de Conexão e Acesso (IP, data, hora, porta)</td>
+                      <td className="p-3">Guarda obrigatória de registros de aplicação na internet por 6 meses.</td>
+                      <td className="p-3">Cumprimento de Obrigação Legal (Art. 7º, II c/c Art. 15 Marco Civil)</td>
+                    </tr>
+                    <tr>
+                      <td className="p-3 font-semibold text-[#1F1B16]">Cookies de Métricas e Desempenho (Opt-in)</td>
+                      <td className="p-3">Mensuração anônima de acessos e usabilidade do site/aplicativo para melhorias técnicas contínuas.</td>
+                      <td className="p-3">Consentimento (Art. 7º, I) / Legítimo Interesse (Art. 7º, IX)</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </section>
 
-            {/* 2. Para que usamos seus dados? */}
+            {/* 2. Prazos de Retenção e Descarte */}
             <section className="space-y-3 pt-6 border-t border-[#E8E2D9]">
               <div className="flex items-center gap-2.5">
-                <div className="p-1.5 rounded-lg bg-[#F7F4EF] text-[#E3A008] border border-[#E8E2D9]">
-                  <FileText className="w-4 h-4" />
+                <div className="p-1.5 rounded-lg bg-[#F7F4EF] text-[#B45309] border border-[#E8E2D9]" aria-hidden="true">
+                  <Clock className="w-4 h-4" />
                 </div>
-                <h3 className="text-lg font-bold text-[#1F1B16]">
-                  2. Para que usamos seus dados?
-                </h3>
+                <h2 className="text-lg font-bold text-[#1F1B16]">
+                  2. Prazos de Armazenamento e Retenção
+                </h2>
               </div>
-              <p>Utilizamos os dados coletados com fundamentos legais legítimos previstos na LGPD:</p>
-              <ul className="list-disc pl-5 space-y-2 marker:text-[#E3A008]">
-                <li><strong className="text-[#1F1B16]">Processar e entregar seus pedidos:</strong> Preparar os alimentos encomendados e garantir que o entregador chegue com precisão ao seu endereço em Iacanga-SP.</li>
-                <li><strong className="text-[#1F1B16]">Envio de notificações em tempo real:</strong> Manter você informado sobre cada status do pedido (recebido, em preparo, saiu para entrega) por notificações push ou mensagens operacionais.</li>
-                <li><strong className="text-[#1F1B16]">Suporte e atendimento:</strong> Solucionar dúvidas, atender solicitações de suporte, cancelamento ou ajustes em pedidos.</li>
-                <li><strong className="text-[#1F1B16]">Prevenção à fraude e segurança:</strong> Identificar atividades suspeitas, validar pagamentos e proteger os clientes e a plataforma contra fraudes eletrônicas.</li>
-                <li><strong className="text-[#1F1B16]">Cumprimento de obrigações legais:</strong> Emissão de comprovantes fiscais e guarda obrigatória de registros de conexão nos termos da lei.</li>
+              <p>Os dados pessoais são guardados somente pelos períodos estritamente necessários:</p>
+              <ul className="list-disc pl-5 space-y-2 marker:text-[#B45309]">
+                <li><strong className="text-[#1F1B16]">Dados de Perfil e Cadastro:</strong> Conservados durante o vínculo ativo do usuário com o serviço ou até a solicitação formal de exclusão do titular.</li>
+                <li><strong className="text-[#1F1B16]">Histórico de Pedidos e Notas Fiscais:</strong> Mantidos pelo prazo de 5 (cinco) anos para cumprimento de obrigações tributárias e fiscais (Artigo 173 do Código Tributário Nacional) e defesa em juízo (Código Civil).</li>
+                <li><strong className="text-[#1F1B16]">Logs de Conexão de Aplicação:</strong> Armazenados pelo prazo legal de 6 (seis) meses sob sigilo e ambiente controlado, conforme determinação expressa do Art. 15 da Lei nº 12.965/2014 (Marco Civil da Internet).</li>
               </ul>
             </section>
 
-            {/* 3. Compartilhamento de dados */}
+            {/* 3. Compartilhamento de Dados com Terceiros e Operadores */}
             <section className="space-y-3 pt-6 border-t border-[#E8E2D9]">
               <div className="flex items-center gap-2.5">
-                <div className="p-1.5 rounded-lg bg-[#F7F4EF] text-[#E3A008] border border-[#E8E2D9]">
+                <div className="p-1.5 rounded-lg bg-[#F7F4EF] text-[#B45309] border border-[#E8E2D9]" aria-hidden="true">
                   <Share2 className="w-4 h-4" />
                 </div>
-                <h3 className="text-lg font-bold text-[#1F1B16]">
-                  3. Compartilhamento de dados
-                </h3>
+                <h2 className="text-lg font-bold text-[#1F1B16]">
+                  3. Compartilhamento e Transferência Internacional
+                </h2>
               </div>
-              <p>O Batata Top <strong>não comercializa, não aluga e não transfere</strong> seus dados pessoais para terceiros com finalidade de propaganda ou mala direta. O compartilhamento ocorre apenas quando essencial:</p>
-              <ul className="list-disc pl-5 space-y-2 marker:text-[#E3A008]">
-                <li><strong className="text-[#1F1B16]">Entregadores parceiros:</strong> Recebem unicamente o primeiro nome, telefone de contato e endereço de entrega completo para viabilizar a entrega física da sua refeição.</li>
-                <li><strong className="text-[#1F1B16]">Intermediador de pagamento (Mercado Pago):</strong> Envio seguro dos dados da transação para autorização e liquidação dos pagamentos em ambiente criptografado e certificado PCI-DSS.</li>
-                <li><strong className="text-[#1F1B16]">Provedores de infraestrutura:</strong> Serviços de hospedagem em nuvem de alto padrão de segurança e serviço de notificações (Expo) para entrega técnica de mensagens.</li>
-                <li><strong className="text-[#1F1B16]">Autoridades competentes:</strong> Apenas mediante determinação judicial formal ou exigência legal cabível.</li>
+              <p>
+                <strong>Não comercializamos, não alugamos e não vendemos dados pessoais sob nenhuma circunstância.</strong> O compartilhamento restringe-se estritamente às atividades operacionais indispensáveis:
+              </p>
+              <ul className="list-disc pl-5 space-y-2 marker:text-[#B45309]">
+                <li><strong className="text-[#1F1B16]">Entregadores Locais:</strong> Acesso restrito ao primeiro nome, telefone operacional e endereço físico para a realização exclusiva da entrega.</li>
+                <li><strong className="text-[#1F1B16]">Processador de Pagamentos (Mercado Pago):</strong> Ambiente seguro e certificado internacionalmente com o padrão PCI-DSS para autorização e antifraude de transações.</li>
+                <li><strong className="text-[#1F1B16]">Infraestrutura de Nuvem e Banco de Dados (Supabase / Vercel):</strong> Hospedagem em servidores com criptografia em repouso e em trânsito (TLS 1.3), com cláusulas contratuais padrão de segurança alinhadas à LGPD e GDPR.</li>
+                <li><strong className="text-[#1F1B16]">Autoridades Públicas e Judiciais:</strong> Somente quando formalmente requisitado por ordem judicial ou determinação legal expressa.</li>
               </ul>
             </section>
 
-            {/* 4. Como protegemos e armazenamos seus dados? */}
-            <section className="space-y-3 pt-6 border-t border-[#E8E2D9]">
-              <div className="flex items-center gap-2.5">
-                <div className="p-1.5 rounded-lg bg-[#F7F4EF] text-[#E3A008] border border-[#E8E2D9]">
-                  <Lock className="w-4 h-4" />
-                </div>
-                <h3 className="text-lg font-bold text-[#1F1B16]">
-                  4. Como protegemos e armazenamos seus dados?
-                </h3>
-              </div>
-              <ul className="list-disc pl-5 space-y-2 marker:text-[#E3A008]">
-                <li><strong className="text-[#1F1B16]">Criptografia de ponta a ponta:</strong> Todo o tráfego de dados entre o aplicativo/site e os nossos servidores opera sob protocolo HTTPS com criptografia SSL/TLS.</li>
-                <li><strong className="text-[#1F1B16]">Acesso controlado:</strong> Somente operadores autorizados e vinculados a termos de confidencialidade têm acesso aos dados operacionais necessários ao atendimento.</li>
-                <li><strong className="text-[#1F1B16]">Retenção responsável:</strong> Os dados pessoais são mantidos enquanto sua conta estiver ativa ou pelo período necessário para cumprimento de prazos legais e regulatórios vigentes.</li>
-              </ul>
-            </section>
-
-            {/* 5. Quais são os seus direitos (LGPD — Art. 18)? */}
-            <section className="space-y-3 pt-6 border-t border-[#E8E2D9]">
-              <div className="flex items-center gap-2.5">
-                <div className="p-1.5 rounded-lg bg-[#F7F4EF] text-[#E3A008] border border-[#E8E2D9]">
-                  <Eye className="w-4 h-4" />
-                </div>
-                <h3 className="text-lg font-bold text-[#1F1B16]">
-                  5. Quais são os seus direitos (LGPD — Art. 18)?
-                </h3>
-              </div>
-              <p>A Lei Geral de Proteção de Dados assegura a você os seguintes direitos:</p>
-              <ul className="list-disc pl-5 space-y-2 marker:text-[#E3A008]">
-                <li><strong className="text-[#1F1B16]">Confirmação e acesso:</strong> Saber se seus dados são tratados e solicitar acesso às informações cadastradas.</li>
-                <li><strong className="text-[#1F1B16]">Correção de dados:</strong> Solicitar a correção de dados incompletos, inexatos ou desatualizados diretamente pelo app.</li>
-                <li><strong className="text-[#1F1B16]">Revogação de consentimento:</strong> Desativar permissões de localização (GPS) ou notificações a qualquer momento nas configurações do seu aparelho.</li>
-                <li><strong className="text-[#1F1B16]">Eliminação dos dados:</strong> Solicitar a exclusão definitiva dos seus dados cadastrais, ressalvadas as informações de guarda legalmente obrigatória.</li>
-              </ul>
-            </section>
-
-            {/* 6. Como solicitar a exclusão da sua conta e dados? */}
+            {/* 4. Direitos do Titular de Dados (Art. 18 LGPD) */}
             <section className="space-y-4 pt-6 border-t border-[#E8E2D9]">
               <div className="flex items-center gap-2.5">
-                <div className="p-1.5 rounded-lg bg-[#F7F4EF] text-red-600 border border-[#E8E2D9]">
-                  <Trash2 className="w-4 h-4" />
+                <div className="p-1.5 rounded-lg bg-[#F7F4EF] text-[#B45309] border border-[#E8E2D9]" aria-hidden="true">
+                  <Eye className="w-4 h-4" />
                 </div>
-                <h3 className="text-lg font-bold text-[#1F1B16]">
-                  6. Como solicitar a exclusão da sua conta e dados?
-                </h3>
+                <h2 className="text-lg font-bold text-[#1F1B16]">
+                  4. Seus Direitos como Titular (Artigo 18 da LGPD)
+                </h2>
               </div>
-              <p>Você pode solicitar o encerramento da conta e o expurgo dos seus dados pessoais a qualquer momento:</p>
-              <ul className="list-disc pl-5 space-y-2 marker:text-[#E3A008]">
-                <li><strong className="text-[#1F1B16]">Pelo aplicativo:</strong> Acesse o menu <em>Perfil &gt; Segurança &gt; Excluir Conta</em>.</li>
-                <li><strong className="text-[#1F1B16]">Pela página oficial da web:</strong> Acesse nossa central de exclusão pública e registre seu pedido imediatamente.</li>
-              </ul>
+              <p>A qualquer momento e sem custos, você pode exercer os direitos previstos na legislação:</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="p-3 bg-[#FAFAF8] rounded-xl border border-[#E8E2D9]">
+                  <strong className="text-[#1F1B16] block mb-1">Confirmação e Acesso:</strong>
+                  Saber se tratamos seus dados e solicitar cópia integral dos seus registros.
+                </div>
+                <div className="p-3 bg-[#FAFAF8] rounded-xl border border-[#E8E2D9]">
+                  <strong className="text-[#1F1B16] block mb-1">Correção:</strong>
+                  Corrigir dados incompletos, inexatos ou desatualizados diretamente na tela "Meus Dados".
+                </div>
+                <div className="p-3 bg-[#FAFAF8] rounded-xl border border-[#E8E2D9]">
+                  <strong className="text-[#1F1B16] block mb-1">Portabilidade de Dados:</strong>
+                  Baixar seus dados pessoais em formato aberto e estruturado (JSON).
+                </div>
+                <div className="p-3 bg-[#FAFAF8] rounded-xl border border-[#E8E2D9]">
+                  <strong className="text-[#1F1B16] block mb-1">Eliminação e Revogação:</strong>
+                  Requerer a exclusão dos dados tratados sob consentimento e revogar autorizações prévias.
+                </div>
+              </div>
 
-              <div className="pt-2">
+              <div className="flex flex-wrap gap-3 pt-2">
                 <Link
                   href="/excluir-conta"
-                  className="inline-flex items-center gap-2 py-3 px-5 rounded-xl bg-[#E3A008] hover:bg-[#C1440E] text-white font-bold text-xs sm:text-sm shadow-sm transition-all"
+                  className="inline-flex items-center gap-2 py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-700"
                 >
-                  <Trash2 className="w-4 h-4" />
-                  Ir para Página de Exclusão de Conta e Dados
-                  <ExternalLink className="w-3.5 h-3.5" />
+                  <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                  Solicitar Exclusão de Conta e Dados
+                </Link>
+                <Link
+                  href="/meus-dados"
+                  className="inline-flex items-center gap-2 py-2.5 px-4 rounded-xl bg-[#F7F4EF] hover:bg-[#E8E2D9] text-[#1F1B16] font-bold text-xs border border-[#E8E2D9] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B45309]"
+                >
+                  <Download className="w-3.5 h-3.5 text-[#B45309]" aria-hidden="true" />
+                  Acessar e Exportar Meus Dados
                 </Link>
               </div>
             </section>
 
-            {/* 7. Contato do Encarregado de Dados (DPO) e Suporte */}
+            {/* 5. Segurança da Informação */}
             <section className="space-y-3 pt-6 border-t border-[#E8E2D9]">
               <div className="flex items-center gap-2.5">
-                <div className="p-1.5 rounded-lg bg-[#F7F4EF] text-[#E3A008] border border-[#E8E2D9]">
+                <div className="p-1.5 rounded-lg bg-[#F7F4EF] text-[#B45309] border border-[#E8E2D9]" aria-hidden="true">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <h2 className="text-lg font-bold text-[#1F1B16]">
+                  5. Medidas Técnicas e Segurança da Informação
+                </h2>
+              </div>
+              <p>Adotamos medidas protetivas alinhadas às boas práticas de segurança cibernética:</p>
+              <ul className="list-disc pl-5 space-y-2 marker:text-[#B45309]">
+                <li>Comunicação 100% criptografada sob o protocolo HTTPS / TLS 1.3;</li>
+                <li>Controle de acesso fundamentado no princípio do menor privilégio (least privilege);</li>
+                <li>Isolamento de banco de dados com autenticação baseada em JWT seguro e Row Level Security (RLS) no Supabase.</li>
+              </ul>
+            </section>
+
+            {/* 6. Canal do Encarregado de Dados (DPO) e Prazos de Resposta */}
+            <section className="space-y-3 pt-6 border-t border-[#E8E2D9]">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-lg bg-[#F7F4EF] text-[#B45309] border border-[#E8E2D9]" aria-hidden="true">
                   <Mail className="w-4 h-4" />
                 </div>
-                <h3 className="text-lg font-bold text-[#1F1B16]">
-                  7. Contato do Encarregado de Dados (DPO) e Suporte
-                </h3>
+                <h2 className="text-lg font-bold text-[#1F1B16]">
+                  6. Encarregado pelo Tratamento de Dados Pessoais (DPO)
+                </h2>
               </div>
-              <p>Para esclarecer dúvidas sobre esta Declaração de Privacidade ou exercer seus direitos de titular de dados:</p>
+              <p>
+                Em observância ao Artigo 41 da LGPD, disponibilizamos canal de contato direto e exclusivo com o Encarregado de Dados (DPO) para receber comunicações, requisições dos titulares e prestar esclarecimentos à Autoridade Nacional de Proteção de Dados (ANPD):
+              </p>
               <div className="p-4 rounded-xl bg-[#FAFAF8] border border-[#E8E2D9] space-y-2 text-xs sm:text-sm">
                 <div>
-                  <strong className="text-[#1F1B16]">Encarregado pelo tratamento de dados (DPO):</strong>{" "}
-                  <span>Equipe de Privacidade e Suporte Batata Top</span>
+                  <strong className="text-[#1F1B16]">Encarregada pelo Tratamento de Dados (DPO):</strong>{" "}
+                  <span>Maraysis Pontes Baraldo</span>
                 </div>
                 <div>
-                  <strong className="text-[#1F1B16]">E-mail oficial:</strong>{" "}
-                  <a href="mailto:enzzobaraldo2008@gmail.com" className="text-[#1F1B16] font-bold underline hover:text-[#C1440E]">
-                    enzzobaraldo2008@gmail.com
+                  <strong className="text-[#1F1B16]">E-mail oficial da DPO:</strong>{" "}
+                  <a 
+                    href="mailto:maraysis9010@gmail.com" 
+                    className="text-[#1F1B16] font-bold underline hover:text-[#C1440E] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#B45309] rounded"
+                  >
+                    maraysis9010@gmail.com
                   </a>
                 </div>
                 <div>
-                  <strong className="text-[#1F1B16]">Atendimento local em Iacanga-SP:</strong>{" "}
-                  <span>Pelo chat de ajuda no aplicativo ou WhatsApp oficial de suporte da loja.</span>
+                  <strong className="text-[#1F1B16]">Prazo de atendimento:</strong>{" "}
+                  <span>As requisições serão respondidas imediatamente de forma simplificada ou em até 15 (quinze) dias úteis para declarações claras e completas (Art. 19, II da LGPD).</span>
+                </div>
+                <div>
+                  <strong className="text-[#1F1B16]">Endereço da sede:</strong>{" "}
+                  <span>Rua Carlos Roberto Crepaldi, 120, Sala, Jardim Alvorada, Iacanga - SP, CEP 17187-074</span>
                 </div>
               </div>
             </section>
@@ -247,23 +298,27 @@ export default function PrivacidadePage() {
         </div>
       </main>
 
-      {/* Rodapé */}
-      <footer className="text-center text-xs text-[#6B635B] py-6 space-y-2 max-w-3xl mx-auto w-full">
-        <div className="flex justify-center items-center gap-4 font-semibold">
-          <Link href="/privacidade" className="text-[#1F1B16] font-bold">
+      {/* Rodapé e Identificação da Empresa */}
+      <footer className="text-center text-xs text-[#4B453F] py-6 space-y-2 max-w-3xl mx-auto w-full" role="contentinfo">
+        <div className="flex justify-center items-center gap-4 font-semibold flex-wrap">
+          <Link href="/privacidade" className="text-[#1F1B16] font-bold focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#B45309] rounded px-1">
             Política de Privacidade
           </Link>
-          <span>•</span>
-          <Link href="/termos" className="hover:text-[#1F1B16] transition-colors">
+          <span aria-hidden="true">•</span>
+          <Link href="/termos" className="hover:text-[#1F1B16] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#B45309] rounded px-1">
             Termos de Uso
           </Link>
-          <span>•</span>
-          <Link href="/excluir-conta" className="hover:text-[#1F1B16] transition-colors">
+          <span aria-hidden="true">•</span>
+          <Link href="/reembolso" className="hover:text-[#1F1B16] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#B45309] rounded px-1">
+            Política de Reembolso
+          </Link>
+          <span aria-hidden="true">•</span>
+          <Link href="/excluir-conta" className="hover:text-[#1F1B16] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#B45309] rounded px-1">
             Excluir Conta
           </Link>
         </div>
-        <p>© {new Date().getFullYear()} Batata Top • Delivery de Batata Recheada • Iacanga - SP.</p>
-        <p className="text-[10px] text-gray-400">Todos os direitos reservados.</p>
+        <p>© {new Date().getFullYear()} 66.599.795 QUEILA LAIS MARQUES DA SILVA • CNPJ: 66.599.795/0001-04 • Rua Carlos Roberto Crepaldi, 120, Sala, Jardim Alvorada, Iacanga - SP, CEP 17187-074</p>
+        <p className="text-[11px] text-[#6B635B]">Todos os direitos reservados.</p>
       </footer>
     </div>
   )

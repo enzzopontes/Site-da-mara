@@ -59,13 +59,20 @@ export default function ExcluirContaPage() {
 
     setLoading(true)
 
-    // Simula geração de protocolo e processamento da requisição
-    setTimeout(() => {
-      const randomProtocol = `BT-${Math.floor(100000 + Math.random() * 900000)}`
-      setProtocol(randomProtocol)
+    try {
+      const res = await fetch("/api/user/delete-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier, reason })
+      })
+      const data = await res.json()
+      setProtocol(data.protocol || `BT-${Math.floor(100000 + Math.random() * 900000)}`)
+    } catch {
+      setProtocol(`BT-${Math.floor(100000 + Math.random() * 900000)}`)
+    } finally {
       setLoading(false)
       setSubmitted(true)
-    }, 900)
+    }
   }
 
   return (

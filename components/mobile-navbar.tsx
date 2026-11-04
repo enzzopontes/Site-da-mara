@@ -163,10 +163,10 @@ export function MobileNavbar() {
                   className="flex flex-col items-center justify-center flex-1 h-full group transition-all active:scale-90"
                 >
                   <div className="relative flex items-center justify-center mb-0.5">
-                    <Icon className={`h-6 w-6 sm:h-7 sm:w-7 transition-colors ${active ? "text-yellow-500 fill-current" : "text-gray-400"}`} />
+                    <Icon className={`h-6 w-6 sm:h-7 sm:w-7 transition-colors ${active ? "text-amber-700 fill-current" : "text-gray-600"}`} aria-hidden="true" />
                   </div>
                   <span className={`text-[10px] sm:text-[11px] font-black transition-colors text-center w-full truncate px-1 ${
-                    active ? "text-yellow-500" : "text-gray-400"
+                    active ? "text-amber-700" : "text-gray-700"
                   }`}>
                     {item.label}
                   </span>
@@ -178,13 +178,14 @@ export function MobileNavbar() {
               <Link
                 key={item.href}
                 href={item.href}
-                className="flex flex-col items-center justify-center flex-1 h-full group transition-all active:scale-90"
+                className="flex flex-col items-center justify-center flex-1 h-full group transition-all active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 rounded-lg"
+                aria-label={item.label}
               >
                 <div className="relative flex items-center justify-center mb-0.5">
-                  <Icon className={`h-6 w-6 sm:h-7 sm:w-7 transition-colors ${active ? "text-yellow-500 fill-current" : "text-gray-400"}`} />
+                  <Icon className={`h-6 w-6 sm:h-7 sm:w-7 transition-colors ${active ? "text-amber-700 fill-current" : "text-gray-600"}`} aria-hidden="true" />
                 </div>
                 <span className={`text-[10px] sm:text-[11px] font-black transition-colors text-center w-full truncate px-1 ${
-                  active ? "text-yellow-500" : "text-gray-400"
+                  active ? "text-amber-700" : "text-gray-700"
                 }`}>
                   {item.label}
                 </span>
@@ -196,13 +197,15 @@ export function MobileNavbar() {
           <div ref={profileRef} className="relative flex-1 h-full">
             <button
               onClick={() => setIsProfileOpen(!isProfileOpen)}
-              className="flex flex-col items-center justify-center w-full h-full group transition-all active:scale-90"
+              className="flex flex-col items-center justify-center w-full h-full group transition-all active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 rounded-lg"
+              aria-label={user ? "Abrir menu de perfil do usuário" : "Abrir menu de login e navegação"}
+              aria-expanded={isProfileOpen}
             >
               <div className="relative flex items-center justify-center mb-0.5">
-                <User className={`h-6 w-6 sm:h-7 sm:w-7 transition-colors ${isProfileActive || isProfileOpen ? "text-yellow-500 fill-current" : "text-gray-400"}`} />
+                <User className={`h-6 w-6 sm:h-7 sm:w-7 transition-colors ${isProfileActive || isProfileOpen ? "text-amber-700 fill-current" : "text-gray-600"}`} aria-hidden="true" />
               </div>
               <span className={`text-[10px] sm:text-[11px] font-black transition-colors text-center w-full truncate px-1 ${
-                isProfileActive || isProfileOpen ? "text-yellow-500" : "text-gray-400"
+                isProfileActive || isProfileOpen ? "text-amber-700" : "text-gray-700"
               }`}>
                 {user ? "Perfil" : "Entrar"}
               </span>
@@ -276,9 +279,15 @@ export function MobileNavbar() {
                       </Link>
                     </>
                   )}
-                  <div className="border-t border-gray-50 my-1"></div>
-                  <Link href="/ajuda" onClick={() => setIsProfileOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-gray-600 hover:bg-yellow-50 hover:text-yellow-600 transition-colors">
-                    <HelpCircle className="h-4 w-4" /> Ajuda
+                  <div className="border-t border-gray-100 my-1"></div>
+                  <Link href="/privacidade" onClick={() => setIsProfileOpen(false)} className="flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-amber-50 hover:text-amber-800 transition-colors">
+                    <ShieldAlert className="h-4 w-4 text-amber-700" aria-hidden="true" /> Privacidade &amp; LGPD
+                  </Link>
+                  <Link href="/reembolso" onClick={() => setIsProfileOpen(false)} className="flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-amber-50 hover:text-amber-800 transition-colors">
+                    <HelpCircle className="h-4 w-4 text-amber-700" aria-hidden="true" /> Reembolso &amp; CDC
+                  </Link>
+                  <Link href="/ajuda" onClick={() => setIsProfileOpen(false)} className="flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-amber-50 hover:text-amber-800 transition-colors">
+                    <HelpCircle className="h-4 w-4" aria-hidden="true" /> Ajuda
                   </Link>
                   {user ? (
                     <>

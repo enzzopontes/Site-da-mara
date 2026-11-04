@@ -40,10 +40,12 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mt-4 mb-2 sm:hidden" />
 
         <button 
+          type="button"
           onClick={onClose}
-          className="absolute top-6 right-6 p-2 hover:bg-gray-100 rounded-full transition-colors z-10 hidden sm:block"
+          className="absolute top-6 right-6 p-2 hover:bg-gray-100 rounded-full transition-colors z-10 hidden sm:block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+          aria-label="Fechar janela de autenticação"
         >
-          <X className="h-6 w-6 text-gray-400" />
+          <X className="h-6 w-6 text-gray-500" aria-hidden="true" />
         </button>
 
         <div className="p-8 pt-6 sm:pt-12 text-center">

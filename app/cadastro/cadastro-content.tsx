@@ -20,6 +20,7 @@ export function CadastroContent() {
   const [confirmPassword, setConfirmPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [activeSlide, setActiveSlide] = useState(0)
@@ -62,6 +63,11 @@ export function CadastroContent() {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
+
+    if (!acceptedTerms) {
+      setError("É necessário ler e aceitar os Termos de Uso e a Política de Privacidade.")
+      return
+    }
 
     if (password !== confirmPassword) {
       setError("As senhas não coincidem")
@@ -162,11 +168,12 @@ export function CadastroContent() {
               <Button
                 type="button"
                 variant="outline"
-                className="w-full h-14 text-base font-bold bg-white hover:bg-gray-50 border-2 border-gray-100 rounded-2xl flex items-center justify-center gap-3 transition-all active:scale-[0.98]"
+                className="w-full h-14 text-base font-bold bg-white hover:bg-gray-50 border-2 border-gray-200 text-gray-800 rounded-2xl flex items-center justify-center gap-3 transition-all active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
                 onClick={() => signInWithGoogle()}
                 disabled={loading}
+                aria-label="Cadastrar-se utilizando a conta do Google"
               >
-                <svg className="h-6 w-6" viewBox="0 0 24 24">
+                <svg className="h-6 w-6" viewBox="0 0 24 24" aria-hidden="true">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                   <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
                   <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
@@ -186,72 +193,100 @@ export function CadastroContent() {
 
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">E-mail</label>
+                  <label htmlFor="cadastro-email" className="text-xs font-bold text-gray-700 uppercase tracking-wider ml-1">E-mail</label>
                   <Input
+                    id="cadastro-email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="seu@email.com"
                     required
-                    className="h-14 bg-gray-50 border-transparent focus:bg-white focus:border-yellow-500 focus:ring-0 rounded-2xl text-base transition-all"
+                    className="h-14 bg-gray-50 border-gray-200 focus:bg-white focus:border-amber-600 focus:ring-1 focus:ring-amber-600 rounded-2xl text-base transition-all"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Senha</label>
+                  <label htmlFor="cadastro-password" className="text-xs font-bold text-gray-700 uppercase tracking-wider ml-1">Senha</label>
                   <div className="relative">
                     <Input
+                      id="cadastro-password"
                       type={showPassword ? "text" : "password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Mínimo 6 caracteres"
                       required
-                      className="h-14 bg-gray-50 border-transparent focus:bg-white focus:border-yellow-500 focus:ring-0 rounded-2xl text-base pr-12 transition-all"
+                      className="h-14 bg-gray-50 border-gray-200 focus:bg-white focus:border-amber-600 focus:ring-1 focus:ring-amber-600 rounded-2xl text-base pr-12 transition-all"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 p-1 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+                      aria-label={showPassword ? "Ocultar senha digitada" : "Exibir senha digitada em texto"}
                     >
-                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                      {showPassword ? <EyeOff className="h-5 w-5" aria-hidden="true" /> : <Eye className="h-5 w-5" aria-hidden="true" />}
                     </button>
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Confirmar Senha</label>
+                  <label htmlFor="cadastro-confirm-password" className="text-xs font-bold text-gray-700 uppercase tracking-wider ml-1">Confirmar Senha</label>
                   <div className="relative">
                     <Input
+                      id="cadastro-confirm-password"
                       type={showConfirmPassword ? "text" : "password"}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="Repita sua senha"
                       required
-                      className="h-14 bg-gray-50 border-transparent focus:bg-white focus:border-yellow-500 focus:ring-0 rounded-2xl text-base pr-12 transition-all"
+                      className="h-14 bg-gray-50 border-gray-200 focus:bg-white focus:border-amber-600 focus:ring-1 focus:ring-amber-600 rounded-2xl text-base pr-12 transition-all"
                     />
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 p-1 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+                      aria-label={showConfirmPassword ? "Ocultar confirmação de senha" : "Exibir confirmação de senha em texto"}
                     >
-                      {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                      {showConfirmPassword ? <EyeOff className="h-5 w-5" aria-hidden="true" /> : <Eye className="h-5 w-5" aria-hidden="true" />}
                     </button>
                   </div>
                 </div>
 
+                {/* Checkbox Obrigatório LGPD / Termos */}
+                <div className="flex items-start gap-3 pt-2">
+                  <input
+                    type="checkbox"
+                    id="accept-terms-checkbox"
+                    checked={acceptedTerms}
+                    onChange={(e) => setAcceptedTerms(e.target.checked)}
+                    required
+                    className="mt-1 w-4 h-4 rounded border-gray-300 text-amber-600 focus:ring-amber-600 cursor-pointer"
+                    aria-required="true"
+                  />
+                  <label htmlFor="accept-terms-checkbox" className="text-xs text-gray-700 leading-relaxed cursor-pointer select-none">
+                    Declaro que li e concordo com os{" "}
+                    <Link href="/termos" target="_blank" className="font-bold underline text-amber-700 hover:text-amber-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-600 rounded">
+                      Termos de Uso
+                    </Link>{" "}
+                    e a{" "}
+                    <Link href="/privacidade" target="_blank" className="font-bold underline text-amber-700 hover:text-amber-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-600 rounded">
+                      Política de Privacidade (LGPD)
+                    </Link>.
+                  </label>
+                </div>
+
                 {error && (
-                  <div className="bg-red-50 text-red-600 text-xs p-4 rounded-2xl font-bold animate-shake">
+                  <div role="alert" className="bg-red-50 text-red-700 border border-red-200 text-xs p-4 rounded-2xl font-bold animate-shake">
                     {error}
                   </div>
                 )}
 
                 <Button
                   type="submit"
-                  className="w-full h-16 text-lg font-black bg-yellow-500 hover:bg-yellow-600 text-white rounded-2xl shadow-lg shadow-yellow-100 transition-all active:scale-95 flex items-center justify-center gap-2"
+                  className="w-full h-16 text-lg font-black bg-amber-600 hover:bg-amber-700 text-white rounded-2xl shadow-lg shadow-amber-200 transition-all active:scale-95 flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2"
                   disabled={loading}
                 >
                   {loading ? "Criando conta..." : "CRIAR CONTA"}
-                  {!loading && <ArrowRight className="h-5 w-5" />}
+                  {!loading && <ArrowRight className="h-5 w-5" aria-hidden="true" />}
                 </Button>
               </form>
 

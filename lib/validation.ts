@@ -7,7 +7,7 @@ import {
   sanitizeString as secureSanitizeString,
   validatePhone as secureValidatePhone,
   validateOrderPayload,
-} from "./security-validation.ts"
+} from "./security-validation.mjs"
 
 export const validatePhone = secureValidatePhone
 

@@ -168,9 +168,10 @@ export function LoginContent() {
               <Button
                 type="button"
                 variant="outline"
-                className="w-full h-14 text-base font-bold bg-white hover:bg-gray-50 border-2 border-gray-100 rounded-2xl flex items-center justify-center gap-3 transition-all active:scale-[0.98]"
+                className="w-full h-14 text-base font-bold bg-white hover:bg-gray-50 border-2 border-gray-200 text-gray-800 rounded-2xl flex items-center justify-center gap-3 transition-all active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
                 onClick={() => signIn()}
                 disabled={loading}
+                aria-label="Entrar na conta utilizando o Google"
               >
                 <svg className="h-6 w-6" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -192,60 +193,63 @@ export function LoginContent() {
 
               <form onSubmit={handleEmailLogin} className="space-y-4">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">E-mail</label>
+                  <label htmlFor="login-email" className="text-xs font-bold text-gray-700 uppercase tracking-wider ml-1">E-mail</label>
                   <Input
+                    id="login-email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="seu@email.com"
                     required
-                    className="h-14 bg-gray-50 border-transparent focus:bg-white focus:border-yellow-500 focus:ring-0 rounded-2xl text-base transition-all"
+                    className="h-14 bg-gray-50 border-gray-200 focus:bg-white focus:border-amber-600 focus:ring-1 focus:ring-amber-600 rounded-2xl text-base transition-all"
                   />
                 </div>
 
                 <div className="space-y-1.5">
                   <div className="flex justify-between items-center px-1">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Senha</label>
+                    <label htmlFor="login-password" className="text-xs font-bold text-gray-700 uppercase tracking-wider">Senha</label>
                     <button 
                       type="button"
                       onClick={() => setShowResetModal(true)}
-                      className="text-[10px] font-bold text-yellow-600 hover:text-yellow-700 transition-colors"
+                      className="text-xs font-bold text-amber-700 hover:text-amber-900 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-600 rounded"
                     >
                       Esqueceu?
                     </button>
                   </div>
                   <div className="relative">
                     <Input
+                      id="login-password"
                       type={showPassword ? "text" : "password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Sua senha"
                       required
-                      className="h-14 bg-gray-50 border-transparent focus:bg-white focus:border-yellow-500 focus:ring-0 rounded-2xl text-base pr-12 transition-all"
+                      className="h-14 bg-gray-50 border-gray-200 focus:bg-white focus:border-amber-600 focus:ring-1 focus:ring-amber-600 rounded-2xl text-base pr-12 transition-all"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 p-1 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+                      aria-label={showPassword ? "Ocultar senha digitada" : "Exibir senha digitada em texto"}
                     >
-                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                      {showPassword ? <EyeOff className="h-5 w-5" aria-hidden="true" /> : <Eye className="h-5 w-5" aria-hidden="true" />}
                     </button>
                   </div>
                 </div>
 
                 {error && (
-                  <div className="bg-red-50 text-red-600 text-xs p-4 rounded-2xl font-bold animate-shake">
+                  <div role="alert" className="bg-red-50 text-red-700 border border-red-200 text-xs p-4 rounded-2xl font-bold animate-shake">
                     {error}
                   </div>
                 )}
 
                 <Button
                   type="submit"
-                  className="w-full h-16 text-lg font-black bg-yellow-500 hover:bg-yellow-600 text-white rounded-2xl shadow-lg shadow-yellow-100 transition-all active:scale-95 flex items-center justify-center gap-2"
+                  className="w-full h-16 text-lg font-black bg-amber-600 hover:bg-amber-700 text-white rounded-2xl shadow-lg shadow-amber-200 transition-all active:scale-95 flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2"
                   disabled={loading}
                 >
                   {loading ? "Entrando..." : "ENTRAR"}
-                  {!loading && <ArrowRight className="h-5 w-5" />}
+                  {!loading && <ArrowRight className="h-5 w-5" aria-hidden="true" />}
                 </Button>
               </form>
 
@@ -274,13 +278,15 @@ export function LoginContent() {
                   <Mail className="w-6 h-6 text-yellow-600" />
                 </div>
                 <button 
+                  type="button"
                   onClick={() => {
                     setShowResetModal(false)
                     setResetSuccess(false)
                   }}
-                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+                  aria-label="Fechar janela de recuperação de senha"
                 >
-                  <X className="h-6 w-6 text-gray-400" />
+                  <X className="h-6 w-6 text-gray-500" aria-hidden="true" />
                 </button>
               </div>
 

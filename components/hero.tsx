@@ -24,9 +24,9 @@ interface HeroProps {
 
 export function Hero({
   mostRequestedProduct,
-  totalOrders = 1258,
+  totalOrders = 0,
   customerPhotos = [],
-  totalCustomers = 5234,
+  totalCustomers = 0,
 }: HeroProps) {
   const [storeStatus, setStoreStatus] = useState<StoreStatus | null>(null)
   const [isStoreOpen, setIsStoreOpen] = useState(true)
@@ -125,11 +125,10 @@ export function Hero({
                     </span>
                   </div>
 
-                  {/* Rating badge no topo direito preenchendo o espaço vazio */}
+                  {/* Selo de qualidade no topo direito */}
                   <div className="shrink-0 inline-flex items-center gap-1 bg-[#FEF8EC] border border-[#FCE8C3] px-2 py-0.5 rounded-full text-[11px] font-bold text-[#1F1B16]">
-                    <Star className="w-3 h-3 fill-[#FCBB00] text-[#FCBB00]" />
-                    <span>4.9</span>
-                    <span className="text-[#9C9188] font-normal text-[10px]">(500+)</span>
+                    <Star className="w-3 h-3 fill-[#FCBB00] text-[#FCBB00]" aria-hidden="true" />
+                    <span>Feito na Hora</span>
                   </div>
                 </div>
 
@@ -205,11 +204,10 @@ export function Hero({
 
                 <span className="text-[#ECE7E0] hidden sm:inline">•</span>
 
-                {/* Avaliação (Desktop) */}
+                {/* Qualidade e Procedência (Desktop) */}
                 <div className="hidden sm:inline-flex items-center gap-1 bg-transparent py-0 font-bold text-[#1F1B16] shrink-0 text-xs">
-                  <Star className="w-3.5 h-3.5 fill-[#FCBB00] text-[#FCBB00]" />
-                  <span>4.9</span>
-                  <span className="text-[#9C9188] font-normal">(500+)</span>
+                  <Star className="w-3.5 h-3.5 fill-[#FCBB00] text-[#FCBB00]" aria-hidden="true" />
+                  <span>Preparo Artesanal</span>
                 </div>
 
                 <span className="text-[#ECE7E0] hidden sm:inline">•</span>
