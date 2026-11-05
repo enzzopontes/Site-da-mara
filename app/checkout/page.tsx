@@ -2,54 +2,34 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { CheckoutSkeleton } from "@/components/skeletons/checkout-skeleton"
-import { HeaderWrapper } from "@/components/header-wrapper"
-import { Footer } from "@/components/footer"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import Image from "next/image"
+import Link from "next/link"
+import { ShoppingBag, ArrowLeft, Loader2, AlertCircle } from "lucide-react"
+
 import { useCart } from "@/lib/cart-context"
 import { useAuth } from "@/lib/auth-context"
-import {
-  ShoppingBag,
-  MapPin,
-  CreditCard,
-  AlertCircle,
-  Plus,
-  Store,
-  Ticket,
-  Check,
-  X,
-  User,
-  Loader2,
-  Utensils,
-  ChevronRight,
-  ChevronLeft,
-  Trash2,
-  Bike,
-  QrCode,
-  Banknote,
-  Clock,
-  Sparkles,
-  ShieldCheck,
-  CheckCircle2,
-} from "lucide-react"
-import Link from "next/link"
 import { couponsManager, type Coupon } from "@/lib/cupons-manager"
 import { storeStatusManager, type StoreStatus } from "@/lib/store-status-manager"
 import { addressesManager, type Address } from "@/lib/addresses-manager"
 import { ordersManager } from "@/lib/orders-manager"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 
-type CheckoutStep = "itens" | "entrega" | "pagamento"
+import { CartHeader, type CheckoutStep } from "@/components/checkout/cart-header"
+import { CartFooter } from "@/components/checkout/cart-footer"
+import { MinOrderSheet } from "@/components/checkout/min-order-sheet"
+import { StepItens } from "@/components/checkout/step-itens"
+import { StepEntrega } from "@/components/checkout/step-entrega"
+import { StepPagamento } from "@/components/checkout/step-pagamento"
+import { CheckoutSkeleton } from "@/components/skeletons/checkout-skeleton"
+
+const MIN_ORDER_VALUE = 20.0
 
 export default function CheckoutPage() {
   const router = useRouter()
-  const { user, loading } = useAuth()
-  const { items, getTotalPrice, updateQuantity, removeItem, clearCart } = useCart()
+  const { user, loading: authLoading } = useAuth()
+  const { items, getTotalPrice, updateQuantity, removeItem, addItem, clearCart } = useCart()
 
-  // Controle de etapas do fluxo (Padrão iFood)
+  // Controle de etapas do fluxo (Padrão iFood: itens -> entrega -> pagamento)
   const [step, setStep] = useState<CheckoutStep>("itens")
 
   // Status da loja e regras de entrega
@@ -87,19 +67,25 @@ export default function CheckoutPage() {
   const [couponCode, setCouponCode] = useState("")
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null)
   const [couponError, setCouponError] = useState("")
-  const [couponSuccess, setCouponSuccess] = useState(false)
   const [validandoCupom, setValidandoCupom] = useState(false)
+
+  // Produtos recomendados para o carrossel "Aproveite e peça também"
+  const [recommendedProducts, setRecommendedProducts] = useState<any[]>([])
+
+  // Modal de Pedido Mínimo
+  const [showMinOrderSheet, setShowMinOrderSheet] = useState(false)
 
   // Estados de submissão e carregamento
   const [isLoadingData, setIsLoadingData] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  // ─── Carregamento inicial de status da loja e usuário ────────────────────────
+  // ─── 1. Carregamento inicial de status da loja, usuário e produtos ─────────────
   useEffect(() => {
     async function init() {
       setIsLoadingData(true)
       try {
+        // Status da Loja
         const status = await storeStatusManager.getStatus()
         setStoreStatus(status)
         setIsStoreOpen(status.isOpen ?? true)
@@ -114,6 +100,7 @@ export default function CheckoutPage() {
           setDeliveryFee(0)
         }
 
+        // Dados do Usuário e Endereços
         if (user) {
           setNome(user.user_metadata?.full_name || "")
           const rawPhone = user.user_metadata?.phone || ""
@@ -132,6 +119,18 @@ export default function CheckoutPage() {
             setUseNewAddress(true)
           }
         }
+
+        // Busca produtos disponíveis para o carrossel "Aproveite e peça também"
+        const supabase = getSupabaseBrowserClient()
+        const { data: prods } = await supabase
+          .from("products")
+          .select("*")
+          .eq("available", true)
+          .limit(12)
+
+        if (prods && prods.length > 0) {
+          setRecommendedProducts(prods)
+        }
       } catch (err) {
         console.error("[Checkout] Erro ao carregar dados:", err)
       } finally {
@@ -141,24 +140,23 @@ export default function CheckoutPage() {
     init()
   }, [user])
 
-  // Redireciona se não estiver logado
+  // Redireciona para login se não autenticado
   useEffect(() => {
-    if (!loading && !user) {
+    if (!authLoading && !user) {
       router.push("/login?redirect=/checkout")
     }
-  }, [user, loading, router])
+  }, [user, authLoading, router])
 
-  // ─── Cálculos financeiros ────────────────────────────────────────────────────
+  // ─── Cálculos Financeiros ──────────────────────────────────────────────────
   const subtotal = getTotalPrice()
-
   const discountAmount = appliedCoupon
     ? couponsManager.calculateDiscount(subtotal, appliedCoupon)
     : 0
-
   const currentDeliveryFee = deliveryType === "pickup" ? 0 : deliveryFee
   const finalTotal = Math.max(0, subtotal - discountAmount + currentDeliveryFee)
+  const totalItemCount = items.reduce((sum, item) => sum + item.quantity, 0)
 
-  // ─── Formatação e máscaras ───────────────────────────────────────────────────
+  // ─── Formatação de Máscaras ────────────────────────────────────────────────
   const handleTelefoneChange = (value: string) => {
     const nums = value.replace(/\D/g, "")
     if (nums.length <= 11) {
@@ -171,7 +169,10 @@ export default function CheckoutPage() {
   }
 
   const handleCepChange = async (value: string) => {
-    const formatted = value.replace(/\D/g, "").replace(/(\d{5})(\d)/, "$1-$2").substring(0, 9)
+    const formatted = value
+      .replace(/\D/g, "")
+      .replace(/(\d{5})(\d)/, "$1-$2")
+      .substring(0, 9)
     setCep(formatted)
     const digits = formatted.replace(/\D/g, "")
     if (digits.length === 8) {
@@ -187,6 +188,8 @@ export default function CheckoutPage() {
           } else {
             setEnderecoError("")
           }
+        } else {
+          setEnderecoError("CEP não encontrado. Digite o endereço manualmente.")
         }
       } catch {
         // Silêncio em erro de rede ViaCEP
@@ -196,7 +199,7 @@ export default function CheckoutPage() {
     }
   }
 
-  // ─── Ações de Cupom ──────────────────────────────────────────────────────────
+  // ─── Cupons ────────────────────────────────────────────────────────────────
   const handleApplyCoupon = async () => {
     if (!couponCode.trim()) return
     setValidandoCupom(true)
@@ -205,8 +208,6 @@ export default function CheckoutPage() {
       const res = await couponsManager.validateCoupon(couponCode, user?.id)
       if (res.valid && res.coupon) {
         setAppliedCoupon(res.coupon)
-        setCouponSuccess(true)
-        setTimeout(() => setCouponSuccess(false), 3000)
       } else {
         setCouponError(res.message || "Cupom inválido ou expirado.")
         setAppliedCoupon(null)
@@ -224,10 +225,28 @@ export default function CheckoutPage() {
     setCouponError("")
   }
 
-  // ─── Validações por etapa ────────────────────────────────────────────────────
+  // Adição rápida pelo carrossel "Aproveite e peça também"
+  const handleAddQuickItem = (product: any) => {
+    addItem({
+      id: String(product.id),
+      name: product.name || product.nome,
+      price: Number(product.price || product.preco || 0),
+      image: product.image || product.imagem || "/products/default.jpg",
+      quantity: 1,
+      category: product.category || product.categoria || "batata",
+      adicionais: [],
+    })
+  }
+
+  // ─── Validações por Etapa ──────────────────────────────────────────────────
   const validateStep1 = (): boolean => {
     if (items.length === 0) {
       setErrorMessage("Sua sacola está vazia. Adicione itens antes de continuar.")
+      return false
+    }
+    // Trava de Pedido Mínimo de R$ 20,00
+    if (subtotal < MIN_ORDER_VALUE) {
+      setShowMinOrderSheet(true)
       return false
     }
     setErrorMessage(null)
@@ -276,7 +295,9 @@ export default function CheckoutPage() {
     if (formaPagamento === "dinheiro" && troco) {
       const numericTroco = Number(troco.replace(",", "."))
       if (isNaN(numericTroco) || numericTroco < finalTotal) {
-        setErrorMessage(`O valor para troco deve ser maior ou igual a R$ ${finalTotal.toFixed(2).replace(".", ",")}.`)
+        setErrorMessage(
+          `O valor para troco deve ser maior ou igual a R$ ${finalTotal.toFixed(2).replace(".", ",")}.`
+        )
         return false
       }
     }
@@ -285,23 +306,36 @@ export default function CheckoutPage() {
     return true
   }
 
-  // ─── Navegação entre passos ──────────────────────────────────────────────────
+  // ─── Navegação entre Etapas ────────────────────────────────────────────────
   const handleNextStep = () => {
     if (step === "itens") {
-      if (validateStep1()) setStep("entrega")
+      if (validateStep1()) {
+        setStep("entrega")
+        window.scrollTo({ top: 0, behavior: "smooth" })
+      }
     } else if (step === "entrega") {
-      if (validateStep2()) setStep("pagamento")
+      if (validateStep2()) {
+        setStep("pagamento")
+        window.scrollTo({ top: 0, behavior: "smooth" })
+      }
+    } else if (step === "pagamento") {
+      handleFinalizarPedido()
     }
-    window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
   const handlePrevStep = () => {
-    if (step === "pagamento") setStep("entrega")
-    else if (step === "entrega") setStep("itens")
-    window.scrollTo({ top: 0, behavior: "smooth" })
+    if (step === "pagamento") {
+      setStep("entrega")
+      window.scrollTo({ top: 0, behavior: "smooth" })
+    } else if (step === "entrega") {
+      setStep("itens")
+      window.scrollTo({ top: 0, behavior: "smooth" })
+    } else {
+      router.push("/cardapio")
+    }
   }
 
-  // ─── Finalização do Pedido (Embutido no Site, Sem WhatsApp) ───────────────────
+  // ─── Finalização do Pedido (Supabase RPC create_order & Mercado Pago Pix) ───
   const handleFinalizarPedido = async () => {
     if (!validateStep1() || !validateStep2() || !validateStep3()) return
     if (isSubmitting) return
@@ -310,7 +344,6 @@ export default function CheckoutPage() {
     setErrorMessage(null)
 
     try {
-      // 1. Monta a string de endereço
       let enderecoFormatado = "Retirada no Local"
       let bairroFormatado = ""
       let complementoFormatado = ""
@@ -323,16 +356,20 @@ export default function CheckoutPage() {
         } else {
           const addr = addresses.find((a) => a.id === selectedAddressId)
           if (addr) {
-            enderecoFormatado = `${addr.street}, ${addr.number}${addr.complement ? " - " + addr.complement : ""} - ${addr.neighborhood}, ${addr.city}/${addr.state}`
+            enderecoFormatado = `${addr.street}, ${addr.number}${addr.complement ? " - " + addr.complement : ""} - ${addr.neighborhood}, ${addr.city || "Iacanga"}/${addr.state || "SP"}`
             bairroFormatado = addr.neighborhood
             complementoFormatado = addr.complement || ""
           }
         }
       }
 
-      // 2. Prepara os dados do pedido para a RPC
       const isOnlinePix = formaPagamento === "pix"
-      const mappedPaymentMethod = formaPagamento === "pix" ? "pix" : formaPagamento === "cartao_entrega" ? "cartao" : "dinheiro"
+      const mappedPaymentMethod =
+        formaPagamento === "pix"
+          ? "pix"
+          : formaPagamento === "cartao_entrega"
+          ? "cartao"
+          : "dinheiro"
 
       const orderPayload = {
         customerName: nome.trim(),
@@ -359,13 +396,13 @@ export default function CheckoutPage() {
         })),
       }
 
-      // 3. Salva o pedido atomicamente no Supabase
+      // Salva o pedido atomicamente no Supabase via RPC
       const createdOrder = await ordersManager.createOrder(orderPayload)
       if (!createdOrder?.id) {
         throw new Error("Não foi possível gerar seu pedido. Tente novamente.")
       }
 
-      // 4. Se for PIX, aciona a rota interna do Mercado Pago para gerar a chave e QR Code imediatamente
+      // Se for PIX, aciona a rota interna do Mercado Pago para gerar a chave e QR Code imediatamente
       if (isOnlinePix) {
         try {
           const supabase = getSupabaseBrowserClient()
@@ -383,746 +420,194 @@ export default function CheckoutPage() {
             })
           }
         } catch (pixErr) {
-          console.warn("[Checkout] Geração de Pix em segundo plano falhou, tela do pedido reprocessará:", pixErr)
+          console.warn("[Checkout] Geração de Pix em segundo plano falhou:", pixErr)
         }
       } else {
-        // Dispara notificação push para os administradores caso seja dinheiro ou maquininha
-        getSupabaseBrowserClient().auth.getSession().then((sessionRes: any) => {
-          const token = sessionRes?.data?.session?.access_token
-          if (token && createdOrder?.id) {
-            fetch("/api/notify-new-order", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify({ orderId: createdOrder.id }),
-            }).catch(() => {})
-          }
-        }).catch(() => {})
+        // Dispara notificação push para os administradores
+        getSupabaseBrowserClient()
+          .auth.getSession()
+          .then((sessionRes: any) => {
+            const token = sessionRes?.data?.session?.access_token
+            if (token && createdOrder?.id) {
+              fetch("/api/notify-new-order", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ orderId: createdOrder.id }),
+              }).catch(() => {})
+            }
+          })
+          .catch(() => {})
       }
 
-      // 5. Limpa a sacola e redireciona direto para a tela de acompanhamento/pagamento
+      // Limpa a sacola e redireciona direto para a tela de acompanhamento/pagamento
       clearCart()
       router.push(`/pedidos/${createdOrder.id}`)
     } catch (err: any) {
       console.error("[Checkout] Erro ao finalizar:", err)
-      setErrorMessage(err.message || "Ocorreu um erro ao processar seu pedido. Por favor, tente novamente.")
+      setErrorMessage(
+        err.message || "Ocorreu um erro ao processar seu pedido. Por favor, tente novamente."
+      )
       setIsSubmitting(false)
     }
   }
 
-  // ─── Renderização de Carregamento (Zero CLS Skeleton) ─────────────────────
-  if (loading || isLoadingData) {
+  // ─── Carregamento Inicial (Skeleton) ───────────────────────────────────────
+  if (authLoading || isLoadingData) {
     return <CheckoutSkeleton />
   }
 
-  // ─── Sacola Vazia ────────────────────────────────────────────────────────────
+  // ─── Sacola Vazia ──────────────────────────────────────────────────────────
   if (items.length === 0) {
     return (
-      <div className="min-h-screen flex flex-col bg-gray-50">
-        <HeaderWrapper variant="simple" />
+      <div className="min-h-screen flex flex-col bg-[#F7F4EF]">
         <main className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto">
-          <div className="w-20 h-20 rounded-3xl bg-amber-100 flex items-center justify-center text-amber-600 mb-4 shadow-inner">
-            <ShoppingBag className="w-10 h-10" />
+          <div className="relative w-44 h-44 mb-4">
+            <Image
+              src="/logo.png"
+              alt="Sacola Vazia"
+              width={160}
+              height={160}
+              className="w-full h-full object-contain mx-auto opacity-80"
+            />
           </div>
-          <h2 className="text-2xl font-black text-gray-900 mb-2">Sua sacola está vazia</h2>
-          <p className="text-sm text-gray-500 font-medium mb-6">
-            Adicione batatas recheadas saborosas e acompanhamentos direto do cardápio para fazer seu pedido.
+          <h2 className="text-2xl font-black text-[#1F1B16] mb-2">Sua sacola está vazia</h2>
+          <p className="text-sm text-[#6B6157] font-medium mb-6 leading-relaxed">
+            Que tal escolher deliciosas batatas recheadas e acompanhamentos direto do cardápio?
           </p>
           <Link href="/cardapio" className="w-full">
-            <Button className="w-full h-14 bg-amber-500 hover:bg-amber-600 text-white font-black text-base rounded-2xl shadow-lg shadow-amber-200">
+            <button className="w-full h-14 bg-[#E3A008] hover:bg-[#C1440E] active:scale-[0.98] text-white font-black text-base rounded-2xl shadow-md transition-all cursor-pointer">
               Ver Cardápio Completo
-            </Button>
+            </button>
           </Link>
         </main>
-        <Footer />
       </div>
     )
   }
 
+  const activeAddr = addresses.find((a) => a.id === selectedAddressId)
+  const newAddrStr = useNewAddress
+    ? `${rua}, ${numero}${complemento ? " - " + complemento : ""} - ${bairro}`
+    : ""
+
   return (
-    <div className="min-h-screen flex flex-col bg-[#F9FAFB]">
-      {/* Top Header estilo App/iFood com Stepper */}
-      <header className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-xs">
-        <div className="container mx-auto max-w-2xl px-4 py-3 flex items-center justify-between">
-          <button
-            onClick={step === "itens" ? () => router.push("/cardapio") : handlePrevStep}
-            className="p-2 -ml-2 rounded-full hover:bg-gray-100 active:scale-95 transition-all text-gray-700"
-            aria-label="Voltar"
-          >
-            <ChevronLeft className="w-6 h-6" />
-          </button>
+    <div className="min-h-screen flex flex-col bg-[#F7F4EF] text-[#1F1B16]">
+      {/* 1. Stepper e Cabeçalho do Checkout */}
+      <CartHeader
+        step={step}
+        onBack={handlePrevStep}
+        onClear={clearCart}
+        canClear={items.length > 0}
+      />
 
-          <div className="flex flex-col items-center">
-            <span className="text-[10px] font-black text-amber-700 uppercase tracking-widest">
-              Batata Top Delivery
-            </span>
-            <h1 className="text-base font-black text-gray-900">
-              {step === "itens" ? "1. Minha Sacola" : step === "entrega" ? "2. Entrega" : "3. Pagamento"}
-            </h1>
-          </div>
-
-          <div className="w-8 flex justify-end">
-            <span className="text-xs font-black text-gray-400">
-              {step === "itens" ? "1/3" : step === "entrega" ? "2/3" : "3/3"}
-            </span>
-          </div>
-        </div>
-
-        {/* Barra de Progresso visual dos passos */}
-        <div className="w-full bg-gray-100 h-1">
-          <div
-            className="bg-amber-500 h-1 transition-all duration-300"
-            style={{
-              width: step === "itens" ? "33.3%" : step === "entrega" ? "66.6%" : "100%",
-            }}
-          />
-        </div>
-      </header>
-
-      {/* Alerta de Loja Fechada */}
-      {!isStoreOpen && (
-        <div className="bg-red-500 text-white px-4 py-2.5 text-center text-xs font-black flex items-center justify-center gap-2">
-          <Clock className="w-4 h-4 shrink-0" />
-          <span>A loja está fechada no momento. Os pedidos serão processados no próximo horário de funcionamento.</span>
-        </div>
-      )}
-
-      {/* Conteúdo Principal do Checkout */}
-      <main className="flex-1 container mx-auto max-w-2xl px-4 py-5 pb-32">
+      {/* 2. Conteúdo Centralizado Mobile-First */}
+      <main className="flex-1 max-w-xl w-full mx-auto px-4 py-5">
+        {/* Banner de Erro Global se houver */}
         {errorMessage && (
-          <div className="mb-4 p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold flex items-start gap-2.5 animate-in fade-in">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-500" />
-            <p className="flex-1">{errorMessage}</p>
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3 text-xs sm:text-sm font-bold text-red-600 animate-in fade-in">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <span>{errorMessage}</span>
           </div>
         )}
 
-        {/* ─── PASSO 1: ITENS DA SACOLA ────────────────────────────────────────── */}
+        {/* Etapa 1: Sacola de Itens */}
         {step === "itens" && (
-          <div className="space-y-4">
-            <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100">
-              <div className="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
-                <h2 className="text-sm font-black text-gray-900 uppercase tracking-wide flex items-center gap-2">
-                  <ShoppingBag className="w-4 h-4 text-amber-500" /> Itens Adicionados ({items.length})
-                </h2>
-                <Link href="/cardapio" className="text-xs font-bold text-amber-600 hover:text-amber-700">
-                  + Adicionar mais
-                </Link>
-              </div>
-
-              <div className="divide-y divide-gray-100">
-                {items.map((item) => {
-                  const itemAdicionaisTotal = (item.adicionais || []).reduce(
-                    (s, a) => s + (a.price || 0) * (a.quantity || 1),
-                    0
-                  )
-                  const unitPrice = (item.price || 0) + itemAdicionaisTotal
-                  const itemTotal = unitPrice * (item.quantity || 1)
-
-                  return (
-                    <div key={item.id} className="py-4 first:pt-0 last:pb-0 flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-black text-gray-900 truncate">{item.name}</h3>
-                        {item.pastaType && (
-                          <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md inline-block mt-1">
-                            Massa: {item.pastaType.toUpperCase()}
-                          </span>
-                        )}
-
-                        {item.adicionais && item.adicionais.length > 0 && (
-                          <div className="mt-1 space-y-0.5">
-                            {item.adicionais.map((ad, idx) => (
-                              <p key={idx} className="text-xs text-gray-500 font-medium">
-                                + {ad.quantity || 1}x {ad.name} (+R$ {((ad.price || 0) * (ad.quantity || 1)).toFixed(2).replace(".", ",")})
-                              </p>
-                            ))}
-                          </div>
-                        )}
-
-                        <p className="text-xs font-bold text-gray-400 mt-1">
-                          R$ {unitPrice.toFixed(2).replace(".", ",")} cada
-                        </p>
-                      </div>
-
-                      {/* Controle de Quantidade */}
-                      <div className="flex flex-col items-end gap-2 shrink-0">
-                        <span className="text-sm font-black text-gray-900">
-                          R$ {itemTotal.toFixed(2).replace(".", ",")}
-                        </span>
-
-                        <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl p-1">
-                          <button
-                            onClick={() => {
-                              if (item.quantity <= 1) {
-                                removeItem(item.id)
-                              } else {
-                                updateQuantity(item.id, item.quantity - 1)
-                              }
-                            }}
-                            className="w-7 h-7 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-gray-700 active:scale-90 transition-all shadow-xs"
-                            aria-label="Diminuir quantidade"
-                          >
-                            {item.quantity <= 1 ? (
-                              <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                            ) : (
-                              <span className="text-sm font-black">−</span>
-                            )}
-                          </button>
-
-                          <span className="w-6 text-center text-xs font-black text-gray-900">
-                            {item.quantity}
-                          </span>
-
-                          <button
-                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                            className="w-7 h-7 rounded-lg bg-amber-500 flex items-center justify-center text-white active:scale-90 transition-all shadow-xs"
-                            aria-label="Aumentar quantidade"
-                          >
-                            <span className="text-sm font-black">+</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* Seção de Cupom */}
-            <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100">
-              <h3 className="text-xs font-black text-gray-800 uppercase tracking-wide mb-3 flex items-center gap-2">
-                <Ticket className="w-4 h-4 text-amber-500" /> Cupom de Desconto
-              </h3>
-
-              {appliedCoupon ? (
-                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                    <div>
-                      <p className="text-xs font-black uppercase">Cupom {appliedCoupon.code} aplicado!</p>
-                      <p className="text-[11px] font-semibold text-emerald-700">
-                        Desconto de R$ {discountAmount.toFixed(2).replace(".", ",")}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleRemoveCoupon}
-                    className="p-1.5 rounded-lg text-emerald-700 hover:bg-emerald-100 transition-colors"
-                    aria-label="Remover cupom"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Ex: PRIMEIRACOMPRA"
-                      value={couponCode}
-                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                      className="h-12 rounded-xl text-xs font-bold uppercase tracking-wider"
-                    />
-                    <Button
-                      onClick={handleApplyCoupon}
-                      disabled={validandoCupom || !couponCode.trim()}
-                      className="h-12 px-5 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs rounded-xl shrink-0"
-                    >
-                      {validandoCupom ? <Loader2 className="w-4 h-4 animate-spin" /> : "Aplicar"}
-                    </Button>
-                  </div>
-                  {couponError && <p className="text-xs font-bold text-red-600">{couponError}</p>}
-                </div>
-              )}
-            </div>
-
-            {/* Resumo Parcial */}
-            <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100 space-y-2 text-xs">
-              <div className="flex justify-between text-gray-600 font-medium">
-                <span>Subtotal dos itens</span>
-                <span>R$ {subtotal.toFixed(2).replace(".", ",")}</span>
-              </div>
-              {discountAmount > 0 && (
-                <div className="flex justify-between text-emerald-600 font-bold">
-                  <span>Desconto aplicado</span>
-                  <span>- R$ {discountAmount.toFixed(2).replace(".", ",")}</span>
-                </div>
-              )}
-              <div className="pt-2 border-t border-gray-100 flex justify-between items-center text-sm font-black text-gray-900">
-                <span>Total Parcial</span>
-                <span className="text-base text-amber-600">
-                  R$ {(subtotal - discountAmount).toFixed(2).replace(".", ",")}
-                </span>
-              </div>
-            </div>
-          </div>
+          <StepItens
+            items={items}
+            subtotal={subtotal}
+            deliveryFee={currentDeliveryFee}
+            discountAmount={discountAmount}
+            finalTotal={finalTotal}
+            appliedCoupon={appliedCoupon}
+            couponCode={couponCode}
+            couponError={couponError}
+            validandoCupom={validandoCupom}
+            deliveryType={deliveryType}
+            recommendedProducts={recommendedProducts}
+            onUpdateQuantity={updateQuantity}
+            onRemoveItem={removeItem}
+            onSetCouponCode={setCouponCode}
+            onApplyCoupon={handleApplyCoupon}
+            onRemoveCoupon={handleRemoveCoupon}
+            onAddQuickItem={handleAddQuickItem}
+          />
         )}
 
-        {/* ─── PASSO 2: ENTREGA OU RETIRADA ────────────────────────────────────── */}
+        {/* Etapa 2: Entrega e Identificação */}
         {step === "entrega" && (
-          <div className="space-y-4">
-            {/* Seletor Tipo: Delivery vs Retirada (Estilo iFood) */}
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => isDeliveryEnabled && setDeliveryType("delivery")}
-                disabled={!isDeliveryEnabled}
-                className={`p-4 rounded-3xl border-2 text-left transition-all active:scale-98 flex flex-col justify-between ${
-                  deliveryType === "delivery"
-                    ? "border-amber-500 bg-amber-50/40 shadow-sm"
-                    : "border-gray-200 bg-white opacity-80"
-                } ${!isDeliveryEnabled ? "cursor-not-allowed opacity-50" : ""}`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
-                    deliveryType === "delivery" ? "bg-amber-500 text-white" : "bg-gray-100 text-gray-600"
-                  }`}>
-                    <Bike className="w-5 h-5" />
-                  </div>
-                  {deliveryType === "delivery" && (
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 ring-4 ring-amber-100" />
-                  )}
-                </div>
-                <div>
-                  <h4 className="text-sm font-black text-gray-900 leading-tight">Entrega Delivery</h4>
-                  <p className="text-[11px] font-bold text-gray-500 mt-0.5">
-                    {deliveryFee > 0 ? `Taxa: R$ ${deliveryFee.toFixed(2).replace(".", ",")}` : "Entrega Grátis"}
-                  </p>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setDeliveryType("pickup")}
-                className={`p-4 rounded-3xl border-2 text-left transition-all active:scale-98 flex flex-col justify-between ${
-                  deliveryType === "pickup"
-                    ? "border-amber-500 bg-amber-50/40 shadow-sm"
-                    : "border-gray-200 bg-white opacity-80"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
-                    deliveryType === "pickup" ? "bg-amber-500 text-white" : "bg-gray-100 text-gray-600"
-                  }`}>
-                    <Store className="w-5 h-5" />
-                  </div>
-                  {deliveryType === "pickup" && (
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 ring-4 ring-amber-100" />
-                  )}
-                </div>
-                <div>
-                  <h4 className="text-sm font-black text-gray-900 leading-tight">Retirada na Loja</h4>
-                  <p className="text-[11px] font-bold text-emerald-600 mt-0.5">Sem taxa (Grátis)</p>
-                </div>
-              </button>
-            </div>
-
-            {/* Dados do Cliente */}
-            <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100 space-y-3">
-              <h3 className="text-xs font-black text-gray-800 uppercase tracking-wide flex items-center gap-2">
-                <User className="w-4 h-4 text-amber-500" /> Dados do Cliente
-              </h3>
-
-              <div className="space-y-1">
-                <Label className="text-xs font-bold text-gray-600">Seu Nome Completo *</Label>
-                <Input
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  placeholder="Nome e Sobrenome"
-                  className="h-12 rounded-xl text-xs font-medium"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs font-bold text-gray-600">Telefone / WhatsApp com DDD *</Label>
-                <Input
-                  value={telefone}
-                  onChange={(e) => handleTelefoneChange(e.target.value)}
-                  placeholder="(14) 99999-9999"
-                  className="h-12 rounded-xl text-xs font-medium font-mono"
-                />
-              </div>
-            </div>
-
-            {/* Seção Delivery: Escolha de Endereço */}
-            {deliveryType === "delivery" && (
-              <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-black text-gray-800 uppercase tracking-wide flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-amber-500" /> Endereço de Entrega
-                  </h3>
-                  {addresses.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setUseNewAddress(!useNewAddress)}
-                      className="text-xs font-bold text-amber-600 hover:text-amber-700"
-                    >
-                      {useNewAddress ? "Usar endereço salvo" : "+ Novo endereço"}
-                    </button>
-                  )}
-                </div>
-
-                {/* Lista de Endereços Salvos */}
-                {!useNewAddress && addresses.length > 0 && (
-                  <div className="space-y-2">
-                    {addresses.map((addr) => (
-                      <label
-                        key={addr.id}
-                        className={`p-3.5 rounded-2xl border-2 flex items-start gap-3 cursor-pointer transition-all ${
-                          selectedAddressId === addr.id
-                            ? "border-amber-500 bg-amber-50/30"
-                            : "border-gray-200 hover:border-gray-300"
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="selected_address"
-                          checked={selectedAddressId === addr.id}
-                          onChange={() => setSelectedAddressId(addr.id)}
-                          className="mt-1 text-amber-500 focus:ring-amber-400"
-                        />
-                        <div className="flex-1 text-xs">
-                          <p className="font-black text-gray-900">
-                            {addr.street}, {addr.number}
-                            {addr.complement ? ` - ${addr.complement}` : ""}
-                          </p>
-                          <p className="text-gray-500 font-medium">
-                            {addr.neighborhood} — {addr.city}/{addr.state}
-                          </p>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                )}
-
-                {/* Formulário Novo Endereço */}
-                {(useNewAddress || addresses.length === 0) && (
-                  <div className="space-y-3 pt-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <Label className="text-xs font-bold text-gray-600">CEP (Opcional)</Label>
-                        <div className="relative">
-                          <Input
-                            value={cep}
-                            onChange={(e) => handleCepChange(e.target.value)}
-                            placeholder="17570-000"
-                            className="h-11 rounded-xl text-xs font-mono"
-                          />
-                          {buscandoCep && (
-                            <Loader2 className="w-4 h-4 animate-spin absolute right-3 top-3 text-amber-500" />
-                          )}
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs font-bold text-gray-600">Bairro *</Label>
-                        <Input
-                          value={bairro}
-                          onChange={(e) => setBairro(e.target.value)}
-                          placeholder="Bairro"
-                          className="h-11 rounded-xl text-xs"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="col-span-2 space-y-1">
-                        <Label className="text-xs font-bold text-gray-600">Rua / Logradouro *</Label>
-                        <Input
-                          value={rua}
-                          onChange={(e) => setRua(e.target.value)}
-                          placeholder="Nome da rua"
-                          className="h-11 rounded-xl text-xs"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs font-bold text-gray-600">Número *</Label>
-                        <Input
-                          value={numero}
-                          onChange={(e) => setNumero(e.target.value)}
-                          placeholder="123"
-                          className="h-11 rounded-xl text-xs"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label className="text-xs font-bold text-gray-600">Complemento / Referência</Label>
-                      <Input
-                        value={complemento}
-                        onChange={(e) => setComplemento(e.target.value)}
-                        placeholder="Apto, Casa 2, Perto do mercado..."
-                        className="h-11 rounded-xl text-xs"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Seção Retirada: Endereço da Loja */}
-            {deliveryType === "pickup" && (
-              <div className="bg-amber-50/70 border-2 border-amber-300 rounded-3xl p-5 text-xs text-amber-950 space-y-2">
-                <div className="flex items-center gap-2 font-black text-amber-900 text-sm">
-                  <Store className="w-5 h-5 text-amber-600" />
-                  <span>Endereço para Retirada no Balcão:</span>
-                </div>
-                <p className="font-semibold text-gray-800">
-                  Rua Carlos Roberto Crepaldi, 120 - Jardim Alvorada, Iacanga - SP
-                </p>
-                <p className="text-[11px] text-amber-800 font-medium">
-                  Tempo estimado de preparo: <strong>{storeStatus?.waitTimeMin || 15} a {storeStatus?.waitTimeMax || 25} minutos</strong>.
-                </p>
-              </div>
-            )}
-          </div>
+          <StepEntrega
+            deliveryType={deliveryType}
+            setDeliveryType={setDeliveryType}
+            isDeliveryEnabled={isDeliveryEnabled}
+            deliveryFee={currentDeliveryFee}
+            addresses={addresses}
+            selectedAddressId={selectedAddressId}
+            setSelectedAddressId={setSelectedAddressId}
+            useNewAddress={useNewAddress}
+            setUseNewAddress={setUseNewAddress}
+            rua={rua}
+            setRua={setRua}
+            numero={numero}
+            setNumero={setNumero}
+            complemento={complemento}
+            setComplemento={setComplemento}
+            bairro={bairro}
+            setBairro={setBairro}
+            cep={cep}
+            handleCepChange={handleCepChange}
+            buscandoCep={buscandoCep}
+            enderecoError={enderecoError}
+            nome={nome}
+            setNome={setNome}
+            telefone={telefone}
+            handleTelefoneChange={handleTelefoneChange}
+          />
         )}
 
-        {/* ─── PASSO 3: FORMA DE PAGAMENTO E FINALIZAÇÃO ───────────────────────── */}
+        {/* Etapa 3: Pagamento e Finalização */}
         {step === "pagamento" && (
-          <div className="space-y-4">
-            {/* Métodos de Pagamento (Cards Padrão iFood) */}
-            <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100 space-y-3">
-              <h3 className="text-xs font-black text-gray-800 uppercase tracking-wide flex items-center gap-2 mb-1">
-                <CreditCard className="w-4 h-4 text-amber-500" /> Escolha como pagar
-              </h3>
-
-              {/* Opção 1: Pix */}
-              <label
-                className={`p-4 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all active:scale-98 ${
-                  formaPagamento === "pix"
-                    ? "border-amber-500 bg-amber-50/40 shadow-xs"
-                    : "border-gray-200 hover:border-gray-300 bg-white"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                    formaPagamento === "pix" ? "bg-amber-500 text-white" : "bg-gray-100 text-gray-700"
-                  }`}>
-                    <QrCode className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-black text-gray-900">Pix</span>
-                      <span className="text-[10px] font-black uppercase text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                        Aprovação Imediata
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-500 font-medium">
-                      Gere o código Copia e Cola seguro direto no site
-                    </p>
-                  </div>
-                </div>
-                <input
-                  type="radio"
-                  name="forma_pagamento"
-                  checked={formaPagamento === "pix"}
-                  onChange={() => setFormaPagamento("pix")}
-                  className="text-amber-500 focus:ring-amber-400"
-                />
-              </label>
-
-              {/* Opção 2: Cartão na Entrega (Maquininha) */}
-              <label
-                className={`p-4 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all active:scale-98 ${
-                  formaPagamento === "cartao_entrega"
-                    ? "border-amber-500 bg-amber-50/40 shadow-xs"
-                    : "border-gray-200 hover:border-gray-300 bg-white"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                    formaPagamento === "cartao_entrega" ? "bg-amber-500 text-white" : "bg-gray-100 text-gray-700"
-                  }`}>
-                    <CreditCard className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <span className="text-sm font-black text-gray-900">Cartão na Entrega</span>
-                    <p className="text-xs text-gray-500 font-medium">
-                      O entregador leva a maquininha (Crédito, Débito ou VR)
-                    </p>
-                  </div>
-                </div>
-                <input
-                  type="radio"
-                  name="forma_pagamento"
-                  checked={formaPagamento === "cartao_entrega"}
-                  onChange={() => setFormaPagamento("cartao_entrega")}
-                  className="text-amber-500 focus:ring-amber-400"
-                />
-              </label>
-
-              {/* Opção 3: Dinheiro */}
-              <label
-                className={`p-4 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all active:scale-98 ${
-                  formaPagamento === "dinheiro"
-                    ? "border-amber-500 bg-amber-50/40 shadow-xs"
-                    : "border-gray-200 hover:border-gray-300 bg-white"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                    formaPagamento === "dinheiro" ? "bg-amber-500 text-white" : "bg-gray-100 text-gray-700"
-                  }`}>
-                    <Banknote className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <span className="text-sm font-black text-gray-900">Dinheiro na Entrega</span>
-                    <p className="text-xs text-gray-500 font-medium">
-                      Pague em dinheiro físico ao receber o pedido
-                    </p>
-                  </div>
-                </div>
-                <input
-                  type="radio"
-                  name="forma_pagamento"
-                  checked={formaPagamento === "dinheiro"}
-                  onChange={() => setFormaPagamento("dinheiro")}
-                  className="text-amber-500 focus:ring-amber-400"
-                />
-              </label>
-
-              {/* Campo de Troco se Dinheiro */}
-              {formaPagamento === "dinheiro" && (
-                <div className="p-3.5 rounded-2xl bg-gray-50 border border-gray-200 space-y-1.5 animate-in fade-in">
-                  <Label className="text-xs font-bold text-gray-700">Precisa de troco para quanto?</Label>
-                  <Input
-                    placeholder={`Ex: R$ ${(finalTotal + 20).toFixed(2).replace(".", ",")}`}
-                    value={troco}
-                    onChange={(e) => setTroco(e.target.value)}
-                    className="h-11 rounded-xl text-xs font-mono"
-                  />
-                  <p className="text-[10px] text-gray-500">Deixe em branco caso tenha o valor exato.</p>
-                </div>
-              )}
-            </div>
-
-            {/* Talheres Descartáveis (Obrigatório Padrão iFood) */}
-            <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100 space-y-3">
-              <h3 className="text-xs font-black text-gray-800 uppercase tracking-wide flex items-center gap-2">
-                <Utensils className="w-4 h-4 text-amber-500" /> Precisa de talher descartável? *
-              </h3>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setPrecisaTalheres("sim")}
-                  className={`h-12 rounded-2xl border-2 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 ${
-                    precisaTalheres === "sim"
-                      ? "border-amber-500 bg-amber-50 text-amber-900 shadow-xs"
-                      : "border-gray-200 text-gray-700 bg-white"
-                  }`}
-                >
-                  <Check className="w-4 h-4" /> Sim, enviar colher
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPrecisaTalheres("nao")}
-                  className={`h-12 rounded-2xl border-2 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 ${
-                    precisaTalheres === "nao"
-                      ? "border-amber-500 bg-amber-50 text-amber-900 shadow-xs"
-                      : "border-gray-200 text-gray-700 bg-white"
-                  }`}
-                >
-                  <X className="w-4 h-4" /> Não preciso
-                </button>
-              </div>
-            </div>
-
-            {/* Observações do Pedido */}
-            <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100 space-y-2">
-              <Label className="text-xs font-black text-gray-800 uppercase tracking-wide">
-                Observações do Pedido (Opcional)
-              </Label>
-              <Textarea
-                value={observacoes}
-                onChange={(e) => setObservacoes(e.target.value)}
-                placeholder="Ex: Tirar orégano, caprichar no queijo, campainha sem som..."
-                className="rounded-2xl text-xs min-h-[70px] resize-none"
-              />
-            </div>
-
-            {/* Resumo Final com Transparência Total */}
-            <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100 space-y-2.5 text-xs">
-              <h4 className="font-black text-gray-800 uppercase tracking-wide text-xs pb-2 border-b border-gray-100">
-                Resumo dos Valores
-              </h4>
-              <div className="flex justify-between text-gray-600 font-medium">
-                <span>Itens ({items.reduce((s, i) => s + (i.quantity || 1), 0)})</span>
-                <span>R$ {subtotal.toFixed(2).replace(".", ",")}</span>
-              </div>
-              <div className="flex justify-between text-gray-600 font-medium">
-                <span>Taxa de Entrega</span>
-                <span>{currentDeliveryFee > 0 ? `R$ ${currentDeliveryFee.toFixed(2).replace(".", ",")}` : "Grátis"}</span>
-              </div>
-              {discountAmount > 0 && (
-                <div className="flex justify-between text-emerald-600 font-bold">
-                  <span>Desconto Cupom ({appliedCoupon?.code})</span>
-                  <span>- R$ {discountAmount.toFixed(2).replace(".", ",")}</span>
-                </div>
-              )}
-              <div className="pt-3 border-t border-gray-100 flex justify-between items-center text-base font-black text-gray-900">
-                <span>Total a Pagar</span>
-                <span className="text-xl text-amber-600 font-black">
-                  R$ {finalTotal.toFixed(2).replace(".", ",")}
-                </span>
-              </div>
-            </div>
-          </div>
+          <StepPagamento
+            formaPagamento={formaPagamento}
+            setFormaPagamento={setFormaPagamento}
+            troco={troco}
+            setTroco={setTroco}
+            precisaTalheres={precisaTalheres}
+            setPrecisaTalheres={setPrecisaTalheres}
+            observacoes={observacoes}
+            setObservacoes={setObservacoes}
+            items={items}
+            deliveryType={deliveryType}
+            activeAddress={activeAddr}
+            newAddressFormatted={newAddrStr}
+            subtotal={subtotal}
+            deliveryFee={currentDeliveryFee}
+            discountAmount={discountAmount}
+            finalTotal={finalTotal}
+            appliedCoupon={appliedCoupon}
+          />
         )}
       </main>
 
-      {/* ─── RODAPÉ FIXO MOBILE-FIRST (ESTILO IFOOD) ─────────────────────────── */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200/80 p-4 z-50 shadow-lg">
-        <div className="container mx-auto max-w-2xl flex items-center justify-between gap-4">
-          <div className="flex flex-col">
-            <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Total</span>
-            <span className="text-xl font-black text-gray-900">
-              R$ {finalTotal.toFixed(2).replace(".", ",")}
-            </span>
-          </div>
+      {/* 3. Barra Inferior Fixa de Ação */}
+      <CartFooter
+        step={step}
+        total={finalTotal}
+        itemCount={totalItemCount}
+        deliveryType={deliveryType}
+        deliveryFee={currentDeliveryFee}
+        isSubmitting={isSubmitting}
+        onContinue={handleNextStep}
+      />
 
-          <div className="flex-1 max-w-xs">
-            {step === "itens" && (
-              <Button
-                onClick={handleNextStep}
-                className="w-full h-14 bg-amber-500 hover:bg-amber-600 text-white font-black text-sm rounded-2xl shadow-lg shadow-amber-200 transition-all active:scale-95 flex items-center justify-center gap-2"
-              >
-                <span>Continuar</span>
-                <ChevronRight className="w-5 h-5" />
-              </Button>
-            )}
-
-            {step === "entrega" && (
-              <Button
-                onClick={handleNextStep}
-                className="w-full h-14 bg-amber-500 hover:bg-amber-600 text-white font-black text-sm rounded-2xl shadow-lg shadow-amber-200 transition-all active:scale-95 flex items-center justify-center gap-2"
-              >
-                <span>Ir para Pagamento</span>
-                <ChevronRight className="w-5 h-5" />
-              </Button>
-            )}
-
-            {step === "pagamento" && (
-              <Button
-                onClick={handleFinalizarPedido}
-                disabled={isSubmitting}
-                className="w-full h-14 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm rounded-2xl shadow-lg shadow-emerald-200 transition-all active:scale-95 flex items-center justify-center gap-2"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Processando...</span>
-                  </>
-                ) : (
-                  <>
-                    <ShieldCheck className="w-5 h-5" />
-                    <span>Finalizar Pedido</span>
-                  </>
-                )}
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
+      {/* 4. Trava de Pedido Mínimo */}
+      <MinOrderSheet
+        isOpen={showMinOrderSheet}
+        onClose={() => setShowMinOrderSheet(false)}
+        currentSubtotal={subtotal}
+        minOrderValue={MIN_ORDER_VALUE}
+      />
     </div>
   )
 }

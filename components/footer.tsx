@@ -109,8 +109,8 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/carrinho" className="text-gray-600 hover:text-amber-700 transition-colors text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 rounded px-1">
-                  Carrinho de Compras
+                <Link href="/checkout" className="text-gray-600 hover:text-amber-700 transition-colors text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 rounded px-1">
+                  Sacola / Checkout
                 </Link>
               </li>
             </ul>

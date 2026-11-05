@@ -97,11 +97,11 @@ export const AnimatedSearchBar = memo(function AnimatedSearchBar({
         aria-hidden={!showCart}
       >
         <Link
-          href="/carrinho"
+          href="/checkout"
           tabIndex={showCart ? 0 : -1}
           className="relative flex items-center justify-center w-11 h-11 bg-[#F7F5F0] hover:bg-[#ECE7E0] border border-[#ECE7E0] hover:border-[#E3A008] rounded-xl shrink-0 active:scale-95 transition-all cursor-pointer shadow-xs group"
-          aria-label="Ver carrinho"
-          title="Ver carrinho"
+          aria-label="Ver sacola"
+          title="Ver sacola"
         >
           <ShoppingCart className="h-5 w-5 text-[#1A1A1A] group-hover:text-[#E3A008] transition-colors" />
           {totalItems > 0 && (

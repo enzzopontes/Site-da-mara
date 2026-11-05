@@ -34,6 +34,13 @@ function HeaderFallback({ variant = "default" }: HeaderProps) {
 }
 
 export function HeaderWrapper(props: HeaderProps) {
+  const pathname = usePathname()
+
+  // Exibir apenas na Home ("/") de acordo com as regras de visibilidade
+  if (pathname !== "/") {
+    return null
+  }
+
   return (
     <Suspense fallback={<HeaderFallback {...props} />}>
       <Header {...props} />

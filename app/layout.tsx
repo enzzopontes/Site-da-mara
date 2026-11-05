@@ -6,6 +6,7 @@ import { CartProvider } from "@/lib/cart-context"
 import { AuthProvider } from "@/lib/auth-context"
 import { OfflineDetector } from "@/components/offline-detector"
 import { MobileNavbar } from "@/components/mobile-navbar"
+import { CartBar } from "@/components/cart-bar"
 import { CookieConsent } from "@/components/cookie-consent"
 import "./globals.css"
 
@@ -46,6 +47,7 @@ export default function RootLayout({
           <CartProvider>
             <OfflineDetector>
               {children}
+              <CartBar />
               <MobileNavbar />
               <Toaster />
               <CookieConsent />

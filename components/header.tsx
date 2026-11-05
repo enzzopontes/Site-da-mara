@@ -49,7 +49,7 @@ export function Header({ variant = "default" }: HeaderProps) {
   const { user, loading: authLoading } = useAuth()
 
   const [mounted, setMounted] = useState(false)
-  const [timeGreeting, setTimeGreeting] = useState("Olá")
+  const [timeGreeting, setTimeGreeting] = useState("OlÃ¡")
   const [searchTerm, setSearchTerm] = useState(searchParams.get("q") || "")
   const [defaultAddress, setDefaultAddress] = useState<string>("Iacanga - SP")
   const [addressLoading, setAddressLoading] = useState(true)
@@ -60,6 +60,7 @@ export function Header({ variant = "default" }: HeaderProps) {
   const [isHeaderHidden, setIsHeaderHidden] = useState(false)
 
   const hiddenRef = useRef(false)
+
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0)
   const firstName = user ? getFirstName(user.user_metadata?.full_name, user.email) : null
@@ -146,7 +147,7 @@ export function Header({ variant = "default" }: HeaderProps) {
     }
   }, [])
 
-  // Sincronização de scroll suave entre Header e CategoryBar
+  // SincronizaÃ§Ã£o de scroll suave entre Header e CategoryBar
   useEffect(() => {
     if (pathname !== "/" && pathname !== "/cardapio") {
       hiddenRef.current = false
@@ -205,6 +206,8 @@ export function Header({ variant = "default" }: HeaderProps) {
     return false
   }
 
+  if ((pathname as string) !== "/") return null
+
   if (variant === "simple") {
     return (
       <header className="w-full bg-white border-b border-[#ECE7E0] h-16 sticky top-0 z-40 flex items-center">
@@ -242,7 +245,7 @@ export function Header({ variant = "default" }: HeaderProps) {
               type="button"
               onClick={() => setIsAddressModalOpen(true)}
               className="flex flex-col items-start min-w-0 text-left active:scale-[0.98] transition-transform cursor-pointer group"
-              title="Alterar endereço de entrega"
+              title="Alterar endereÃ§o de entrega"
             >
               {isInitialLoading ? (
                 <div className="flex flex-col gap-1.5 py-0.5">
@@ -298,7 +301,7 @@ export function Header({ variant = "default" }: HeaderProps) {
                       window.dispatchEvent(new CustomEvent("catalog-search", { detail: { query: e.target.value } }))
                     }
                   }}
-                  placeholder="Buscar no cardápio..."
+                  placeholder="Buscar no cardÃ¡pio..."
                   aria-label="Buscar produtos"
                   className="w-full bg-[#F7F5F0] border border-[#ECE7E0] focus:border-[#E3A008] focus:bg-white rounded-full h-10 pl-9 pr-4 text-sm text-[#1A1A1A] placeholder:text-[#717171] outline-none transition-colors"
                 />
@@ -309,7 +312,7 @@ export function Header({ variant = "default" }: HeaderProps) {
           {/* Right: Desktop Quick Links + Minimalist Circular Cart Button */}
           <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
             <nav
-              aria-label="Navegação principal"
+              aria-label="NavegaÃ§Ã£o principal"
               className="hidden lg:flex items-center gap-3 xl:gap-5 text-sm font-semibold"
             >
               <Link
@@ -320,7 +323,7 @@ export function Header({ variant = "default" }: HeaderProps) {
                 }`}
               >
                 <Home className="h-4 w-4" />
-                <span>Início</span>
+                <span>InÃ­cio</span>
               </Link>
               <Link
                 href="/cardapio"
@@ -330,7 +333,7 @@ export function Header({ variant = "default" }: HeaderProps) {
                 }`}
               >
                 <UtensilsCrossed className="h-4 w-4" />
-                <span>Cardápio</span>
+                <span>CardÃ¡pio</span>
               </Link>
               <Link
                 href="/pedidos"
@@ -377,9 +380,9 @@ export function Header({ variant = "default" }: HeaderProps) {
             </nav>
 
             <Link
-              href="/carrinho"
+              href="/checkout"
               className="w-10 h-10 rounded-full bg-[#F3F0EB] hover:bg-[#ECE7E0] flex items-center justify-center relative active:scale-[0.98] transition-transform flex-shrink-0"
-              aria-label="Ver carrinho"
+              aria-label="Ver sacola"
             >
               <ShoppingCart className="text-[#1A1A1A] h-5 w-5" />
               {totalItems > 0 && (
