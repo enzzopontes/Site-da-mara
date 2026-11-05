@@ -23,8 +23,12 @@ export function CartFooter({
   onContinue,
 }: CartFooterProps) {
   const formattedTotal = `R$ ${total.toFixed(2).replace(".", ",")}`
-  const isFree = deliveryType === "pickup" || deliveryFee === 0
-  const deliveryStatusText = isFree ? "retirada grátis" : "com entrega"
+  const deliveryStatusText =
+    deliveryType === "pickup"
+      ? "retirada na casa"
+      : deliveryFee === 0
+      ? "entrega grátis"
+      : "com entrega"
 
   const getButtonText = () => {
     switch (step) {

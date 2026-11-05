@@ -10,6 +10,7 @@ import {
   FileText,
   MapPin,
   Bike,
+  Home,
   Store,
 } from "lucide-react"
 import { CartItem } from "@/lib/cart-context"
@@ -81,7 +82,7 @@ export function StepPagamento({
 
   const getAddressDisplay = () => {
     if (deliveryType === "pickup") {
-      return "Retirada no Balcão: Rua Carlos Roberto Crepaldi, 120 - Jd Alvorada"
+      return "Retirada na Casa: Rua Carlos Roberto Crepaldi, 120 - Jd Alvorada"
     }
     if (newAddressFormatted) return newAddressFormatted
     if (activeAddress) {
@@ -231,11 +232,11 @@ export function StepPagamento({
         {/* Resumo de Entrega */}
         <div className="p-3 bg-[#F7F5F0] rounded-2xl flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-white border border-[#ECE7E0] flex items-center justify-center text-[#E3A008] shrink-0">
-            {deliveryType === "delivery" ? <Bike className="w-4 h-4" /> : <Store className="w-4 h-4" />}
+            {deliveryType === "delivery" ? <Bike className="w-4 h-4" /> : <Home className="w-4 h-4" />}
           </div>
           <div className="min-w-0 flex-1">
             <span className="text-[11px] font-bold text-[#8C827A] uppercase block">
-              {deliveryType === "delivery" ? "Entrega Delivery" : "Retirada na Loja"}
+              {deliveryType === "delivery" ? "Entrega Delivery" : "Retirada na Casa"}
             </span>
             <p className="text-xs font-bold text-[#1F1B16] truncate">
               {getAddressDisplay()}

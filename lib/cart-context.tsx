@@ -20,6 +20,8 @@ export interface CartItem {
 
 interface CartContextType {
   items: CartItem[]
+  coupon: any | null
+  setCoupon: (coupon: any | null) => void
   addItem: (item: CartItem) => void
   removeItem: (id: string) => void
   updateQuantity: (id: string, quantity: number) => void
@@ -31,13 +33,22 @@ const CartContext = createContext<CartContextType | undefined>(undefined)
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([])
+  const [coupon, setCouponState] = useState<any | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
 
-  // Carregar carrinho do localStorage
+  // Carregar carrinho e cupom do localStorage
   useEffect(() => {
-    const savedCart = localStorage.getItem("batata top-cart")
-    if (savedCart) {
-      setItems(JSON.parse(savedCart))
+    try {
+      const savedCart = localStorage.getItem("batata top-cart")
+      if (savedCart) {
+        setItems(JSON.parse(savedCart))
+      }
+      const savedCoupon = localStorage.getItem("batata top-coupon")
+      if (savedCoupon) {
+        setCouponState(JSON.parse(savedCoupon))
+      }
+    } catch {
+      // Ignora erro de JSON
     }
     setIsInitialized(true)
   }, [])
@@ -48,6 +59,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
       localStorage.setItem("batata top-cart", JSON.stringify(items))
     }
   }, [items, isInitialized])
+
+  // Salvar cupom no localStorage
+  useEffect(() => {
+    if (isInitialized) {
+      if (coupon) {
+        localStorage.setItem("batata top-coupon", JSON.stringify(coupon))
+      } else {
+        localStorage.removeItem("batata top-coupon")
+      }
+    }
+  }, [coupon, isInitialized])
+
+  const setCoupon = (newCoupon: any | null) => {
+    setCouponState(newCoupon)
+  }
 
   const addItem = (newItem: CartItem) => {
     setItems((prev) => {
@@ -102,7 +128,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <CartContext.Provider value={{ items, addItem, removeItem, updateQuantity, clearCart, getTotalPrice }}>
+    <CartContext.Provider value={{ items, coupon, setCoupon, addItem, removeItem, updateQuantity, clearCart, getTotalPrice }}>
       {children}
     </CartContext.Provider>
   )

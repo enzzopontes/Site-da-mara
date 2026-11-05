@@ -4,6 +4,7 @@ import { useState } from "react"
 import {
   MapPin,
   Bike,
+  Home,
   Store,
   Clock,
   ChevronRight,
@@ -103,8 +104,8 @@ export function StepEntrega({
               : "text-[#6B6157] hover:text-[#1F1B16]"
           }`}
         >
-          <Store className="w-4 h-4 text-[#E3A008]" />
-          <span>Retirar no Balcão</span>
+          <Home className="w-4 h-4 text-[#E3A008]" />
+          <span>Retirar na Casa</span>
         </button>
       </div>
 
@@ -261,21 +262,24 @@ export function StepEntrega({
           )}
         </div>
       ) : (
-        /* Card de Retirada no Balcão */
+        /* Card de Retirada na Casa */
         <div className="bg-white rounded-3xl p-5 border border-[#ECE7E0] shadow-xs space-y-4">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-2xl bg-amber-50 text-[#E3A008] flex items-center justify-center flex-shrink-0 mt-0.5">
-              <Store className="w-5 h-5" />
+              <Home className="w-5 h-5" />
             </div>
             <div>
               <span className="text-[11px] font-black text-[#8C827A] uppercase tracking-wider block">
                 Local de Retirada
               </span>
               <h3 className="text-base font-black text-[#1F1B16]">
-                Batata Top (Loja Física)
+                Retirada na Casa (Batata Top)
               </h3>
               <p className="text-xs text-[#6B6157] mt-0.5 leading-relaxed">
                 Rua Carlos Roberto Crepaldi, 120 - Jardim Alvorada, Iacanga - SP
+              </p>
+              <p className="text-[11px] text-[#8C827A] mt-1 font-medium">
+                Retire seu pedido quentinho diretamente com a gente!
               </p>
             </div>
           </div>
