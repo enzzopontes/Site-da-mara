@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Plus, Trash2, Edit2, Image as ImageIcon, Tag, ArrowUpDown, Sparkles, Upload } from "lucide-react"
+import { Plus, Trash2, Edit2, Image as ImageIcon, Tag, ArrowUpDown, Sparkles, Upload, CheckCircle2, Link2, X } from "lucide-react"
 
 export function AdminHomeBannersSection() {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -24,6 +24,7 @@ export function AdminHomeBannersSection() {
   const [editingBanner, setEditingBanner] = useState<HomeBannerItem | null>(null)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [showUrlInput, setShowUrlInput] = useState(false)
 
   const [imageUrl, setImageUrl] = useState("")
   const [title, setTitle] = useState("")
@@ -37,11 +38,17 @@ export function AdminHomeBannersSection() {
       const [bannersList, couponsList, imagesList] = await Promise.all([
         bannersManager.getAllBanners().catch(() => []),
         couponsManager.getCoupons().catch(() => []),
-        imageUploadManager.getImagesByCategory("promo").catch(() => []),
+        imageUploadManager.getAllImages().catch(() => []),
       ])
+      // Prioriza banners e ordena os mais recentes
+      const sortedImages = (imagesList || []).sort((a, b) => {
+        const aIsBanner = a.name.toLowerCase().includes("banner") ? 1 : 0
+        const bIsBanner = b.name.toLowerCase().includes("banner") ? 1 : 0
+        return bIsBanner - aIsBanner
+      })
       setBanners(bannersList)
       setCoupons(couponsList.filter((c) => c.isActive))
-      setPromoImages(imagesList)
+      setPromoImages(sortedImages)
     } finally {
       setLoading(false)
     }
@@ -58,6 +65,7 @@ export function AdminHomeBannersSection() {
     setCouponId("")
     setDisplayOrder(banners.length > 0 ? banners[0].display_order + 1 : 0)
     setIsActive(true)
+    setShowUrlInput(false)
     setModalOpen(true)
   }
 
@@ -68,6 +76,7 @@ export function AdminHomeBannersSection() {
     setCouponId(b.coupon_id || "")
     setDisplayOrder(b.display_order)
     setIsActive(b.is_active)
+    setShowUrlInput(false)
     setModalOpen(true)
   }
 
@@ -242,66 +251,170 @@ export function AdminHomeBannersSection() {
         )}
 
         <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="text-base font-bold text-stone-900">
                 {editingBanner ? "Editar Banner Promocional" : "Novo Banner Promocional"}
               </DialogTitle>
             </DialogHeader>
 
-            <form onSubmit={handleSave} className="space-y-4 pt-2">
+            <form onSubmit={handleSave} className="space-y-4 pt-1">
               <div>
-                <Label className="text-xs font-semibold">Imagem do Banner 16:9 (Obrigatório)</Label>
-                <div className="flex gap-2 mt-1">
-                  <Input
-                    value={imageUrl}
-                    onChange={(e) => setImageUrl(e.target.value)}
-                    placeholder="https://... ou envie do computador"
-                    required
-                    className="text-xs flex-1"
-                  />
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={uploading}
-                    onClick={() => fileInputRef.current?.click()}
-                    className="text-xs shrink-0 gap-1 cursor-pointer"
-                  >
-                    <Upload className="w-3.5 h-3.5" />
-                    {uploading ? "..." : "Subir"}
-                  </Button>
+                <div className="flex items-center justify-between mb-2">
+                  <Label className="text-xs font-semibold text-stone-900">
+                    Arte do Banner 16:9 (Obrigatório)
+                  </Label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={uploading}
+                      onClick={() => fileInputRef.current?.click()}
+                      className="h-7 text-[11px] gap-1 px-2.5 border-stone-300 hover:bg-stone-50 cursor-pointer"
+                    >
+                      <Upload className="w-3 h-3 text-stone-600" />
+                      {uploading ? "Subindo..." : "Subir do Computador"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowUrlInput((v) => !v)}
+                      className={`h-7 text-[11px] gap-1 px-2 text-stone-600 hover:text-stone-900 cursor-pointer ${
+                        showUrlInput ? "bg-stone-100 font-semibold" : ""
+                      }`}
+                      title="Inserir link externo"
+                    >
+                      <Link2 className="w-3 h-3" />
+                      URL
+                    </Button>
+                  </div>
                 </div>
 
-                {promoImages.length > 0 && (
-                  <div className="mt-2">
-                    <span className="text-[10px] font-bold text-stone-400 flex items-center gap-1 mb-1">
-                      <Sparkles className="w-3 h-3 text-amber-500" /> Ou selecionar do Banco de Imagens:
-                    </span>
-                    <div className="flex gap-1.5 overflow-x-auto py-1">
-                      {promoImages.slice(0, 6).map((img) => (
-                        <button
-                          key={img.id}
-                          type="button"
-                          onClick={() => setImageUrl(`data:${img.mimeType};base64,${img.data}`)}
-                          className="w-12 h-8 rounded border border-stone-200 overflow-hidden shrink-0 hover:border-[#E3A008] transition-colors cursor-pointer"
-                        >
-                          <img src={`data:${img.mimeType};base64,${img.data}`} alt="Thumb" className="w-full h-full object-cover" />
-                        </button>
-                      ))}
-                    </div>
+                {/* Campo compacto de URL externa (aparece apenas quando solicitado) */}
+                {showUrlInput && (
+                  <div className="flex gap-1.5 mb-2.5 p-2 bg-stone-50 rounded-lg border border-stone-200">
+                    <Input
+                      value={imageUrl}
+                      onChange={(e) => setImageUrl(e.target.value)}
+                      placeholder="Cole o link da imagem (ex: https://...)"
+                      className="text-xs h-7 flex-1 bg-white"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowUrlInput(false)}
+                      className="h-7 w-7 p-0 text-stone-400 hover:text-stone-600 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </Button>
                   </div>
                 )}
 
+                {/* Galeria de Banners no Supabase com nomezinho em cima e miniatura embaixo */}
+                {promoImages.length > 0 ? (
+                  <div className="space-y-1.5">
+                    <span className="text-[11px] font-semibold text-stone-500 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-[#E3A008]" />
+                      Banners no Supabase (toque para escolher):
+                    </span>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-56 overflow-y-auto pr-1 py-1 rounded-lg border border-stone-200/80 p-2 bg-stone-50/50">
+                      {promoImages.map((img) => {
+                        const directUrl = `/api/images/${img.id}`
+                        const dataUrl = img.data ? `data:${img.mimeType};base64,${img.data}` : directUrl
+                        const isSelected =
+                          imageUrl === directUrl ||
+                          imageUrl === dataUrl ||
+                          imageUrl.includes(img.id)
+
+                        const friendlyName =
+                          img.name
+                            .replace(/\.[^/.]+$/, "")
+                            .replace(/^banner[-_]?\d*[-_]?/i, "")
+                            .replace(/[-_]/g, " ")
+                            .toUpperCase() || img.name
+
+                        return (
+                          <button
+                            key={img.id}
+                            type="button"
+                            onClick={() => {
+                              setImageUrl(directUrl)
+                              if (!title) setTitle(friendlyName)
+                            }}
+                            className={`p-1.5 rounded-lg border text-left cursor-pointer transition-all flex flex-col justify-between group ${
+                              isSelected
+                                ? "border-[#E3A008] bg-amber-500/10 ring-2 ring-[#E3A008]/40 shadow-xs"
+                                : "border-stone-200 hover:border-stone-400 bg-white"
+                            }`}
+                          >
+                            {/* Nomezinho em cima */}
+                            <div className="flex items-center justify-between gap-1 mb-1 px-0.5">
+                              <span
+                                className={`text-[10px] font-bold truncate block ${
+                                  isSelected ? "text-[#C1440E]" : "text-stone-700"
+                                }`}
+                                title={img.name}
+                              >
+                                {friendlyName}
+                              </span>
+                              {isSelected && (
+                                <CheckCircle2 className="w-3 h-3 text-[#E3A008] shrink-0" />
+                              )}
+                            </div>
+
+                            {/* Imagem pequena embaixo */}
+                            <div className="w-full aspect-[16/9] rounded overflow-hidden bg-stone-100 border border-stone-200/50">
+                              <img
+                                src={dataUrl}
+                                alt={img.name}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                loading="lazy"
+                              />
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 text-center rounded-lg border border-dashed border-stone-200 text-stone-400 text-xs">
+                    Nenhum banner encontrado no Supabase. Clique em "Subir do Computador".
+                  </div>
+                )}
+
+                {/* Banner Selecionado com destaque */}
                 {Boolean(imageUrl) && (
-                  <div className="mt-2 aspect-[16/9] rounded-lg overflow-hidden border border-stone-200 bg-stone-100">
-                    <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                  <div className="mt-2.5 p-2 rounded-lg border border-[#E3A008]/40 bg-amber-50/40 flex items-center gap-3">
+                    <div className="w-20 aspect-[16/9] rounded overflow-hidden shrink-0 border border-stone-200 bg-stone-100 shadow-2xs">
+                      <img src={imageUrl} alt="Selecionado" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wide block">
+                        ✓ Imagem Selecionada
+                      </span>
+                      <p className="text-xs font-semibold text-stone-900 truncate">
+                        {title || imageUrl}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setImageUrl("")}
+                      className="h-7 text-[11px] text-stone-500 hover:text-red-600 cursor-pointer"
+                    >
+                      Trocar
+                    </Button>
                   </div>
                 )}
               </div>
