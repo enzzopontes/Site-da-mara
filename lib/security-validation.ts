@@ -100,16 +100,23 @@ export function validateOrderPayload(order: any): { isValid: boolean; error?: st
   return { isValid: true }
 }
 
-export function validateImagePayload(mimeType: string, base64Data: string): { isValid: boolean; error?: string } {
+export function validateImagePayload(mimeType: string, base64Data: string): { isValid: boolean; error?: string; normalizedMime?: string } {
   if (typeof mimeType !== 'string' || typeof base64Data !== 'string') {
     return { isValid: false, error: 'Dados de imagem inválidos' }
   }
 
-  const cleanMime = mimeType.toLowerCase().trim()
+  let cleanMime = mimeType.toLowerCase().trim()
 
   // Bloqueio explícito de vetores SVG (armazenamento de scripts)
   if (cleanMime.includes('svg') || cleanMime.includes('xml')) {
     return { isValid: false, error: 'Formato SVG/XML não permitido por motivos de segurança' }
+  }
+
+  // Normalização de MIME types compatíveis/legados
+  if (cleanMime === 'image/jpg' || cleanMime === 'image/pjpeg' || cleanMime === 'image/jfif') {
+    cleanMime = 'image/jpeg'
+  } else if (cleanMime === 'image/x-png') {
+    cleanMime = 'image/png'
   }
 
   const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
@@ -118,7 +125,7 @@ export function validateImagePayload(mimeType: string, base64Data: string): { is
   }
 
   // Validação de Magic Bytes no cabeçalho Base64
-  const cleanBase64 = base64Data.replace(/^data:image\/[a-zA-Z]+;base64,/, '').trim()
+  const cleanBase64 = base64Data.replace(/^data:image\/[a-zA-Z0-9.+_-]+;base64,/, '').trim()
 
   const magicHeaders: Record<string, string[]> = {
     'image/jpeg': ['/9j/'],
@@ -134,5 +141,5 @@ export function validateImagePayload(mimeType: string, base64Data: string): { is
     return { isValid: false, error: 'Assinatura binária do arquivo não corresponde ao tipo declarado' }
   }
 
-  return { isValid: true }
+  return { isValid: true, normalizedMime: cleanMime }
 }

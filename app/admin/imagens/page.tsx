@@ -59,7 +59,7 @@ export default function AdminImagensPage() {
     if (!loading) {
       if (!user) {
         router.push("/login")
-      } else if (user.email && ADMIN_EMAILS.includes(user.email)) {
+      } else if (user.email && ADMIN_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase())) {
         setIsAdmin(true)
         loadImages()
       } else {
@@ -72,11 +72,11 @@ export default function AdminImagensPage() {
   const loadImages = async () => {
     try {
       setLoadingImages(true)
-      const productImages = await imageUploadManager.getImagesByCategory("product")
-      const promoImages = await imageUploadManager.getImagesByCategory("promo")
-      const generalImages = await imageUploadManager.getImagesByCategory("general")
+      const allImages = await imageUploadManager.getAllImages()
+
+
       
-      const allImages = [...productImages, ...promoImages, ...generalImages]
+
       setImages(allImages)
     } catch (error) {
       console.error("Erro ao carregar imagens:", error)
@@ -106,6 +106,8 @@ export default function AdminImagensPage() {
 
       await imageUploadManager.uploadImage(file, uploadCategory)
       setUploadProgress("Upload concluído com sucesso!")
+      setUploadError(null)
+      setSelectedCategory("all")
       await loadImages()
 
       setTimeout(() => {
@@ -113,6 +115,7 @@ export default function AdminImagensPage() {
       }, 3000)
     } catch (err) {
       console.error("Erro no upload:", err)
+      setUploadProgress(null)
       setUploadError(err instanceof Error ? err.message : "Erro ao enviar imagem.")
     } finally {
       setUploading(false)
@@ -301,7 +304,7 @@ export default function AdminImagensPage() {
                   </div>
                 )}
 
-                {uploadProgress && !uploading && (
+                {uploadProgress && !uploading && !uploadError && (
                   <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200 mt-2">
                     <Check className="h-3.5 w-3.5" />
                     {uploadProgress}
@@ -410,9 +413,10 @@ export default function AdminImagensPage() {
                       {/* Thumbnail Container */}
                       <div className="relative aspect-square w-full bg-stone-100 overflow-hidden">
                         <img
-                          src={`data:${image.mimeType};base64,${image.data}`}
+                          src={image.data ? (image.data.startsWith("data:") ? image.data : `data:${image.mimeType || "image/jpeg"};base64,${image.data}`) : "/placeholder.svg?height=300&width=300&query=imagem"}
                           alt={image.name}
                           onLoad={e => handleImageLoad(image.id, e)}
+                          onError={(e) => { e.currentTarget.src = "/placeholder.svg?height=300&width=300&query=imagem" }}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />
 
@@ -517,7 +521,7 @@ export default function AdminImagensPage() {
             {/* Thumbnail preview */}
             <div className="flex items-center gap-3 p-3 bg-stone-50 rounded-2xl border border-stone-200/80">
               <img
-                src={`data:${imageToDelete.mimeType};base64,${imageToDelete.data}`}
+                src={imageToDelete.data ? (imageToDelete.data.startsWith("data:") ? imageToDelete.data : `data:${imageToDelete.mimeType || "image/jpeg"};base64,${imageToDelete.data}`) : "/placeholder.svg?height=100&width=100&query=imagem"}
                 alt={imageToDelete.name}
                 className="h-14 w-14 rounded-xl object-cover border border-stone-200"
               />
