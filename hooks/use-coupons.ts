@@ -29,11 +29,6 @@ export function useCoupons(currentOrderTotal = 0) {
         return
       }
 
-      const now = new Date()
-      const validCoupons = (activeCoupons ?? []).filter(
-        (c: any) => !c.expires_at || new Date(c.expires_at) > now
-      )
-
       let free: any[] = []
       if (user?.id) {
         try {
@@ -51,7 +46,8 @@ export function useCoupons(currentOrderTotal = 0) {
         }
       }
 
-      setCoupons(validCoupons)
+      // Sincronização direta com todos os cupons ativos do banco (igual ao aplicativo)
+      setCoupons(activeCoupons ?? [])
       setFreeCoupons(free)
     } catch (err: any) {
       setError(err?.message || "Erro ao carregar cupons")

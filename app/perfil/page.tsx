@@ -861,38 +861,28 @@ export default function PerfilPage() {
 
                 {/* 3. Lista de Acordeões Expansíveis (Idêntico ao App Mobile) */}
                 <div className="divide-y divide-[#ECE7E0]">
-                  {/* ITEM: Cupons */}
-                  <div className="border-b border-[#ECE7E0] last:border-b-0">
-                    <button
-                      type="button"
-                      onClick={() => router.push("/cupons")}
-                      className="w-full flex items-center justify-between py-4 px-1 text-left cursor-pointer active:scale-[0.98] transition-transform group"
-                    >
-                      <div className="flex items-center gap-3.5 min-w-0 flex-1 pr-3">
-                        <div className="w-6 flex items-center justify-center text-[#717171] shrink-0">
-                          <Ticket className="h-5 w-5" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="text-[15px] text-[#1A1A1A] font-medium truncate">
-                              Cupons
-                            </p>
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#E3A008] text-white">
-                              {isLoadingCoupons
-                                ? "..."
-                                : `${activeCoupons.length} ${
-                                    activeCoupons.length === 1 ? "ativo" : "ativos"
-                                  }`}
-                            </span>
-                          </div>
-                          <p className="text-xs text-[#717171] mt-0.5 truncate">
-                            Meus cupons e descontos disponíveis
-                          </p>
-                        </div>
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-[#717171] shrink-0 group-hover:translate-x-0.5 transition-transform" />
-                    </button>
-                  </div>
+                  {/* ACORDEÃO 1: Recompensas */}
+                  <ProfileAccordionItem
+                    icon={<Gift className="h-5 w-5" />}
+                    title="Recompensas"
+                    subtitle="Cupons de desconto e fidelidade"
+                    expanded={openAccordion === "recompensas"}
+                    onToggle={() =>
+                      setOpenAccordion(
+                        openAccordion === "recompensas" ? null : "recompensas"
+                      )
+                    }
+                    items={[
+                      {
+                        label: "Cupons",
+                        onPress: () => router.push("/cupons"),
+                      },
+                      {
+                        label: "Histórico de Fidelidade e Pedidos",
+                        onPress: () => router.push("/pedidos"),
+                      },
+                    ]}
+                  />
 
                   {/* ACORDEÃO 2: Minha Conta */}
                   <ProfileAccordionItem
