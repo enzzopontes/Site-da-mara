@@ -85,34 +85,67 @@ export default function AdminImagensPage() {
     }
   }
 
-  const handleFileUpload = async (files: FileList | null) => {
-    if (!files || files.length === 0) return
-    const file = files[0]
+  const handleFileUpload = async (files: FileList | File[] | null) => {
+    if (!files) return
+    const fileList = Array.from(files)
+    if (fileList.length === 0) return
 
-    if (!file.type.startsWith("image/")) {
-      setUploadError("O arquivo selecionado deve ser uma imagem (JPG, PNG, WebP).")
-      return
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      setUploadError("A imagem excede o tamanho máximo permitido de 5MB.")
+    const validFiles = fileList.filter(file => file.type.startsWith("image/"))
+    if (validFiles.length === 0) {
+      setUploadError("Nenhum arquivo de imagem válido (JPG, PNG, WebP) foi selecionado.")
       return
     }
 
     try {
       setUploading(true)
       setUploadError(null)
-      setUploadProgress(`Processando ${file.name}...`)
 
-      await imageUploadManager.uploadImage(file, uploadCategory)
-      setUploadProgress("Upload concluído com sucesso!")
-      setUploadError(null)
-      setSelectedCategory("all")
-      await loadImages()
+      let successCount = 0
+      const errors: string[] = []
+
+      for (let i = 0; i < validFiles.length; i++) {
+        const file = validFiles[i]
+        const progressText = validFiles.length > 1
+          ? `Processando imagem ${i + 1} de ${validFiles.length} (${file.name})...`
+          : `Processando ${file.name}...`
+        setUploadProgress(progressText)
+
+        if (file.size > 5 * 1024 * 1024) {
+          errors.push(`${file.name}: excede 5MB`)
+          continue
+        }
+
+        try {
+          await imageUploadManager.uploadImage(file, uploadCategory)
+          successCount++
+        } catch (err: any) {
+          errors.push(`${file.name}: ${err?.message || "erro ao enviar"}`)
+        }
+      }
+
+      if (successCount > 0) {
+        setSelectedCategory("all")
+        await loadImages()
+      }
+
+      if (errors.length === 0) {
+        setUploadProgress(
+          validFiles.length > 1
+            ? `${validFiles.length} imagens enviadas com sucesso!`
+            : "Upload concluído com sucesso!"
+        )
+        setUploadError(null)
+      } else if (successCount > 0) {
+        setUploadProgress(`${successCount} de ${validFiles.length} imagens enviadas com sucesso.`)
+        setUploadError(`Erros em ${errors.length} arquivo(s): ${errors.join("; ")}`)
+      } else {
+        setUploadProgress(null)
+        setUploadError(`Falha ao enviar: ${errors.join("; ")}`)
+      }
 
       setTimeout(() => {
         setUploadProgress(null)
-      }, 3000)
+      }, 4000)
     } catch (err) {
       console.error("Erro no upload:", err)
       setUploadProgress(null)
@@ -275,6 +308,7 @@ export default function AdminImagensPage() {
               <input
                 ref={fileInputRef}
                 type="file"
+                multiple
                 accept="image/jpeg,image/png,image/webp"
                 className="hidden"
                 onChange={e => handleFileUpload(e.target.files)}
@@ -290,10 +324,10 @@ export default function AdminImagensPage() {
 
                 <div>
                   <p className="text-sm font-bold text-stone-800">
-                    Clique para selecionar ou arraste o arquivo aqui
+                    Clique para selecionar uma ou mais imagens ou arraste aqui
                   </p>
                   <p className="text-xs text-stone-500 mt-1">
-                    Formatos aceitos: JPG, PNG, WebP (Até 5MB)
+                    Formatos aceitos: JPG, PNG, WebP (Até 5MB por imagem)
                   </p>
                 </div>
 

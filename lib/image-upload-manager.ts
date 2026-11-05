@@ -33,6 +33,89 @@ class ImageUploadManager {
   }
 
   /**
+   * Compacta a imagem no cliente ajustando dimensões e qualidade
+   */
+  async compressImage(
+    file: File,
+    maxWidth = 1200,
+    maxHeight = 1200
+  ): Promise<{ base64: string; mimeType: string }> {
+    if (typeof window === "undefined") {
+      const base64 = await this.fileToBase64(file)
+      return { base64, mimeType: file.type || "image/jpeg" }
+    }
+
+    try {
+      const dataUrl = await this.fileToDataUrl(file)
+      return await new Promise((resolve, reject) => {
+        const img = new Image()
+        img.onload = () => {
+          try {
+            let { width, height } = img
+            if (width > maxWidth || height > maxHeight) {
+              if (width / maxWidth > height / maxHeight) {
+                height = Math.round((height * maxWidth) / width)
+                width = maxWidth
+              } else {
+                width = Math.round((width * maxHeight) / height)
+                height = maxHeight
+              }
+            }
+
+            const canvas = document.createElement("canvas")
+            canvas.width = width
+            canvas.height = height
+            const ctx = canvas.getContext("2d")
+            if (!ctx) {
+              throw new Error("Contexto 2D indisponível")
+            }
+
+            let mimeType = (file.type || "image/jpeg").toLowerCase().trim()
+            if (mimeType === "image/jpg" || mimeType === "image/pjpeg" || mimeType === "image/jfif") {
+              mimeType = "image/jpeg"
+            }
+
+            if (mimeType === "image/jpeg") {
+              ctx.fillStyle = "#FFFFFF"
+              ctx.fillRect(0, 0, width, height)
+            }
+
+            ctx.drawImage(img, 0, 0, width, height)
+
+            let quality = 0.82
+            let resultDataUrl = canvas.toDataURL(mimeType, quality)
+            let base64 = resultDataUrl.split(",")[1] || resultDataUrl
+
+            if (mimeType === "image/png" && base64.length > 700000) {
+              mimeType = "image/jpeg"
+              ctx.fillStyle = "#FFFFFF"
+              ctx.fillRect(0, 0, width, height)
+              ctx.drawImage(img, 0, 0, width, height)
+              resultDataUrl = canvas.toDataURL("image/jpeg", 0.8)
+              base64 = resultDataUrl.split(",")[1] || resultDataUrl
+            }
+
+            if (base64.length > 700000) {
+              resultDataUrl = canvas.toDataURL(mimeType, 0.65)
+              base64 = resultDataUrl.split(",")[1] || resultDataUrl
+            }
+
+            resolve({ base64, mimeType })
+          } catch (err) {
+            reject(err)
+          }
+        }
+        img.onerror = (err) => reject(err)
+        img.src = dataUrl
+      })
+    } catch (error) {
+      console.warn("[ImageUploadManager] Compressão falhou, usando fallback:", error)
+      const base64 = await this.fileToBase64(file)
+      return { base64, mimeType: file.type || "image/jpeg" }
+    }
+  }
+
+  /**
    * Faz upload de uma imagem e retorna a URL para uso no site
    */
   async uploadImage(
@@ -61,17 +144,18 @@ class ImageUploadManager {
         detectedMime = 'image/png'
       }
 
-      // Converte para base64
-      const base64Data = await this.fileToBase64(file)
+      // Compactação inteligente no cliente
+      const { base64: base64Data, mimeType: compressedMime } = await this.compressImage(file)
+      const effectiveMimeCandidate = compressedMime || detectedMime
 
       // Validação profunda de assinatura binária (magic bytes) e bloqueio de SVG/scripts
-      const validation = validateImagePayload(detectedMime, base64Data)
+      const validation = validateImagePayload(effectiveMimeCandidate, base64Data)
       if (!validation.isValid) {
         throw new Error(validation.error || "Arquivo de imagem inválido")
       }
 
       const safeName = sanitizeFileName(file.name)
-      const effectiveMime = validation.normalizedMime || detectedMime
+      const effectiveMime = validation.normalizedMime || effectiveMimeCandidate
 
       // Cria um ID único
       const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
@@ -101,6 +185,13 @@ class ImageUploadManager {
           error.message?.toLowerCase().includes('permission denied')
         ) {
           throw new Error("Permissão negada ao salvar imagem (RLS). Apenas administradores autenticados podem enviar arquivos.")
+        }
+        if (
+          error.message?.includes('uploaded_images_data_max_length') ||
+          error.details?.includes('uploaded_images_data_max_length') ||
+          (error as any).hint?.includes('uploaded_images_data_max_length')
+        ) {
+          throw new Error("A imagem excede o limite máximo permitido pelo banco de dados. Tente uma imagem com menor resolução.")
         }
         throw new Error(error.message || "Erro ao salvar imagem no banco de dados.")
       }
