@@ -230,13 +230,14 @@ export function Header({ variant = "default" }: HeaderProps) {
     )
   }
 
+  const isPerfil = pathname === "/perfil" || pathname?.startsWith("/perfil") || pathname === "/meus-dados"
   const hideHeader = isHeaderHidden && (pathname === "/" || pathname === "/cardapio")
   const isInitialLoading = !mounted || authLoading || addressLoading
 
   return (
     <>
       <header
-        className={`sticky top-0 z-40 w-full h-16 bg-[#FFFFFF] border-b border-[#ECE7E0] transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        className={`${isPerfil ? "hidden md:block" : "block"} sticky top-0 z-40 w-full h-16 bg-[#FFFFFF] border-b border-[#ECE7E0] transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
           hideHeader
             ? "-translate-y-full pointer-events-none"
             : "translate-y-0 opacity-100 pointer-events-auto"

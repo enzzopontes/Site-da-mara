@@ -10,7 +10,7 @@ export function PerfilSkeleton() {
       className="min-h-screen flex flex-col bg-white md:bg-[#F7F5F0] antialiased select-none pb-24 lg:pb-12"
     >
       {/* Header bar */}
-      <header className="sticky top-0 z-40 bg-white border-b border-[#ECE7E0] h-14 sm:h-16 px-4 flex items-center justify-between">
+      <header className="hidden md:flex sticky top-0 z-40 bg-white border-b border-[#ECE7E0] h-14 sm:h-16 px-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Skeleton className="w-8 h-8 rounded-full" />
           <Skeleton className="w-24 h-5 rounded-md" />
