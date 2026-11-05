@@ -21,6 +21,7 @@ export function CampaignBanner() {
     open: false,
     message: "",
   })
+  const [aspectRatio, setAspectRatio] = useState<number>(16 / 9)
 
   const touchStartX = useRef<number>(0)
   const touchEndX = useRef<number>(0)
@@ -49,6 +50,21 @@ export function CampaignBanner() {
   const validBanners = useMemo(() => {
     return banners.filter((b) => !imgErrorMap[b.id] && isSafeImageUrl(b.image_url))
   }, [banners, imgErrorMap])
+
+  // Auto-adapta a proporção do container ao tamanho real do banner (igual ao app mobile)
+  useEffect(() => {
+    const firstUrl = validBanners[0]?.image_url
+    if (!firstUrl) return
+    const img = new Image()
+    img.src = firstUrl
+    img.onload = () => {
+      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+        const ratio = img.naturalWidth / img.naturalHeight
+        const clamped = Math.max(1.3, Math.min(2.6, ratio))
+        setAspectRatio(clamped)
+      }
+    }
+  }, [validBanners])
 
   const total = validBanners.length
 
@@ -207,7 +223,10 @@ export function CampaignBanner() {
   if (loading) {
     return (
       <div className="w-full bg-[#F7F5F0] py-3 select-none">
-        <div className="w-[84%] sm:w-[80%] md:w-[74%] max-w-[760px] mx-auto aspect-[16/9] max-h-[380px] bg-stone-200/80 rounded-2xl animate-pulse" />
+        <div
+          className="w-[84%] sm:w-[80%] md:w-[74%] max-w-[760px] mx-auto bg-stone-200/80 rounded-2xl sm:rounded-3xl animate-pulse"
+          style={{ aspectRatio: `${aspectRatio}` }}
+        />
       </div>
     )
   }
@@ -226,26 +245,33 @@ export function CampaignBanner() {
           onClose={() => setToastState((prev) => ({ ...prev, open: false }))}
         />
         <section aria-label="Banner Promocional" className="w-full bg-[#F7F5F0] py-2 sm:py-3 select-none">
-          <div className="w-[86%] sm:w-[82%] md:w-[74%] max-w-[760px] mx-auto">
+          <div className="w-[84%] sm:w-[80%] md:w-[74%] max-w-[760px] mx-auto">
             <div
               onClick={() => handleBannerClick(single)}
-              className={`relative w-full aspect-[16/9] max-h-[380px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-sm border border-stone-200/90 bg-[#1F1B16]/5 ${
+              className={`relative w-full rounded-2xl sm:rounded-3xl overflow-hidden shadow-sm ${
                 single.coupon?.code ? "cursor-pointer active:scale-[0.99] transition-transform" : ""
               }`}
+              style={{ aspectRatio: `${aspectRatio}` }}
             >
-              {/* Backdrop suave com blur para acomodar qualquer proporção sem cortar nada */}
-              <img
-                src={single.image_url}
-                alt=""
-                aria-hidden="true"
-                className="absolute inset-0 w-full h-full object-cover blur-xl opacity-30 scale-110 pointer-events-none"
-              />
-              {/* Banner com object-contain: 100% visível independente do tamanho original */}
               <img
                 src={single.image_url}
                 alt={single.title || "Banner promocional"}
-                className="relative z-10 w-full h-full object-contain drop-shadow-xs"
+                className="w-full h-full object-cover select-none pointer-events-none"
+                loading="lazy"
+                onLoad={(e) => {
+                  const { naturalWidth, naturalHeight } = e.currentTarget
+                  if (naturalWidth > 0 && naturalHeight > 0) {
+                    const ratio = naturalWidth / naturalHeight
+                    setAspectRatio(Math.max(1.3, Math.min(2.6, ratio)))
+                  }
+                }}
+                onError={() => setImgErrorMap((prev) => ({ ...prev, [single.id]: true }))}
               />
+              {single.coupon?.badge_label && (
+                <div className="absolute top-2.5 left-2.5 sm:top-3.5 sm:left-3.5 z-20 bg-[#C1440E] text-white text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-1 rounded-lg shadow-md">
+                  {single.coupon.badge_label}
+                </div>
+              )}
               {single.coupon?.code && (
                 <div className="absolute bottom-2.5 right-2.5 sm:bottom-3.5 sm:right-3.5 z-20 bg-black/80 backdrop-blur-md text-white text-[10px] sm:text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-lg border border-white/15">
                   <Tag className="w-3.5 h-3.5 text-[#E3A008]" />
@@ -312,20 +338,24 @@ export function CampaignBanner() {
                       } as React.CSSProperties
                     }
                   >
-                    <div className="relative w-full aspect-[16/9] max-h-[380px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-sm border border-stone-200/90 bg-[#1F1B16]/5">
-                      {/* Fundo suave com efeito ambient blur: preenche harmoniosamente sem bordas pretas secas */}
-                      <img
-                        src={banner.image_url}
-                        alt=""
-                        aria-hidden="true"
-                        className="absolute inset-0 w-full h-full object-cover blur-xl opacity-30 scale-110 pointer-events-none"
-                      />
-
-                      {/* Imagem do banner 100% COMPLETA - NUNCA CORTADA */}
+                    <div
+                      className="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden shadow-sm"
+                      style={{ aspectRatio: `${aspectRatio}` }}
+                    >
                       <img
                         src={banner.image_url}
                         alt={banner.title || "Banner promocional"}
-                        className="relative z-10 w-full h-full object-contain drop-shadow-xs"
+                        className="w-full h-full object-cover select-none pointer-events-none"
+                        loading="lazy"
+                        onLoad={(e) => {
+                          if (idx === displayIndex) {
+                            const { naturalWidth, naturalHeight } = e.currentTarget
+                            if (naturalWidth > 0 && naturalHeight > 0) {
+                              const ratio = naturalWidth / naturalHeight
+                              setAspectRatio(Math.max(1.3, Math.min(2.6, ratio)))
+                            }
+                          }
+                        }}
                         onError={() => setImgErrorMap((prev) => ({ ...prev, [banner.id]: true }))}
                       />
 
