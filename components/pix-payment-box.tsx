@@ -2,35 +2,73 @@
 
 import { useState, useEffect } from "react"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Copy, Check, QrCode, Clock, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react"
+import { Copy, Check, QrCode, Clock, CheckCircle2, AlertCircle, ExternalLink } from "lucide-react"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 
 interface PixPaymentBoxProps {
   orderId: string
   total: number
-  pixData?: {
-    qrCode?: string
-    qrCodeBase64?: string
-    ticketUrl?: string
-    expirationDate?: string
-  } | null
+  pixData?: any
   onPaymentApproved?: () => void
 }
 
 export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPaymentApproved }: PixPaymentBoxProps) {
   const [copied, setCopied] = useState(false)
-  const [pix, setPix] = useState(initialPixData || null)
-  const [loading, setLoading] = useState(!initialPixData?.qrCode)
+  const [pix, setPix] = useState<any>(initialPixData || null)
+  const [loading, setLoading] = useState(!initialPixData?.qrCode && !initialPixData?.qr_code)
   const [error, setError] = useState<string | null>(null)
   const [isApproved, setIsApproved] = useState(false)
   const [timeLeft, setTimeLeft] = useState<string>("")
+
+  // Helper de extração multichaves idêntico ao app mobile
+  const extractKeys = (data: any) => {
+    if (!data) return { qrCode: "", qrCodeBase64: "", ticketUrl: "", expirationDate: null }
+    const qrCode =
+      data.pix_qr_code ||
+      data.qr_code ||
+      data.qrCode ||
+      data.point_of_interaction?.transaction_data?.qr_code ||
+      data.pix_code ||
+      ""
+    const qrCodeBase64 =
+      data.pix_qr_code_base64 ||
+      data.qr_code_base64 ||
+      data.qrCodeBase64 ||
+      data.point_of_interaction?.transaction_data?.qr_code_base64 ||
+      ""
+    const ticketUrl =
+      data.ticket_url ||
+      data.ticketUrl ||
+      data.point_of_interaction?.transaction_data?.ticket_url ||
+      data.init_point ||
+      data.payment_link ||
+      ""
+    const expirationDate =
+      data.expirationDate ||
+      data.expiration_date ||
+      data.date_of_expiration ||
+      null
+
+    return { qrCode, qrCodeBase64, ticketUrl, expirationDate }
+  }
+
+  // Sincroniza pix se initialPixData mudar
+  useEffect(() => {
+    if (initialPixData) {
+      const parsed = extractKeys(initialPixData)
+      if (parsed.qrCode || parsed.qrCodeBase64) {
+        setPix(parsed)
+        setLoading(false)
+      }
+    }
+  }, [initialPixData])
 
   // Carrega os dados do Pix da API caso não tenham vindo no pedido inicialmente
   useEffect(() => {
     let isMounted = true
 
     async function fetchPix() {
-      if (pix?.qrCode) return
+      if (pix?.qrCode || pix?.qr_code) return
       setLoading(true)
       setError(null)
       try {
@@ -57,12 +95,8 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
         if (!isMounted) return
 
         if (data.success) {
-          setPix({
-            qrCode: data.qrCode,
-            qrCodeBase64: data.qrCodeBase64,
-            ticketUrl: data.ticketUrl,
-            expirationDate: data.expirationDate,
-          })
+          const parsed = extractKeys(data)
+          setPix(parsed)
         } else {
           setError(data.error || "Não foi possível carregar o código Pix.")
         }
@@ -80,15 +114,17 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
     }
   }, [orderId, pix?.qrCode])
 
-  // Temporizador de expiração
+  // Temporizador de expiração (30 min ou da API)
   useEffect(() => {
-    if (!pix?.expirationDate) return
+    const expTimeStr = pix?.expirationDate
+    const expTime = expTimeStr
+      ? new Date(expTimeStr).getTime()
+      : Date.now() + 30 * 60 * 1000
 
     const updateTimer = () => {
-      const expTime = new Date(pix.expirationDate!).getTime()
       const diff = expTime - Date.now()
       if (diff <= 0) {
-        setTimeLeft("Expirado")
+        setTimeLeft("Tempo expirado")
         return
       }
       const minutes = Math.floor(diff / 60000)
@@ -107,7 +143,7 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
 
     // 1. Inscrição Realtime no Supabase
     const channel = supabase
-      .channel(`order-pix-status-${orderId}`)
+      .channel(`order-pix-status-${orderId}-${Date.now()}`)
       .on(
         "postgres_changes",
         {
@@ -118,7 +154,11 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
         },
         (payload: any) => {
           const newStatus = payload.new?.status
-          if (newStatus && newStatus !== "awaiting_payment" && newStatus !== "cancelled") {
+          const mpStatus = payload.new?.metadata?.mp_payment_status
+          if (
+            (newStatus && newStatus !== "awaiting_payment" && newStatus !== "cancelled") ||
+            mpStatus === "approved"
+          ) {
             setIsApproved(true)
             onPaymentApproved?.()
           }
@@ -126,22 +166,29 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
       )
       .subscribe()
 
-    // 2. Polling ativo a cada 4 segundos como contingência
+    // 2. Polling ativo a cada 3 segundos como contingência (igual app)
     const interval = setInterval(async () => {
       try {
         const { data, error: qErr } = await supabase
           .from("orders")
-          .select("status")
+          .select("status, metadata")
           .eq("id", orderId)
           .maybeSingle()
 
-        if (!qErr && data && data.status !== "awaiting_payment") {
-          setIsApproved(true)
-          onPaymentApproved?.()
-          clearInterval(interval)
+        if (!qErr && data) {
+          const isPaid =
+            (data.status && data.status !== "awaiting_payment" && data.status !== "cancelled") ||
+            data.metadata?.mp_payment_status === "approved" ||
+            Boolean(data.metadata?.paid_at)
+
+          if (isPaid) {
+            setIsApproved(true)
+            onPaymentApproved?.()
+            clearInterval(interval)
+          }
         }
       } catch {}
-    }, 4000)
+    }, 3000)
 
     return () => {
       supabase.removeChannel(channel)
@@ -150,13 +197,14 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
   }, [orderId, onPaymentApproved])
 
   const handleCopyCode = async () => {
-    if (!pix?.qrCode) return
+    const code = pix?.qrCode || pix?.qr_code
+    if (!code) return
     try {
       if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(pix.qrCode)
+        await navigator.clipboard.writeText(code)
       } else {
         const textArea = document.createElement("textarea")
-        textArea.value = pix.qrCode
+        textArea.value = code
         textArea.style.position = "fixed"
         textArea.style.left = "-999999px"
         document.body.appendChild(textArea)
@@ -174,7 +222,7 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
 
   if (isApproved) {
     return (
-      <div className="bg-emerald-50 border-2 border-emerald-500 rounded-3xl p-6 text-center shadow-lg shadow-emerald-50 mb-6 animate-in fade-in">
+      <div className="bg-emerald-50 border-2 border-emerald-500 rounded-3xl p-6 text-center shadow-lg shadow-emerald-50 mb-6 transition-all duration-500 animate-in fade-in">
         <div className="w-16 h-16 bg-emerald-500 text-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-md shadow-emerald-200">
           <CheckCircle2 className="w-8 h-8" />
         </div>
@@ -186,8 +234,15 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
     )
   }
 
+  const qrCodeText = pix?.qrCode || pix?.qr_code || ""
+  const qrImageUri = pix?.qrCodeBase64 || pix?.qr_code_base64
+    ? `data:image/png;base64,${pix?.qrCodeBase64 || pix?.qr_code_base64}`
+    : qrCodeText
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrCodeText)}`
+    : null
+
   return (
-    <div className="bg-white border-2 border-amber-400 rounded-3xl p-5 sm:p-6 shadow-xl shadow-amber-500/10 mb-6">
+    <div className="bg-white border-2 border-amber-400 rounded-3xl p-5 sm:p-6 shadow-xl shadow-amber-500/10 mb-6 transition-all">
       <div className="flex items-center justify-between border-b border-amber-100 pb-4 mb-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center font-black shadow-md shadow-amber-200">
@@ -202,9 +257,9 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
         </div>
 
         {timeLeft && (
-          <div className="flex items-center gap-1.5 bg-gray-100 px-3 py-1.5 rounded-full text-xs font-black text-gray-700">
+          <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full text-xs font-black text-amber-900">
             <Clock className="w-3.5 h-3.5 text-amber-600" />
-            <span>{timeLeft}</span>
+            <span>Pague em até {timeLeft}</span>
           </div>
         )}
       </div>
@@ -244,11 +299,11 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
 
       {!loading && !error && pix && (
         <div className="flex flex-col items-center">
-          {/* Imagem do QR Code se disponível */}
-          {pix.qrCodeBase64 ? (
+          {/* Imagem do QR Code (com fallback de API online idêntico ao app) */}
+          {qrImageUri ? (
             <div className="bg-white p-3 rounded-2xl border-2 border-gray-200 shadow-inner mb-4">
               <img
-                src={`data:image/png;base64,${pix.qrCodeBase64}`}
+                src={qrImageUri}
                 alt="QR Code Pix"
                 className="w-48 h-48 sm:w-56 sm:h-56 object-contain"
               />
@@ -264,7 +319,7 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
           </div>
 
           {/* Botão Copia e Cola */}
-          {pix.qrCode && (
+          {qrCodeText ? (
             <div className="w-full space-y-2">
               <button
                 onClick={handleCopyCode}
@@ -289,11 +344,23 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
 
               <div className="bg-gray-50 border border-gray-200 rounded-xl p-2.5">
                 <p className="text-[11px] font-mono text-gray-500 break-all line-clamp-2 select-all">
-                  {pix.qrCode}
+                  {qrCodeText}
                 </p>
               </div>
+
+              {pix.ticketUrl && (
+                <a
+                  href={pix.ticketUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full h-11 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-bold text-gray-700 flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4 text-gray-500" />
+                  <span>Abrir link de pagamento no navegador / app</span>
+                </a>
+              )}
             </div>
-          )}
+          ) : null}
 
           {/* Guia Rápido estilo iFood */}
           <div className="w-full mt-5 pt-4 border-t border-gray-100">
@@ -306,6 +373,9 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
               <li>Escolha a opção <strong>Pix Copia e Cola</strong>.</li>
               <li>Cole o código e confirme o pagamento de <strong>R$ {total.toFixed(2).replace(".", ",")}</strong>.</li>
             </ol>
+            <p className="text-[11px] text-gray-400 mt-2 italic text-center">
+              Assim que você pagar, o status atualiza automaticamente aqui.
+            </p>
           </div>
         </div>
       )}

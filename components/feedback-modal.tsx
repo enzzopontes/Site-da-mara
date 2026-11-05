@@ -10,13 +10,14 @@ import { useAuth } from "@/lib/auth-context"
 interface FeedbackModalProps {
   orderId: string
   orderNumber: string
+  initialRating?: number
   onClose: () => void
   onSuccess?: () => void
 }
 
-export function FeedbackModal({ orderId, orderNumber, onClose, onSuccess }: FeedbackModalProps) {
+export function FeedbackModal({ orderId, orderNumber, initialRating = 0, onClose, onSuccess }: FeedbackModalProps) {
   const { user } = useAuth()
-  const [rating, setRating] = useState(0)
+  const [rating, setRating] = useState(initialRating)
   const [hoveredRating, setHoveredRating] = useState(0)
   const [comment, setComment] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)

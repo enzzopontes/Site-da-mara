@@ -8,7 +8,7 @@ export interface Order {
   customerPhone: string
   items: any[]
   total: number
-  status: "pending" | "preparing" | "ready" | "delivered" | "cancelled" | "awaiting_payment"
+  status: "pending" | "preparing" | "ready" | "delivered" | "cancelled" | "awaiting_payment" | "confirmed" | "preparo" | "out_for_delivery"
   paymentMethod: string
   deliveryType: "delivery" | "pickup"
   address: string

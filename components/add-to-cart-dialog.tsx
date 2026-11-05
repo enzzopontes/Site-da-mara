@@ -52,6 +52,59 @@ const CATEGORY_PHRASES: Record<string, string[]> = {
   geral: ["Que tal um extra?", "Bora dar um upgrade?", "Escolha seu adicional"],
 }
 
+const FALLBACK_BEBIDAS: DrinkProduct[] = [
+  {
+    id: "beb-1",
+    name: "Coca-Cola 200ml",
+    price: 3.5,
+    image: "/products/coca-cola-200ml.png",
+    category: "bebida",
+    description: "Refrigerante Coca-Cola 200ml gelado",
+  },
+  {
+    id: "beb-2",
+    name: "Coca-Cola Lata 350ml",
+    price: 5.0,
+    image: "/products/coca-cola-lata.png",
+    category: "bebida",
+    description: "Refrigerante Coca-Cola lata gelada",
+  },
+  {
+    id: "beb-3",
+    name: "Coca-Cola Lata Zero 350ml",
+    price: 5.0,
+    image: "/products/coca-cola-lata-zero.png",
+    category: "bebida",
+    description: "Refrigerante Coca-Cola Zero lata gelada",
+  },
+  {
+    id: "beb-4",
+    name: "Fanta 2L",
+    price: 12.0,
+    image: "/products/fanta-2l.png",
+    category: "bebida",
+    description: "Refrigerante Fanta 2 litros gelado",
+  },
+  {
+    id: "beb-5",
+    name: "Coca-Cola 2L",
+    price: 12.0,
+    image: "/products/coca-cola-2l.png",
+    category: "bebida",
+    description: "Refrigerante Coca-Cola 2 litros gelado",
+  },
+]
+
+function getDrinkImage(name: string): string {
+  const lower = name.toLowerCase()
+  if (lower.includes("zero")) return "/products/coca-cola-lata-zero.png"
+  if (lower.includes("lata")) return "/products/coca-cola-lata.png"
+  if (lower.includes("200ml")) return "/products/coca-cola-200ml.png"
+  if (lower.includes("fanta")) return "/products/fanta-2l.png"
+  if (lower.includes("2l")) return "/products/coca-cola-2l.png"
+  return "/products/coca-cola-lata.png"
+}
+
 function classifyAdicional(item: Adicional): string {
   const name = (item.name || "").toLowerCase()
   if (name.includes("bacon")) return "bacon"
@@ -103,7 +156,7 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
   const [selectedAdicionais, setSelectedAdicionais] = useState<Record<string, number>>({})
   const [adicionaisDisponiveis, setAdicionaisDisponiveis] = useState<Adicional[]>([])
   const [selectedBebidas, setSelectedBebidas] = useState<Record<string, number>>({})
-  const [bebidasDisponiveis, setBebidasDisponiveis] = useState<DrinkProduct[]>([])
+  const [bebidasDisponiveis, setBebidasDisponiveis] = useState<DrinkProduct[]>(FALLBACK_BEBIDAS)
   const [quantity, setQuantity] = useState(1)
   const [observacoes, setObservacoes] = useState("")
   const [pastaType, setPastaType] = useState<"penne" | "parafuso" | "espaguete">("penne")
@@ -162,24 +215,26 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
             const { data, error } = await supabase
               .from("products")
               .select("id, name, price, image_url, category, available")
-              .ilike("category", "bebida%")
-              .eq("available", true)
+              .or("category.eq.bebida,category.eq.bebidas,category.ilike.bebida%")
               .order("name")
 
             if (!error && data && data.length > 0) {
-              setBebidasDisponiveis(
-                data.map((b: any) => ({
-                  id: b.id,
-                  name: b.name,
-                  price: Number(b.price),
-                  image: b.image_url || "/products/coca-cola-lata.jpg",
-                  category: "bebida",
-                }))
-              )
-              return
+              const activeDrinks = data.filter((b: any) => b.available !== false)
+              if (activeDrinks.length > 0) {
+                setBebidasDisponiveis(
+                  activeDrinks.map((b: any) => ({
+                    id: b.id,
+                    name: b.name,
+                    price: Number(b.price),
+                    image: b.image_url ? b.image_url.replace(".jpg", ".png") : getDrinkImage(b.name),
+                    category: "bebida",
+                  }))
+                )
+                return
+              }
             }
           } catch (err) {
-            console.warn("Falha ao buscar bebidas via Supabase client, tentando fallback:", err)
+            console.warn("Falha ao buscar bebidas via Supabase client:", err)
           }
 
           try {
@@ -190,7 +245,7 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
                   id: b.id,
                   name: b.name,
                   price: b.price,
-                  image: b.image || "/products/coca-cola-lata.jpg",
+                  image: b.image ? b.image.replace(".jpg", ".png") : getDrinkImage(b.name),
                   category: "bebida",
                 }))
               )
@@ -460,88 +515,7 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
               </div>
             )}
 
-            {/* SEÇÃO DE CROSS-SELL DE BEBIDAS (ACIMA DOS ADICIONAIS) */}
-            {!isBebida && bebidasDisponiveis.length > 0 && (
-              <div className="space-y-2 pt-1">
-                {/* BANNER DE CABEÇALHO */}
-                <div className="-mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-[#F7F5F1] border-y border-gray-100">
-                  <h5 className="font-bold text-[15px] text-[#1F1B16]">Bora escolher uma bebida?</h5>
-                  <p className="text-[12px] text-gray-500">Escolha até 10 opções</p>
-                </div>
-
-                {/* LISTA DE BEBIDAS COM MINIATURA */}
-                <div className="divide-y divide-gray-100">
-                  {bebidasDisponiveis.map((bebida) => {
-                    const qty = selectedBebidas[bebida.id] || 0
-                    return (
-                      <div
-                        key={bebida.id}
-                        className="flex items-center justify-between py-3"
-                      >
-                        <div className="flex items-center gap-3 min-w-0 flex-1 pr-3">
-                          <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center overflow-hidden shrink-0 border border-gray-100">
-                            <img
-                              src={bebida.image}
-                              alt={bebida.name}
-                              className="w-12 h-12 object-contain"
-                              onError={(e) => {
-                                ;(e.target as HTMLImageElement).src = "/placeholder.jpg"
-                              }}
-                            />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[15px] font-semibold text-[#1F1B16] truncate">
-                              {bebida.name}
-                            </p>
-                            <p className="text-sm font-bold text-[#E3A008] mt-0.5">
-                              R$ {bebida.price.toFixed(2).replace(".", ",")}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* PÍLULA DE QUANTIDADE */}
-                        <div className="shrink-0">
-                          {qty === 0 ? (
-                            <button
-                              type="button"
-                              onClick={() => updateBebidaQuantity(bebida.id, 1)}
-                              className="w-8 h-8 rounded-full border border-[#E3A008] text-[#E3A008] hover:bg-[#FEF8EC] flex items-center justify-center transition-colors active:scale-95"
-                              aria-label={`Adicionar ${bebida.name}`}
-                            >
-                              <Plus className="w-4 h-4" />
-                            </button>
-                          ) : (
-                            <div className="flex items-center gap-2 bg-white rounded-full p-1 shadow-sm border border-gray-200">
-                              <button
-                                type="button"
-                                onClick={() => updateBebidaQuantity(bebida.id, -1)}
-                                className="w-7 h-7 rounded-full text-gray-600 hover:bg-gray-100 flex items-center justify-center transition-colors active:scale-95"
-                                aria-label="Diminuir bebida"
-                              >
-                                <Minus className="w-3.5 h-3.5" />
-                              </button>
-                              <span className="font-bold text-sm text-[#1F1B16] min-w-[18px] text-center">
-                                {qty}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => updateBebidaQuantity(bebida.id, 1)}
-                                className="w-7 h-7 rounded-full bg-[#E3A008] text-white hover:bg-[#C68A07] flex items-center justify-center transition-colors active:scale-95"
-                                aria-label="Aumentar bebida"
-                              >
-                                <Plus className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* SEÇÃO DE ADICIONAIS AGRUPADOS ESTILO IFOOD (EMBAIXO, ANTES DA OBSERVAÇÃO) */}
+            {/* SEÇÃO DE ADICIONAIS AGRUPADOS ESTILO IFOOD */}
             {!isBebida && activeCategories.length > 0 && (
               <div className="space-y-4 pt-1">
                 <div className="flex items-center justify-between">
@@ -623,6 +597,87 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
                               </div>
                             )
                           })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* SEÇÃO DE CROSS-SELL DE BEBIDAS (EMBAIXO DOS ADICIONAIS) */}
+            {!isBebida && (
+              <div className="space-y-2 pt-1">
+                {/* BANNER DE CABEÇALHO */}
+                <div className="-mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-[#F7F5F1] border-y border-gray-100">
+                  <h5 className="font-bold text-[15px] text-[#1F1B16]">Bora escolher uma bebida?</h5>
+                  <p className="text-[12px] text-gray-500">Escolha até 10 opções</p>
+                </div>
+
+                {/* LISTA DE BEBIDAS COM MINIATURA */}
+                <div className="divide-y divide-gray-100">
+                  {bebidasDisponiveis.map((bebida) => {
+                    const qty = selectedBebidas[bebida.id] || 0
+                    return (
+                      <div
+                        key={bebida.id}
+                        className="flex items-center justify-between py-3"
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1 pr-3">
+                          <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center overflow-hidden shrink-0 border border-gray-100">
+                            <img
+                              src={bebida.image}
+                              alt={bebida.name}
+                              className="w-12 h-12 object-contain"
+                              onError={(e) => {
+                                ;(e.target as HTMLImageElement).src = "/placeholder.jpg"
+                              }}
+                            />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[15px] font-semibold text-[#1F1B16] truncate">
+                              {bebida.name}
+                            </p>
+                            <p className="text-sm font-bold text-[#E3A008] mt-0.5">
+                              R$ {bebida.price.toFixed(2).replace(".", ",")}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* PÍLULA DE QUANTIDADE */}
+                        <div className="shrink-0">
+                          {qty === 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => updateBebidaQuantity(bebida.id, 1)}
+                              className="w-8 h-8 rounded-full border border-[#E3A008] text-[#E3A008] hover:bg-[#FEF8EC] flex items-center justify-center transition-colors active:scale-95"
+                              aria-label={`Adicionar ${bebida.name}`}
+                            >
+                              <Plus className="w-4 h-4" />
+                            </button>
+                          ) : (
+                            <div className="flex items-center gap-2 bg-white rounded-full p-1 shadow-sm border border-gray-200">
+                              <button
+                                type="button"
+                                onClick={() => updateBebidaQuantity(bebida.id, -1)}
+                                className="w-7 h-7 rounded-full text-gray-600 hover:bg-gray-100 flex items-center justify-center transition-colors active:scale-95"
+                                aria-label="Diminuir bebida"
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+                              <span className="font-bold text-sm text-[#1F1B16] min-w-[18px] text-center">
+                                {qty}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => updateBebidaQuantity(bebida.id, 1)}
+                                className="w-7 h-7 rounded-full bg-[#E3A008] text-white hover:bg-[#C68A07] flex items-center justify-center transition-colors active:scale-95"
+                                aria-label="Aumentar bebida"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )
