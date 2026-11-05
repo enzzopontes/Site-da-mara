@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
 import { AdminTableSkeleton } from "@/components/skeletons/admin-skeleton"
+import { AdminHomeBannersSection } from "@/components/admin-home-banners-section"
 import { 
   ArrowLeft, Megaphone, Zap, Tag, Image as ImageIcon, Save, AlertCircle, 
   Trash2, Plus, Sparkles, CheckCircle2, Sliders, ExternalLink, RefreshCw, 
@@ -761,6 +762,8 @@ export default function AdminPromocoesPage() {
             </div>
           </div>
 
+          {/* Banners Promocionais da Home (Sincronizado com Mobile) */}
+          <AdminHomeBannersSection />
         </div>
       </main>
 

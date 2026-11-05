@@ -1,5 +1,6 @@
 import { HeaderWrapper } from "@/components/header-wrapper"
 import { Hero } from "@/components/hero"
+import { CampaignBanner } from "@/components/campaign-banner"
 import { CategoryBar } from "@/components/category-bar"
 import { HomeCouponBanner } from "@/components/home-coupon-banner"
 import { FeaturedProducts } from "@/components/featured-products"
@@ -73,6 +74,9 @@ export default async function Home() {
           customerPhotos={mostRequestedData.customerPhotos}
           totalCustomers={totalCustomers}
         />
+
+        {/* Banner de Campanhas Promocionais Sincronizado com App */}
+        <CampaignBanner />
 
         {/* Barra de Categorias Rápidas (Chips estilo iFood com espaço reservado CLS = 0) */}
         <section aria-label="Navegação por categorias" className="w-full min-h-[60px] bg-white">

@@ -6,11 +6,13 @@ import { OrderSummary } from "@/components/order-summary"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter, useParams } from "next/navigation"
 import { PedidoDetalheSkeleton } from "@/components/skeletons/pedido-detalhe-skeleton"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef, useCallback } from "react"
 import { ArrowLeft, Clock, MapPin, Phone, MessageSquare, Package, ShoppingBag, CheckCircle2, Truck, Timer, Ticket } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ordersManager, type Order } from "@/lib/orders-manager"
 import { PixPaymentBox } from "@/components/pix-payment-box"
+import { SlideDownPaymentBanner } from "@/components/slide-down-payment-banner"
+import { triggerPixConfettiCannons } from "@/lib/pix-confetti"
 
 export default function DetalhesPedidoPage() {
   const { user, loading } = useAuth()
@@ -19,6 +21,17 @@ export default function DetalhesPedidoPage() {
   const orderId = params.id as string
   const [order, setOrder] = useState<Order | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [showPaymentSuccessBanner, setShowPaymentSuccessBanner] = useState(false)
+  const hasCelebratedRef = useRef(false)
+
+  const handlePaymentApproved = () => {
+    if (!hasCelebratedRef.current) {
+      hasCelebratedRef.current = true
+      setShowPaymentSuccessBanner(true)
+      triggerPixConfettiCannons()
+    }
+    loadOrder(true)
+  }
 
   useEffect(() => {
     if (!loading && !user) {
@@ -32,8 +45,10 @@ export default function DetalhesPedidoPage() {
     }
   }, [user, orderId])
 
-  const loadOrder = async () => {
-    setIsLoading(true)
+  const loadOrder = async (isSilent = false) => {
+    if (!isSilent && !order) {
+      setIsLoading(true)
+    }
     try {
       const foundOrder = await ordersManager.getOrderById(orderId)
       if (foundOrder) {
@@ -46,7 +61,9 @@ export default function DetalhesPedidoPage() {
     } catch (error) {
       console.error("Erro ao carregar pedido:", error)
     } finally {
-      setIsLoading(false)
+      if (!isSilent) {
+        setIsLoading(false)
+      }
     }
   }
 
@@ -95,6 +112,7 @@ export default function DetalhesPedidoPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
+      <SlideDownPaymentBanner visible={showPaymentSuccessBanner} onDismiss={() => setShowPaymentSuccessBanner(false)} />
       <HeaderWrapper />
       <main className="flex-1 pb-24 lg:pb-8">
         <div className="bg-white border-b sticky top-0 z-30 lg:relative lg:top-0">
@@ -116,9 +134,9 @@ export default function DetalhesPedidoPage() {
               orderId={order.id}
               total={order.total}
               pixData={order.metadata?.pix}
-              onPaymentApproved={() => {
-                loadOrder()
-              }}
+              onPaymentApproved={handlePaymentApproved}
+
+
             />
           )}
 
