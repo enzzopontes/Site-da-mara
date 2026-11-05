@@ -460,7 +460,88 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
               </div>
             )}
 
-            {/* SEÇÃO DE ADICIONAIS AGRUPADOS ESTILO IFOOD */}
+            {/* SEÇÃO DE CROSS-SELL DE BEBIDAS (ACIMA DOS ADICIONAIS) */}
+            {!isBebida && bebidasDisponiveis.length > 0 && (
+              <div className="space-y-2 pt-1">
+                {/* BANNER DE CABEÇALHO */}
+                <div className="-mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-[#F7F5F1] border-y border-gray-100">
+                  <h5 className="font-bold text-[15px] text-[#1F1B16]">Bora escolher uma bebida?</h5>
+                  <p className="text-[12px] text-gray-500">Escolha até 10 opções</p>
+                </div>
+
+                {/* LISTA DE BEBIDAS COM MINIATURA */}
+                <div className="divide-y divide-gray-100">
+                  {bebidasDisponiveis.map((bebida) => {
+                    const qty = selectedBebidas[bebida.id] || 0
+                    return (
+                      <div
+                        key={bebida.id}
+                        className="flex items-center justify-between py-3"
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1 pr-3">
+                          <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center overflow-hidden shrink-0 border border-gray-100">
+                            <img
+                              src={bebida.image}
+                              alt={bebida.name}
+                              className="w-12 h-12 object-contain"
+                              onError={(e) => {
+                                ;(e.target as HTMLImageElement).src = "/placeholder.jpg"
+                              }}
+                            />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[15px] font-semibold text-[#1F1B16] truncate">
+                              {bebida.name}
+                            </p>
+                            <p className="text-sm font-bold text-[#E3A008] mt-0.5">
+                              R$ {bebida.price.toFixed(2).replace(".", ",")}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* PÍLULA DE QUANTIDADE */}
+                        <div className="shrink-0">
+                          {qty === 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => updateBebidaQuantity(bebida.id, 1)}
+                              className="w-8 h-8 rounded-full border border-[#E3A008] text-[#E3A008] hover:bg-[#FEF8EC] flex items-center justify-center transition-colors active:scale-95"
+                              aria-label={`Adicionar ${bebida.name}`}
+                            >
+                              <Plus className="w-4 h-4" />
+                            </button>
+                          ) : (
+                            <div className="flex items-center gap-2 bg-white rounded-full p-1 shadow-sm border border-gray-200">
+                              <button
+                                type="button"
+                                onClick={() => updateBebidaQuantity(bebida.id, -1)}
+                                className="w-7 h-7 rounded-full text-gray-600 hover:bg-gray-100 flex items-center justify-center transition-colors active:scale-95"
+                                aria-label="Diminuir bebida"
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+                              <span className="font-bold text-sm text-[#1F1B16] min-w-[18px] text-center">
+                                {qty}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => updateBebidaQuantity(bebida.id, 1)}
+                                className="w-7 h-7 rounded-full bg-[#E3A008] text-white hover:bg-[#C68A07] flex items-center justify-center transition-colors active:scale-95"
+                                aria-label="Aumentar bebida"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* SEÇÃO DE ADICIONAIS AGRUPADOS ESTILO IFOOD (EMBAIXO, ANTES DA OBSERVAÇÃO) */}
             {!isBebida && activeCategories.length > 0 && (
               <div className="space-y-4 pt-1">
                 <div className="flex items-center justify-between">
@@ -542,87 +623,6 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
                               </div>
                             )
                           })}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* SEÇÃO DE CROSS-SELL DE BEBIDAS */}
-            {!isBebida && bebidasDisponiveis.length > 0 && (
-              <div className="space-y-2 pt-1">
-                {/* BANNER DE CABEÇALHO */}
-                <div className="-mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-[#F7F5F1] border-y border-gray-100">
-                  <h5 className="font-bold text-[15px] text-[#1F1B16]">Bora escolher uma bebida?</h5>
-                  <p className="text-[12px] text-gray-500">Escolha até 10 opções</p>
-                </div>
-
-                {/* LISTA DE BEBIDAS COM MINIATURA */}
-                <div className="divide-y divide-gray-100">
-                  {bebidasDisponiveis.map((bebida) => {
-                    const qty = selectedBebidas[bebida.id] || 0
-                    return (
-                      <div
-                        key={bebida.id}
-                        className="flex items-center justify-between py-3"
-                      >
-                        <div className="flex items-center gap-3 min-w-0 flex-1 pr-3">
-                          <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center overflow-hidden shrink-0 border border-gray-100">
-                            <img
-                              src={bebida.image}
-                              alt={bebida.name}
-                              className="w-12 h-12 object-contain"
-                              onError={(e) => {
-                                ;(e.target as HTMLImageElement).src = "/placeholder.jpg"
-                              }}
-                            />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[15px] font-semibold text-[#1F1B16] truncate">
-                              {bebida.name}
-                            </p>
-                            <p className="text-sm font-bold text-[#E3A008] mt-0.5">
-                              R$ {bebida.price.toFixed(2).replace(".", ",")}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* PÍLULA DE QUANTIDADE */}
-                        <div className="shrink-0">
-                          {qty === 0 ? (
-                            <button
-                              type="button"
-                              onClick={() => updateBebidaQuantity(bebida.id, 1)}
-                              className="w-8 h-8 rounded-full border border-[#E3A008] text-[#E3A008] hover:bg-[#FEF8EC] flex items-center justify-center transition-colors active:scale-95"
-                              aria-label={`Adicionar ${bebida.name}`}
-                            >
-                              <Plus className="w-4 h-4" />
-                            </button>
-                          ) : (
-                            <div className="flex items-center gap-2 bg-white rounded-full p-1 shadow-sm border border-gray-200">
-                              <button
-                                type="button"
-                                onClick={() => updateBebidaQuantity(bebida.id, -1)}
-                                className="w-7 h-7 rounded-full text-gray-600 hover:bg-gray-100 flex items-center justify-center transition-colors active:scale-95"
-                                aria-label="Diminuir bebida"
-                              >
-                                <Minus className="w-3.5 h-3.5" />
-                              </button>
-                              <span className="font-bold text-sm text-[#1F1B16] min-w-[18px] text-center">
-                                {qty}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => updateBebidaQuantity(bebida.id, 1)}
-                                className="w-7 h-7 rounded-full bg-[#E3A008] text-white hover:bg-[#C68A07] flex items-center justify-center transition-colors active:scale-95"
-                                aria-label="Aumentar bebida"
-                              >
-                                <Plus className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          )}
                         </div>
                       </div>
                     )
