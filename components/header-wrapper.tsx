@@ -1,6 +1,7 @@
 "use client"
 
 import { Suspense } from "react"
+import { usePathname } from "next/navigation"
 import { Header } from "./header"
 
 interface HeaderProps {
@@ -8,6 +9,9 @@ interface HeaderProps {
 }
 
 function HeaderFallback({ variant = "default" }: HeaderProps) {
+  const pathname = usePathname()
+  const isCardapio = pathname === "/cardapio"
+
   if (variant === "simple") {
     return (
       <header className="w-full bg-[#FFFFFF] border-b border-[#ECE7E0] h-16 sticky top-0 z-40 flex items-center">
@@ -19,7 +23,7 @@ function HeaderFallback({ variant = "default" }: HeaderProps) {
   }
 
   return (
-    <header className="sticky top-0 z-40 w-full h-16 bg-[#FFFFFF] border-b border-[#ECE7E0]">
+    <header className={`${isCardapio ? "relative" : "sticky top-0"} z-40 w-full h-16 bg-[#FFFFFF] border-b border-[#ECE7E0]`}>
       <div className="max-w-7xl mx-auto h-16 px-4 sm:px-8 flex items-center justify-between gap-3">
         <div className="flex flex-col gap-1.5 py-0.5">
           <div className="h-3 w-24 bg-[#F3F0EB] rounded animate-pulse" />
@@ -39,4 +43,3 @@ export function HeaderWrapper(props: HeaderProps) {
     </Suspense>
   )
 }
-

@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
 import { ProductCard } from "@/components/product-card"
-import { Search, Utensils, GlassWater, Soup, Sparkles, Flame, Layers, X } from "lucide-react"
+import { Utensils, GlassWater, Soup, Sparkles, SearchX } from "lucide-react"
 import { CardapioSkeleton } from "@/components/skeletons/cardapio-skeleton"
+import { MenuStickyNav, type MenuCategory } from "@/components/menu-sticky-nav"
 
 interface Product {
   id: string
@@ -23,82 +24,67 @@ interface CardapioContentProps {
   topMacarraoNames?: string[]
 }
 
-export function CardapioContent({ 
-  batatas, 
-  macarrao, 
+export function CardapioContent({
+  batatas,
+  macarrao,
   bebidas,
   topBatatasNames = [],
   topMacarraoNames = []
 }: CardapioContentProps) {
   const searchParams = useSearchParams()
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "")
-  const [activeTab, setActiveTab] = useState(() => {
-    const cat = searchParams.get("category")
-    if (cat === "batata" || cat === "batatas") return "batatas"
-    if (cat === "macarrao") return "macarrao"
-    if (cat === "bebida" || cat === "bebidas") return "bebidas"
-    return "todos"
-  })
+  const [activeTab, setActiveTab] = useState("todos")
   const [mounted, setMounted] = useState(false)
-  
+
   const tabsContainerRef = useRef<HTMLDivElement>(null)
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
-  
-  const sectionBatatasRef = useRef<HTMLElement>(null)
-  const sectionMacarraoRef = useRef<HTMLElement>(null)
-  const sectionBebidasRef = useRef<HTMLElement>(null)
-  
-  const [isDragging, setIsDragging] = useState(false)
-  const [startX, setStartX] = useState(0)
-  const [scrollLeft, setScrollLeft] = useState(0)
   const searchInputRef = useRef<HTMLInputElement>(null)
-  const isManualScrolling = useRef(false)
-  const manualScrollTimeout = useRef<NodeJS.Timeout | null>(null)
+
+  const activeTabRef = useRef(activeTab)
+  const isManualScrollRef = useRef(false)
+  const manualScrollTimerRef = useRef<NodeJS.Timeout | null>(null)
+
   const [promoProductIds, setPromoProductIds] = useState<string[]>([])
   const [superPromoActive, setSuperPromoActive] = useState(false)
 
-  // Função para centralizar a aba ativa
+  useEffect(() => {
+    activeTabRef.current = activeTab
+  }, [activeTab])
+
+  // Centralizar aba selecionada no carrossel horizontal
   const centerActiveTab = useCallback((tabId: string) => {
-    if (tabsContainerRef.current) {
-      const tabIds = ["todos", "batatas", "macarrao", "bebidas"]
-      const index = tabIds.indexOf(tabId)
-      
-      if (index !== -1) {
-        const activeTabElement = tabsContainerRef.current.children[index] as HTMLElement
-        if (activeTabElement) {
-          const container = tabsContainerRef.current
-          const containerWidth = container.offsetWidth
-          const tabOffset = activeTabElement.offsetLeft
-          const tabWidth = activeTabElement.offsetWidth
-          
-          container.scrollTo({
-            left: tabOffset - (containerWidth / 2) + (tabWidth / 2),
-            behavior: "smooth"
-          })
-        }
-      }
-    }
+    const container = tabsContainerRef.current
+    const tabElement = document.getElementById(`tab-${tabId}`)
+    if (!container || !tabElement) return
+
+    const containerWidth = container.offsetWidth
+    const tabOffset = tabElement.offsetLeft
+    const tabWidth = tabElement.offsetWidth
+
+    container.scrollTo({
+      left: tabOffset - containerWidth / 2 + tabWidth / 2,
+      behavior: "smooth"
+    })
   }, [])
 
-  // Escutar evento global de pesquisa (Vindo da Navbar)
+  // Escutar evento global de foco na busca vindo da MobileNavbar ou URL
   useEffect(() => {
     const handleFocusSearch = () => {
       if (searchInputRef.current) {
-        searchInputRef.current.focus();
-        searchInputRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+        searchInputRef.current.focus()
+        searchInputRef.current.scrollIntoView({ behavior: "smooth", block: "center" })
       }
-    };
-
-    window.addEventListener("focus-search", handleFocusSearch);
-    
-    // Se o parâmetro focus=search estiver na URL ao carregar
-    if (searchParams.get("focus") === "search") {
-      setTimeout(handleFocusSearch, 500);
     }
 
-    return () => window.removeEventListener("focus-search", handleFocusSearch);
-  }, [searchParams]);
+    window.addEventListener("focus-search", handleFocusSearch)
 
+    if (searchParams.get("focus") === "search") {
+      setTimeout(handleFocusSearch, 300)
+    }
+
+    return () => window.removeEventListener("focus-search", handleFocusSearch)
+  }, [searchParams])
+
+  // Sincronizar parâmetros de busca e categoria da URL
   useEffect(() => {
     const q = searchParams.get("q")
     if (q !== null && q !== searchQuery) {
@@ -106,29 +92,46 @@ export function CardapioContent({
     }
     const cat = searchParams.get("category")
     if (cat) {
-      if (cat === "batata" || cat === "batatas") setActiveTab("batatas")
-      else if (cat === "macarrao") setActiveTab("macarrao")
-      else if (cat === "bebida" || cat === "bebidas") setActiveTab("bebidas")
-      else setActiveTab("todos")
+      const normalizedCat =
+        cat === "batata" || cat === "batatas"
+          ? "batatas"
+          : cat === "macarrao"
+          ? "macarrao"
+          : cat === "bebida" || cat === "bebidas"
+          ? "bebidas"
+          : "todos"
+
+      setActiveTab(normalizedCat)
+      centerActiveTab(normalizedCat)
+
+      if (normalizedCat !== "todos") {
+        setTimeout(() => {
+          const target = document.getElementById(normalizedCat)
+          if (target) {
+            target.scrollIntoView({ behavior: "smooth" })
+          }
+        }, 300)
+      }
     }
-  }, [searchParams]);
+  }, [searchParams, centerActiveTab])
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
+  // Carregar dados de promoção
   useEffect(() => {
     const loadPromoData = async () => {
       try {
         const { storeStatusManager } = await import("@/lib/store-status-manager")
         const status = await storeStatusManager.getStatus()
-        
+
         if (status.superPromo?.isActive) {
           setSuperPromoActive(true)
-          setPromoProductIds(batatas.map(b => b.id))
+          setPromoProductIds(batatas.map((b) => b.id))
         } else if (status.itemPromo?.isActive && status.promoProducts) {
           setSuperPromoActive(false)
-          setPromoProductIds(status.promoProducts.map(p => p.productId))
+          setPromoProductIds(status.promoProducts.map((p) => p.productId))
         } else {
           setSuperPromoActive(false)
           setPromoProductIds([])
@@ -137,225 +140,356 @@ export function CardapioContent({
         console.error("Erro ao carregar dados de promoção:", error)
       }
     }
-    
+
     loadPromoData()
     const interval = setInterval(loadPromoData, 5000)
     return () => clearInterval(interval)
   }, [batatas])
 
-  const scrollToCategory = (catId: string) => {
-    setActiveTab(catId)
-    centerActiveTab(catId)
-  }
+  // Filtragem e ordenação inteligente dos produtos
+  const filterAndSortProducts = useCallback(
+    (products: Product[], topNames: string[]) => {
+      const normalize = (str: string) =>
+        str
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
 
-  // Lógica para arrastar as abas (Drag to Scroll)
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (!tabsContainerRef.current) return
-    setIsDragging(true)
-    setStartX(e.pageX - tabsContainerRef.current.offsetLeft)
-    setScrollLeft(tabsContainerRef.current.scrollLeft)
-  }
+      const term = normalize(searchQuery.trim())
 
-  const handleMouseLeave = () => setIsDragging(false)
-  const handleMouseUp = () => setIsDragging(false)
+      const filtered = products.filter((product) => {
+        if (!term) return true
+        const name = normalize(product.name)
+        const description = normalize(product.description)
+        return name.includes(term) || description.includes(term)
+      })
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || !tabsContainerRef.current) return
-    e.preventDefault()
-    const x = e.pageX - tabsContainerRef.current.offsetLeft
-    const walk = (x - startX) * 2
-    tabsContainerRef.current.scrollLeft = scrollLeft - walk
-  }
+      return [...filtered].sort((a, b) => {
+        const aInPromo = promoProductIds.includes(a.id)
+        const bInPromo = promoProductIds.includes(b.id)
 
-  const filterAndSortProducts = (products: Product[], topNames: string[]) => {
-    const normalize = (str: string) => 
-      str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
-    
-    const term = normalize(searchQuery)
-    
-    const filtered = products.filter((product) => {
-      const name = normalize(product.name)
-      const description = normalize(product.description)
-      return name.includes(term) || description.includes(term)
+        if (aInPromo && !bInPromo) return -1
+        if (!aInPromo && bInPromo) return 1
+
+        const indexA = topNames.findIndex(
+          (name) => name.toLowerCase() === a.name.toLowerCase()
+        )
+        const indexB = topNames.findIndex(
+          (name) => name.toLowerCase() === b.name.toLowerCase()
+        )
+
+        if (indexA !== -1 && indexB !== -1) return indexA - indexB
+        if (indexA !== -1) return -1
+        if (indexB !== -1) return 1
+        return 0
+      })
+    },
+    [searchQuery, promoProductIds]
+  )
+
+  const filteredBatatas = useMemo(
+    () => filterAndSortProducts(batatas, topBatatasNames),
+    [filterAndSortProducts, batatas, topBatatasNames]
+  )
+  const filteredMacarrao = useMemo(
+    () => filterAndSortProducts(macarrao, topMacarraoNames),
+    [filterAndSortProducts, macarrao, topMacarraoNames]
+  )
+  const filteredBebidas = useMemo(
+    () => filterAndSortProducts(bebidas, []),
+    [filterAndSortProducts, bebidas]
+  )
+
+  const totalCount =
+    filteredBatatas.length + filteredMacarrao.length + filteredBebidas.length
+
+  const categories: MenuCategory[] = useMemo(
+    () => [
+      {
+        id: "todos",
+        label: "Todos",
+        iconSrc: "/assets/icones3d/iconetodos.png",
+        count: totalCount
+      },
+      {
+        id: "batatas",
+        label: "Batatas",
+        iconSrc: "/assets/icones3d/icone batata.png",
+        count: filteredBatatas.length
+      },
+      {
+        id: "macarrao",
+        label: "Macarrão",
+        iconSrc: "/assets/icones3d/icone macarrao.png",
+        count: filteredMacarrao.length
+      },
+      {
+        id: "bebidas",
+        label: "Bebidas",
+        iconSrc: "/assets/icones3d/icone bebidas geladas.png",
+        count: filteredBebidas.length
+      }
+    ],
+    [totalCount, filteredBatatas.length, filteredMacarrao.length, filteredBebidas.length]
+  )
+
+  // Ação ao selecionar aba no carrossel de categorias
+  const handleSelectCategory = useCallback(
+    (catId: string) => {
+      setActiveTab(catId)
+      centerActiveTab(catId)
+
+      isManualScrollRef.current = true
+      if (manualScrollTimerRef.current) {
+        clearTimeout(manualScrollTimerRef.current)
+      }
+
+      const releaseManualScroll = () => {
+        isManualScrollRef.current = false
+      }
+
+      if (catId === "todos") {
+        window.scrollTo({ top: 0, behavior: "smooth" })
+      } else {
+        const target = document.getElementById(catId)
+        if (target) {
+          target.scrollIntoView({ behavior: "smooth", block: "start" })
+        }
+      }
+
+      // Desbloqueia após scroll terminar (tempo seguro com suporte a scrollend)
+      if ("onscrollend" in window) {
+        window.addEventListener("scrollend", releaseManualScroll, { once: true })
+      }
+      manualScrollTimerRef.current = setTimeout(releaseManualScroll, 750)
+    },
+    [centerActiveTab]
+  )
+
+  // IntersectionObserver: ScrollSpy de alta performance (sem listeners de scroll no catálogo)
+  useEffect(() => {
+    if (!mounted) return
+
+    const sectionIds = ["batatas", "macarrao", "bebidas"]
+    const observedElements: HTMLElement[] = []
+
+    sectionIds.forEach((id) => {
+      const el = document.getElementById(id)
+      if (el) observedElements.push(el)
     })
 
-    return [...filtered].sort((a, b) => {
-      const aInPromo = promoProductIds.includes(a.id)
-      const bInPromo = promoProductIds.includes(b.id)
-      
-      if (aInPromo && !bInPromo) return -1
-      if (!aInPromo && bInPromo) return 1
-      
-      const indexA = topNames.findIndex(name => name.toLowerCase() === a.name.toLowerCase())
-      const indexB = topNames.findIndex(name => name.toLowerCase() === b.name.toLowerCase())
-      
-      if (indexA !== -1 && indexB !== -1) return indexA - indexB
-      if (indexA !== -1) return -1
-      if (indexB !== -1) return 1
-      return 0
-    })
-  }
+    if (observedElements.length === 0) return
 
-  const filteredBatatas = filterAndSortProducts(batatas, topBatatasNames)
-  const filteredMacarrao = filterAndSortProducts(macarrao, topMacarraoNames)
-  const filteredBebidas = filterAndSortProducts(bebidas, [])
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (isManualScrollRef.current) return
+
+        // Procura a seção que intersecta a zona de leitura do topo
+        const visibleEntry = entries.find((entry) => entry.isIntersecting)
+        if (visibleEntry?.target?.id) {
+          const newActiveId = visibleEntry.target.id
+          if (newActiveId !== activeTabRef.current) {
+            activeTabRef.current = newActiveId
+            setActiveTab(newActiveId)
+            centerActiveTab(newActiveId)
+          }
+        }
+      },
+      {
+        // Linha de disparo logo abaixo do header sticky (110px do topo)
+        rootMargin: "-110px 0px -65% 0px",
+        threshold: [0, 0.15]
+      }
+    )
+
+    observedElements.forEach((el) => observer.observe(el))
+
+    // Listener passivo ultra-leve apenas para resetar "todos" no topo absoluto da página
+    const handleTopBoundary = () => {
+      if (
+        window.scrollY < 60 &&
+        activeTabRef.current !== "todos" &&
+        !isManualScrollRef.current
+      ) {
+        activeTabRef.current = "todos"
+        setActiveTab("todos")
+        centerActiveTab("todos")
+      }
+    }
+
+    window.addEventListener("scroll", handleTopBoundary, { passive: true })
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener("scroll", handleTopBoundary)
+      if (manualScrollTimerRef.current) {
+        clearTimeout(manualScrollTimerRef.current)
+      }
+    }
+  }, [mounted, centerActiveTab, filteredBatatas.length, filteredMacarrao.length, filteredBebidas.length])
 
   if (!mounted) return <CardapioSkeleton />
 
-  const totalCount = filteredBatatas.length + filteredMacarrao.length + filteredBebidas.length
-
-  const categories = [
-    { id: "todos", label: "Todos", iconSrc: "/assets/icones3d/iconetodos.png", count: totalCount },
-    { id: "batatas", label: "Batatas", iconSrc: "/assets/icones3d/icone batata.png", count: filteredBatatas.length },
-    { id: "macarrao", label: "Macarrão", iconSrc: "/assets/icones3d/icone macarrao.png", count: filteredMacarrao.length },
-    { id: "bebidas", label: "Bebidas", iconSrc: "/assets/icones3d/icone bebidas geladas.png", count: filteredBebidas.length },
-  ]
+  const isSearchActive = searchQuery.trim().length > 0
+  const hasNoResults = totalCount === 0
 
   return (
-    <main className="flex-1 bg-gray-50 pb-20">
-      {/* Header Sticky Travado Flush no Scroll (sem espaço em branco e sem sombras) */}
-      <div className="bg-white border-b border-[#ECE7E0] sticky top-14 sm:top-16 z-30 py-2.5">
-        <div className="container mx-auto px-4 max-w-5xl">
-          <div className="relative flex items-center justify-center">
-            <div
-              ref={tabsContainerRef}
-              onMouseDown={handleMouseDown}
-              onMouseLeave={handleMouseLeave}
-              onMouseUp={handleMouseUp}
-              onMouseMove={handleMouseMove}
-              className={`flex items-center justify-start md:justify-center overflow-x-auto no-scrollbar gap-2 py-0.5 px-1 w-full ${isDragging ? 'cursor-grabbing select-none' : 'cursor-grab'}`}
-              style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-            >
-              {categories.map((cat) => {
-                const isActive = activeTab === cat.id
-                return (
-                <button
-                  key={cat.id}
-                  onClick={() => !isDragging && scrollToCategory(cat.id)}
-                  className={`shrink-0 flex-shrink-0 h-10 px-3.5 rounded-full flex items-center gap-2 text-xs font-bold transition-all border cursor-pointer whitespace-nowrap ${
-                    isActive 
-                      ? "bg-[#FEF8EC] border-[#E3A008] text-[#A16207] shadow-2xs" 
-                      : "bg-white border-[#ECE7E0] text-[#1F1B16] hover:bg-[#F7F4EF]"
-                  }`}
-                >
-                  <img src={cat.iconSrc} alt={cat.label} className="h-6 w-6 object-contain shrink-0" />
-                  <span>{cat.label}</span>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                    isActive
-                      ? "bg-[#FDE68A] text-[#854D0E]"
-                      : "bg-gray-100 text-gray-500"
-                  }`}>
-                    {cat.count}
-                  </span>
-                </button>
-                )
-              })}
+    <main className="flex-1 bg-gray-50 pb-24 min-h-screen">
+      {/* Cabeçalho Sticky Inteligente (Busca + Abas Flush) */}
+      <MenuStickyNav
+        categories={categories}
+        activeTab={activeTab}
+        onSelectCategory={handleSelectCategory}
+        tabsContainerRef={tabsContainerRef}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onSearchClear={() => setSearchQuery("")}
+        searchInputRef={searchInputRef}
+      />
+
+      <div className="max-w-5xl mx-auto px-4 py-5 sm:py-7">
+        {/* Caso de busca sem nenhum resultado */}
+        {isSearchActive && hasNoResults && (
+          <div className="flex flex-col items-center justify-center text-center py-16 px-4 bg-white rounded-2xl border border-dashed border-[#ECE7E0] shadow-xs my-4 animate-in fade-in-50 duration-200">
+            <div className="w-14 h-14 rounded-full bg-[#FEF8EC] flex items-center justify-center text-[#E3A008] mb-3">
+              <SearchX className="h-7 w-7" />
             </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="container mx-auto px-4 py-6">
-        <div className="mb-6 lg:hidden">
-          <div className="relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#E3A008]" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Busque por batatas, macarrão ou bebidas..."
-              className="w-full h-11 pl-10 pr-10 bg-white border border-[#ECE7E0] focus:border-[#E3A008] focus:ring-2 focus:ring-[#E3A008]/20 rounded-xl text-sm outline-none transition-all placeholder:text-gray-400 text-gray-800"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
-                aria-label="Limpar busca"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="space-y-10 w-full">
-          {(activeTab === "todos" || activeTab === "batatas") && (
-            <section 
-              ref={sectionBatatasRef}
-              id="batatas"
-              className="w-full px-1"
+            <h2 className="text-base font-bold text-[#1A1A1A] mb-1">
+              Nenhum produto encontrado
+            </h2>
+            <p className="text-xs sm:text-sm text-[#717171] max-w-sm mb-4">
+              Não encontramos resultados para &ldquo;<span className="font-semibold text-[#1A1A1A]">{searchQuery}</span>&rdquo;. Tente outro termo ou limpe a busca.
+            </p>
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="h-10 px-5 rounded-full bg-[#E3A008] hover:bg-[#C1440E] text-white text-xs font-bold transition-colors cursor-pointer"
             >
-              <div className="mb-6">
-                <h2 className="text-2xl font-black text-gray-800 mb-2 flex items-center gap-2">
-                  <Utensils className="h-6 w-6 text-yellow-500" /> 
-                  Batatas Recheadas
+              Limpar busca e ver cardápio
+            </button>
+          </div>
+        )}
+
+        {/* Listagem Contínua dos Produtos (ScrollSpy) */}
+        <div className="space-y-10 w-full">
+          {/* Seção Batatas Recheadas */}
+          {(!isSearchActive || filteredBatatas.length > 0) && (
+            <section
+              id="batatas"
+              className="w-full px-0.5 scroll-mt-28 sm:scroll-mt-32"
+              aria-labelledby="heading-batatas"
+            >
+              <div className="mb-4">
+                <h2
+                  id="heading-batatas"
+                  className="text-xl sm:text-2xl font-black text-[#1A1A1A] mb-1 flex items-center gap-2"
+                >
+                  <Utensils className="h-5 w-5 sm:h-6 sm:w-6 text-[#E3A008]" />
+                  <span>Batatas Recheadas</span>
                 </h2>
-                <p className="text-sm text-gray-500 flex items-center gap-1.5">
-                  <Sparkles className="h-4 w-4 text-yellow-500" />
-                  <span className="font-medium">Personalize com adicionais!</span>
+                <p className="text-xs sm:text-sm text-[#717171] flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-[#E3A008]" />
+                  <span className="font-medium">Personalize com seus adicionais favoritos!</span>
                 </p>
               </div>
+
               {filteredBatatas.length > 0 ? (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-                  {filteredBatatas.map((product) => (
-                    <ProductCard key={product.id} product={product} rank={topBatatasNames.findIndex(name => name.toLowerCase() === product.name.toLowerCase()) !== -1 ? (topBatatasNames.findIndex(name => name.toLowerCase() === product.name.toLowerCase()) + 1) as 1 | 2 | 3 : null} />
-                  ))}
+                  {filteredBatatas.map((product) => {
+                    const rankIdx = topBatatasNames.findIndex(
+                      (name) => name.toLowerCase() === product.name.toLowerCase()
+                    )
+                    const rank = rankIdx !== -1 ? ((rankIdx + 1) as 1 | 2 | 3) : null
+
+                    return (
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                        rank={rank}
+                      />
+                    )
+                  })}
                 </div>
               ) : (
-                <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200">
-                  <Utensils className="h-12 w-12 mx-auto text-gray-300 mb-3" />
-                  <p className="text-gray-400 font-semibold">Nenhuma batata encontrada.</p>
+                <div className="text-center py-12 bg-white rounded-2xl border-2 border-dashed border-[#ECE7E0]">
+                  <Utensils className="h-10 w-10 mx-auto text-[#ECE7E0] mb-2" />
+                  <p className="text-[#717171] text-xs font-semibold">
+                    Nenhuma batata disponível no momento.
+                  </p>
                 </div>
               )}
             </section>
           )}
 
-          {(activeTab === "todos" || activeTab === "macarrao") && (
-            <section 
-              ref={sectionMacarraoRef}
+          {/* Seção Macarrão */}
+          {(!isSearchActive || filteredMacarrao.length > 0) && (
+            <section
               id="macarrao"
-              className="w-full px-1"
+              className="w-full px-0.5 scroll-mt-28 sm:scroll-mt-32"
+              aria-labelledby="heading-macarrao"
             >
-              <div className="mb-6">
-                <h2 className="text-2xl font-black text-gray-800 mb-2 flex items-center gap-2">
-                  <Soup className="h-6 w-6 text-yellow-500" /> 
-                  Macarrão
+              <div className="mb-4">
+                <h2
+                  id="heading-macarrao"
+                  className="text-xl sm:text-2xl font-black text-[#1A1A1A] mb-1 flex items-center gap-2"
+                >
+                  <Soup className="h-5 w-5 sm:h-6 sm:w-6 text-[#E3A008]" />
+                  <span>Macarrão</span>
                 </h2>
-                <p className="text-sm text-gray-500 flex items-center gap-1.5">
-                  <Sparkles className="h-4 w-4 text-yellow-500" />
-                  <span className="font-medium">Adicione proteínas!</span>
+                <p className="text-xs sm:text-sm text-[#717171] flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-[#E3A008]" />
+                  <span className="font-medium">Adicione proteínas e queijo gratinado!</span>
                 </p>
               </div>
+
               {filteredMacarrao.length > 0 ? (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-                  {filteredMacarrao.map((product) => (
-                    <ProductCard key={product.id} product={product} rank={topMacarraoNames.findIndex(name => name.toLowerCase() === product.name.toLowerCase()) !== -1 ? (topMacarraoNames.findIndex(name => name.toLowerCase() === product.name.toLowerCase()) + 1) as 1 | 2 | 3 : null} />
-                  ))}
+                  {filteredMacarrao.map((product) => {
+                    const rankIdx = topMacarraoNames.findIndex(
+                      (name) => name.toLowerCase() === product.name.toLowerCase()
+                    )
+                    const rank = rankIdx !== -1 ? ((rankIdx + 1) as 1 | 2 | 3) : null
+
+                    return (
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                        rank={rank}
+                      />
+                    )
+                  })}
                 </div>
               ) : (
-                <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200">
-                  <Soup className="h-12 w-12 mx-auto text-gray-300 mb-3" />
-                  <p className="text-gray-400 font-semibold">Nenhum macarrão encontrado.</p>
+                <div className="text-center py-12 bg-white rounded-2xl border-2 border-dashed border-[#ECE7E0]">
+                  <Soup className="h-10 w-10 mx-auto text-[#ECE7E0] mb-2" />
+                  <p className="text-[#717171] text-xs font-semibold">
+                    Nenhum macarrão disponível no momento.
+                  </p>
                 </div>
               )}
             </section>
           )}
 
-          {(activeTab === "todos" || activeTab === "bebidas") && (
-            <section 
-              ref={sectionBebidasRef}
+          {/* Seção Bebidas */}
+          {(!isSearchActive || filteredBebidas.length > 0) && (
+            <section
               id="bebidas"
-              className="w-full px-1"
+              className="w-full px-0.5 scroll-mt-28 sm:scroll-mt-32"
+              aria-labelledby="heading-bebidas"
             >
-              <div className="mb-6">
-                <h2 className="text-2xl font-black text-gray-800 mb-2 flex items-center gap-2">
-                  <GlassWater className="h-6 w-6 text-yellow-500" /> 
-                  Bebidas Geladas
+              <div className="mb-4">
+                <h2
+                  id="heading-bebidas"
+                  className="text-xl sm:text-2xl font-black text-[#1A1A1A] mb-1 flex items-center gap-2"
+                >
+                  <GlassWater className="h-5 w-5 sm:h-6 sm:w-6 text-[#E3A008]" />
+                  <span>Bebidas Geladas</span>
                 </h2>
-                <p className="text-sm text-gray-500">Complemente seu pedido!</p>
+                <p className="text-xs sm:text-sm text-[#717171]">
+                  Refrigerantes, sucos e complementos para o seu pedido.
+                </p>
               </div>
+
               {filteredBebidas.length > 0 ? (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                   {filteredBebidas.map((product) => (
@@ -363,9 +497,11 @@ export function CardapioContent({
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200">
-                  <GlassWater className="h-12 w-12 mx-auto text-gray-300 mb-3" />
-                  <p className="text-gray-400 font-semibold">Nenhuma bebida encontrada.</p>
+                <div className="text-center py-12 bg-white rounded-2xl border-2 border-dashed border-[#ECE7E0]">
+                  <GlassWater className="h-10 w-10 mx-auto text-[#ECE7E0] mb-2" />
+                  <p className="text-[#717171] text-xs font-semibold">
+                    Nenhuma bebida disponível no momento.
+                  </p>
                 </div>
               )}
             </section>

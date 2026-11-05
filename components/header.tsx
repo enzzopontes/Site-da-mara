@@ -212,12 +212,13 @@ export function Header({ variant = "default" }: HeaderProps) {
   }
 
   const hideOnHome = isHeaderHidden && pathname === "/"
+  const isCardapio = pathname === "/cardapio"
   const isInitialLoading = !mounted || authLoading || addressLoading
 
   return (
     <>
       <header
-        className={`sticky top-0 z-40 w-full h-16 bg-[#FFFFFF] border-b border-[#ECE7E0] transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        className={`${isCardapio ? "relative" : "sticky top-0"} z-40 w-full h-16 bg-[#FFFFFF] border-b border-[#ECE7E0] transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
           hideOnHome
             ? "-translate-y-full pointer-events-none"
             : "translate-y-0 opacity-100 pointer-events-auto"
@@ -274,6 +275,7 @@ export function Header({ variant = "default" }: HeaderProps) {
               </div>
             )}
 
+            {!isCardapio && (
             <form onSubmit={handleSearch} className="hidden lg:block w-44 xl:w-72">
               <div className="relative flex items-center w-full">
                 <Search className="absolute left-3 h-4 w-4 text-[#717171] pointer-events-none" />
@@ -287,6 +289,7 @@ export function Header({ variant = "default" }: HeaderProps) {
                 />
               </div>
             </form>
+            )}
           </div>
 
           {/* Right: Desktop Quick Links + Minimalist Circular Cart Button */}
