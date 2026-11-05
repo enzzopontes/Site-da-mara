@@ -210,7 +210,7 @@ export function Header({ variant = "default" }: HeaderProps) {
     return false
   }
 
-  if ((pathname as string) !== "/") return null
+  if (pathname === "/checkout" || pathname?.startsWith("/checkout")) return null
 
   if (variant === "simple") {
     return (

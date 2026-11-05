@@ -58,6 +58,11 @@ export const MenuStickyNav = memo(function MenuStickyNav({
     }
 
     checkScroll()
+    if (window.scrollY <= 45) {
+      window.dispatchEvent(
+        new CustomEvent("header-scroll-swap", { detail: { headerHidden: false } })
+      )
+    }
     window.addEventListener("scroll", onScroll, { passive: true })
 
     return () => {
