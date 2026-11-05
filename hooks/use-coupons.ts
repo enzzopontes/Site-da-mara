@@ -29,6 +29,11 @@ export function useCoupons(currentOrderTotal = 0) {
         return
       }
 
+      const now = new Date()
+      const validCoupons = (activeCoupons ?? []).filter(
+        (c: any) => !c.expires_at || new Date(c.expires_at) > now
+      )
+
       let free: any[] = []
       if (user?.id) {
         try {
@@ -46,7 +51,7 @@ export function useCoupons(currentOrderTotal = 0) {
         }
       }
 
-      setCoupons(activeCoupons ?? [])
+      setCoupons(validCoupons)
       setFreeCoupons(free)
     } catch (err: any) {
       setError(err?.message || "Erro ao carregar cupons")
@@ -91,7 +96,7 @@ export function useCoupons(currentOrderTotal = 0) {
       if (coupon.max_uses != null && coupon.current_uses >= coupon.max_uses) {
         return { valid: false, reason: "Cupom esgotado" }
       }
-      if (coupon.min_order_value && currentOrderTotal < coupon.min_order_value) {
+      if (coupon.min_order_value && currentOrderTotal > 0 && currentOrderTotal < coupon.min_order_value) {
         const falta = (coupon.min_order_value - currentOrderTotal).toFixed(2)
         return { valid: false, reason: `Faltam R$ ${falta.replace(".", ",")} pra usar` }
       }

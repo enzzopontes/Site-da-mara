@@ -280,14 +280,22 @@ export default function PerfilPage() {
     const fetchCoupons = async () => {
       setIsLoadingCoupons(true)
       try {
-        const all = await couponsManager.getCoupons()
-        const now = new Date()
-        const valid = all.filter(
-          (c) => c.isActive && (!c.expiresAt || new Date(c.expiresAt) > now)
-        )
-        if (mounted) setActiveCoupons(valid)
-      } catch {
-        if (mounted) setActiveCoupons([])
+        const supabase = getSupabaseBrowserClient()
+        const { data, error } = await supabase
+          .from("coupons")
+          .select("*")
+          .eq("active", true)
+          .order("discount_value", { ascending: false })
+
+        if (!error && data) {
+          const now = new Date()
+          const valid = data.filter(
+            (c: any) => !c.expires_at || new Date(c.expires_at) > now
+          )
+          if (mounted) setActiveCoupons(valid)
+        }
+      } catch (err) {
+        console.error("Erro ao buscar cupons:", err)
       } finally {
         if (mounted) setIsLoadingCoupons(false)
       }
@@ -799,10 +807,7 @@ export default function PerfilPage() {
                 <div className="mb-6">
                   <button
                     type="button"
-                    onClick={() => {
-                      setOpenAccordion("recompensas")
-                      setActiveSubPanel("cupons")
-                    }}
+                    onClick={() => router.push("/cupons")}
                     className="w-full text-left group cursor-pointer active:scale-[0.98] transition-transform"
                   >
                     <div className="relative z-10 bg-white rounded-2xl border border-[#ECE7E0] p-4 shadow-xs flex items-center justify-between">
@@ -886,8 +891,7 @@ export default function PerfilPage() {
                       {
                         label: "Meus Cupons",
                         badge: `${activeCoupons.length}`,
-                        isExpandedContent: activeSubPanel === "cupons",
-                        onPress: () => toggleSubPanel("recompensas", "cupons"),
+                        onPress: () => router.push("/cupons"),
                         customContent: (
                           <div className="p-3.5 rounded-xl bg-[#F7F5F0] border border-[#ECE7E0] space-y-3">
                             {isLoadingCoupons ? (

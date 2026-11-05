@@ -103,14 +103,23 @@ export function CouponCard({
                 className="object-contain"
               />
             </div>
-            <h3 className="text-xl font-bold text-[#1F1B16] leading-none">
-              {discountLabel}
-            </h3>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-xl font-bold text-[#1F1B16] leading-none">
+                  {discountLabel}
+                </h3>
+                {coupon?.code && (
+                  <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-[#FEF8EC] text-[#A16207] border border-[#E3A008]/40">
+                    {coupon.code}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Descrição */}
           <p className="text-[13px] text-[#3E3E3E] mt-1.5 leading-snug">
-            {coupon?.description || `${discountLabel} para pedidos selecionados.`}
+            {coupon?.description || (coupon?.code ? `Cupom ${coupon.code} para seus pedidos.` : `${discountLabel} para pedidos selecionados.`)}
           </p>
 
           {/* Meta Info */}
@@ -120,7 +129,7 @@ export function CouponCard({
                 Válido para pedidos acima de {formatMoney(minOrder)}.
               </span>
             ) : (
-              <span />
+              <span className="truncate pr-2 text-emerald-600 font-medium">Sem valor mínimo</span>
             )}
             {timeLeft && <span className="flex-shrink-0 font-medium">{timeLeft}</span>}
           </div>
@@ -146,7 +155,7 @@ export function CouponCard({
                 e.stopPropagation()
                 setRulesOpen((v) => !v)
               }}
-              className="underline text-xs text-[#717171] hover:text-[#1F1B16] flex items-center gap-0.5"
+              className="underline text-xs text-[#717171] hover:text-[#1F1B16] flex items-center gap-0.5 cursor-pointer"
             >
               Regras {rulesOpen ? "˄" : "˅"}
             </button>
