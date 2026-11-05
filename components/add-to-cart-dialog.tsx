@@ -469,10 +469,6 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
     })
 
     onOpenChange(false)
-
-    if (typeof window !== "undefined" && window.location.pathname === "/") {
-      window.location.href = "/cardapio"
-    }
   }
 
   const imageUrl = product.image || "/placeholder.jpg"

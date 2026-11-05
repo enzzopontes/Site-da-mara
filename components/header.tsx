@@ -172,6 +172,10 @@ export function Header({ variant = "default" }: HeaderProps) {
 
     window.addEventListener("header-scroll-swap", onHeaderScrollSwap)
     window.addEventListener("scroll", handleScroll, { passive: true })
+    if (window.scrollY <= 40) {
+      hiddenRef.current = false
+      setIsHeaderHidden(false)
+    }
 
     return () => {
       window.removeEventListener("header-scroll-swap", onHeaderScrollSwap)

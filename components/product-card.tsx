@@ -82,10 +82,6 @@ export function ProductCard({ product, rank = null, isMostRequested = false }: P
         title: "Adicionado ao carrinho!",
         description: `${product.name} foi adicionado ao seu carrinho.`,
       })
-      
-      if (window.location.pathname === "/") {
-        window.location.href = "/cardapio"
-      }
     } else {
       setDialogOpen(true)
     }
