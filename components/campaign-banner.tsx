@@ -1,15 +1,20 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
-import Image from "next/image"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { ChevronLeft, ChevronRight, Tag } from "lucide-react"
 import { bannersManager, isSafeImageUrl, type HomeBannerItem } from "@/lib/banners-manager"
+import { useCart } from "@/lib/cart-context"
 import { TopToast } from "@/components/top-toast"
 
+type TrackBanner = HomeBannerItem & { _key?: string }
+
 export function CampaignBanner() {
+  const { setCoupon } = useCart()
   const [banners, setBanners] = useState<HomeBannerItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [currentIndex, setCurrentIndex] = useState(0)
+  const [realIndex, setRealIndex] = useState(0) // 0 a N-1
+  const [displayIndex, setDisplayIndex] = useState(1) // 1 a N no track com clones
+  const [isTransitioning, setIsTransitioning] = useState(true)
   const [isHovered, setIsHovered] = useState(false)
   const [imgErrorMap, setImgErrorMap] = useState<Record<string, boolean>>({})
   const [toastState, setToastState] = useState<{ open: boolean; message: string; subMessage?: string }>({
@@ -19,8 +24,9 @@ export function CampaignBanner() {
 
   const touchStartX = useRef<number>(0)
   const touchEndX = useRef<number>(0)
+  const resetTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Carrega banners e registra Realtime
+  // Carrega banners e escuta Realtime
   useEffect(() => {
     let mounted = true
     const load = async () => {
@@ -39,14 +45,72 @@ export function CampaignBanner() {
     }
   }, [])
 
-  // Auto-play suave a cada 7 segundos (pausa durante hover)
+  // Filtra banners válidos
+  const validBanners = useMemo(() => {
+    return banners.filter((b) => !imgErrorMap[b.id] && isSafeImageUrl(b.image_url))
+  }, [banners, imgErrorMap])
+
+  const total = validBanners.length
+
+  // Lista com clones nas pontas para looping circular contínuo com espiada bilateral perfeita
+  const trackItems = useMemo<TrackBanner[]>(() => {
+    if (total <= 1) return validBanners
+    const first = validBanners[0]
+    const last = validBanners[total - 1]
+    return [
+      { ...last, _key: `clone-last-${last.id}` },
+      ...validBanners.map((b) => ({ ...b, _key: `real-${b.id}` })),
+      { ...first, _key: `clone-first-${first.id}` },
+    ]
+  }, [validBanners, total])
+
+  // Navegação para próximo
+  const handleNext = useCallback(() => {
+    if (total <= 1) return
+    setIsTransitioning(true)
+    setDisplayIndex((prev) => prev + 1)
+  }, [total])
+
+  // Navegação para anterior
+  const handlePrev = useCallback(() => {
+    if (total <= 1) return
+    setIsTransitioning(true)
+    setDisplayIndex((prev) => prev - 1)
+  }, [total])
+
+  // Trata salto silencioso ao alcançar clones (loop infinito invisível)
   useEffect(() => {
-    if (isHovered || banners.length <= 1) return
+    if (total <= 1) return
+
+    if (displayIndex === total + 1) {
+      setRealIndex(0)
+      resetTimerRef.current = setTimeout(() => {
+        setIsTransitioning(false)
+        setDisplayIndex(1)
+      }, 500)
+    } else if (displayIndex === 0) {
+      setRealIndex(total - 1)
+      resetTimerRef.current = setTimeout(() => {
+        setIsTransitioning(false)
+        setDisplayIndex(total)
+      }, 500)
+    } else {
+      setRealIndex(displayIndex - 1)
+    }
+
+    return () => {
+      if (resetTimerRef.current) clearTimeout(resetTimerRef.current)
+    }
+  }, [displayIndex, total])
+
+  // Auto-play a cada 7 segundos (pausa quando o mouse está em cima)
+  useEffect(() => {
+    if (isHovered || total <= 1) return
     const timer = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % banners.length)
+      handleNext()
     }, 7000)
     return () => clearInterval(timer)
-  }, [isHovered, banners.length])
+  }, [isHovered, total, handleNext])
 
   // Cópia para Clipboard com Fallback multi-plataforma e suporte iOS
   const copyToClipboard = useCallback(async (code: string) => {
@@ -66,37 +130,59 @@ export function CampaignBanner() {
         document.execCommand("copy")
         document.body.removeChild(textArea)
       }
-
-      if (typeof window !== "undefined") {
-        try {
-          localStorage.setItem("batata_applied_coupon", code)
-          localStorage.setItem("batata_pending_coupon", code)
-        } catch {}
-        if ("vibrate" in navigator) {
-          navigator.vibrate(20)
-        }
-      }
-
-      setToastState({
-        open: true,
-        message: `Cupom "${code}" copiado com sucesso!`,
-        subMessage: "Cole o código no carrinho ou checkout para aplicar o desconto.",
-      })
-    } catch {
-      setToastState({
-        open: true,
-        message: `Código: ${code}`,
-        subMessage: "Não foi possível copiar automaticamente. Digite o código no checkout.",
-      })
-    }
+    } catch {}
   }, [])
 
-  const handleBannerClick = (banner: HomeBannerItem) => {
-    const couponCode = banner.coupon?.code
-    if (couponCode) {
-      copyToClipboard(couponCode)
-    }
-  }
+  // Aplicação instantânea do cupom na sacola ao clicar no banner
+  const handleBannerClick = useCallback(
+    async (banner: HomeBannerItem) => {
+      const coupon = banner.coupon
+      if (coupon && (coupon.code || coupon.id)) {
+        const couponData = {
+          id: coupon.id,
+          code: coupon.code,
+          discount: Number(coupon.discount_value),
+          type: coupon.discount_type as "percentage" | "fixed",
+          title: coupon.title,
+          description: coupon.description,
+          badgeLabel: coupon.badge_label,
+          minOrderValue: coupon.min_order_value != null ? Number(coupon.min_order_value) : null,
+          isActive: coupon.active,
+          expiresAt: coupon.expires_at ? new Date(coupon.expires_at) : null,
+        }
+
+        // 1. Atualiza estado global do CartContext
+        if (setCoupon) {
+          setCoupon(couponData)
+        }
+
+        // 2. Persiste em todas as chaves do localStorage para a sacola ler instantaneamente
+        try {
+          localStorage.setItem("batata top-coupon", JSON.stringify(couponData))
+          localStorage.setItem("batata_applied_coupon", coupon.code)
+          localStorage.setItem("batata_pending_coupon", coupon.code)
+        } catch {}
+
+        // 3. Copia o código para a área de transferência
+        await copyToClipboard(coupon.code)
+
+        // 4. Vibração tátil sutil em dispositivos móveis
+        if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+          try {
+            navigator.vibrate(20)
+          } catch {}
+        }
+
+        // 5. Toast superior confirmando a ativação na sacola
+        setToastState({
+          open: true,
+          message: `Cupom "${coupon.code}" aplicado com sucesso!`,
+          subMessage: "Desconto ativado na sua sacola. O valor já foi reduzido!",
+        })
+      }
+    },
+    [setCoupon, copyToClipboard]
+  )
 
   // Gestos de Touch Swipe
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -108,35 +194,72 @@ export function CampaignBanner() {
   const handleTouchEnd = () => {
     if (!touchStartX.current || !touchEndX.current) return
     const diff = touchStartX.current - touchEndX.current
-    if (diff > 45 && banners.length > 1) {
-      setCurrentIndex((prev) => (prev + 1) % banners.length)
-    } else if (diff < -45 && banners.length > 1) {
-      setCurrentIndex((prev) => (prev - 1 + banners.length) % banners.length)
+    if (diff > 45) {
+      handleNext()
+    } else if (diff < -45) {
+      handlePrev()
     }
     touchStartX.current = 0
     touchEndX.current = 0
   }
 
-  // Skeleton loading (zero CLS)
+  // Skeleton loading
   if (loading) {
     return (
-      <div className="w-full bg-[#F7F5F0] py-3 px-4">
-        <div className="max-w-5xl mx-auto">
-          <div className="w-full aspect-[21/9] sm:aspect-[24/9] md:aspect-[32/9] bg-stone-200/80 rounded-2xl animate-pulse" />
-        </div>
+      <div className="w-full bg-[#F7F5F0] py-3 select-none">
+        <div className="w-[84%] sm:w-[80%] md:w-[74%] max-w-[760px] mx-auto aspect-[16/9] max-h-[380px] bg-stone-200/80 rounded-2xl animate-pulse" />
       </div>
     )
   }
 
-  // Filtra banners válidos (sem erro de imagem e com URL segura)
-  const validBanners = banners.filter(
-    (b) => !imgErrorMap[b.id] && isSafeImageUrl(b.image_url)
-  )
+  if (total === 0) return null
 
-  if (validBanners.length === 0) return null
-
-  // Índice protegido contra out-of-bounds
-  const safeIndex = currentIndex % validBanners.length
+  // Quando só tem 1 banner, renderiza estático centralizado
+  if (total === 1) {
+    const single = validBanners[0]
+    return (
+      <>
+        <TopToast
+          isOpen={toastState.open}
+          message={toastState.message}
+          subMessage={toastState.subMessage}
+          onClose={() => setToastState((prev) => ({ ...prev, open: false }))}
+        />
+        <section aria-label="Banner Promocional" className="w-full bg-[#F7F5F0] py-2 sm:py-3 select-none">
+          <div className="w-[86%] sm:w-[82%] md:w-[74%] max-w-[760px] mx-auto">
+            <div
+              onClick={() => handleBannerClick(single)}
+              className={`relative w-full aspect-[16/9] max-h-[380px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-sm border border-stone-200/90 bg-[#1F1B16]/5 ${
+                single.coupon?.code ? "cursor-pointer active:scale-[0.99] transition-transform" : ""
+              }`}
+            >
+              {/* Backdrop suave com blur para acomodar qualquer proporção sem cortar nada */}
+              <img
+                src={single.image_url}
+                alt=""
+                aria-hidden="true"
+                className="absolute inset-0 w-full h-full object-cover blur-xl opacity-30 scale-110 pointer-events-none"
+              />
+              {/* Banner com object-contain: 100% visível independente do tamanho original */}
+              <img
+                src={single.image_url}
+                alt={single.title || "Banner promocional"}
+                className="relative z-10 w-full h-full object-contain drop-shadow-xs"
+              />
+              {single.coupon?.code && (
+                <div className="absolute bottom-2.5 right-2.5 sm:bottom-3.5 sm:right-3.5 z-20 bg-black/80 backdrop-blur-md text-white text-[10px] sm:text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-lg border border-white/15">
+                  <Tag className="w-3.5 h-3.5 text-[#E3A008]" />
+                  <span>
+                    Cupom: <strong className="text-[#E3A008] font-black">{single.coupon.code}</strong> (Toque para aplicar)
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      </>
+    )
+  }
 
   return (
     <>
@@ -149,92 +272,125 @@ export function CampaignBanner() {
 
       <section
         aria-label="Campanhas e Banners Promocionais"
-        className="w-full bg-[#F7F5F0] py-2 sm:py-3 px-3 sm:px-4 select-none"
+        className="w-full bg-[#F7F5F0] py-2 sm:py-3 select-none overflow-hidden"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        <div className="max-w-5xl mx-auto relative group">
-          {/* Trilho de Deslizamento Horizontal com Animação Fluida */}
-          <div className="relative w-full rounded-2xl overflow-hidden shadow-xs border border-stone-200/80 bg-stone-100">
+        <div className="relative w-full max-w-5xl mx-auto group">
+          {/* Trilho Deslizante com Espiada Lateral Idêntica ao App Mobile */}
+          <div className="w-full overflow-hidden">
             <div
-              className="flex w-full transition-transform duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] will-change-transform"
-              style={{ transform: `translateX(-${safeIndex * 100}%)` }}
+              className={`flex items-center gap-3 sm:gap-4 will-change-transform ${
+                isTransitioning
+                  ? "transition-transform duration-500 ease-[cubic-bezier(0.25,1,0.5,1)]"
+                  : ""
+              }`}
+              style={{
+                // Fórmula de centralização: deixa a borda do banner anterior na esquerda e do próximo na direita
+                transform: `translateX(calc((100% - var(--banner-w, 84%)) / 2 - ${displayIndex} * (var(--banner-w, 84%) + var(--banner-gap, 12px))))`,
+              }}
             >
-              {validBanners.map((banner, idx) => (
-                <div
-                  key={banner.id}
-                  onClick={() => handleBannerClick(banner)}
-                  className={`w-full shrink-0 relative aspect-[21/9] sm:aspect-[24/9] md:aspect-[32/9] overflow-hidden ${
-                    banner.coupon?.code ? "cursor-pointer" : ""
-                  }`}
-                >
-                  <Image
-                    src={banner.image_url}
-                    alt={banner.title || "Banner promocional"}
-                    fill
-                    priority={idx === 0}
-                    sizes="(max-width: 768px) 100vw, 1024px"
-                    className="object-cover transition-transform duration-500 hover:scale-[1.01]"
-                    onError={() => {
-                      setImgErrorMap((prev) => ({ ...prev, [banner.id]: true }))
-                    }}
-                  />
+              {trackItems.map((banner, idx) => {
+                const isActive = idx === displayIndex
+                const couponCode = banner.coupon?.code
+                const badgeText = banner.coupon?.badge_label
 
-                  {/* Chip Flutuante informando cupom vinculado */}
-                  {banner.coupon?.code && (
-                    <div className="absolute bottom-2.5 right-2.5 sm:bottom-3 sm:right-3 bg-black/75 backdrop-blur-md text-white text-[11px] sm:text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-md border border-white/10 hover:bg-black/90 transition-colors">
-                      <Tag className="w-3 h-3 text-[#E3A008]" />
-                      <span>Clique para copiar: <strong>{banner.coupon.code}</strong></span>
+                return (
+                  <div
+                    key={banner._key || `${banner.id}-${idx}`}
+                    onClick={() => handleBannerClick(banner)}
+                    className={`shrink-0 w-[84%] sm:w-[80%] md:w-[74%] max-w-[760px] transition-opacity duration-300 ${
+                      isActive ? "opacity-100" : "opacity-85"
+                    } ${couponCode ? "cursor-pointer" : ""}`}
+                    style={
+                      {
+                        "--banner-w": "84%",
+                        "--banner-gap": "12px",
+                      } as React.CSSProperties
+                    }
+                  >
+                    <div className="relative w-full aspect-[16/9] max-h-[380px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-sm border border-stone-200/90 bg-[#1F1B16]/5">
+                      {/* Fundo suave com efeito ambient blur: preenche harmoniosamente sem bordas pretas secas */}
+                      <img
+                        src={banner.image_url}
+                        alt=""
+                        aria-hidden="true"
+                        className="absolute inset-0 w-full h-full object-cover blur-xl opacity-30 scale-110 pointer-events-none"
+                      />
+
+                      {/* Imagem do banner 100% COMPLETA - NUNCA CORTADA */}
+                      <img
+                        src={banner.image_url}
+                        alt={banner.title || "Banner promocional"}
+                        className="relative z-10 w-full h-full object-contain drop-shadow-xs"
+                        onError={() => setImgErrorMap((prev) => ({ ...prev, [banner.id]: true }))}
+                      />
+
+                      {/* Badge / Selo Promocional (se cadastrado) */}
+                      {badgeText && (
+                        <div className="absolute top-2.5 left-2.5 sm:top-3.5 sm:left-3.5 z-20 bg-[#C1440E] text-white text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-1 rounded-lg shadow-md">
+                          {badgeText}
+                        </div>
+                      )}
+
+                      {/* Chip de Cupom Vinculado com Chamada Clara */}
+                      {couponCode && (
+                        <div className="absolute bottom-2.5 right-2.5 sm:bottom-3.5 sm:right-3.5 z-20 bg-black/80 backdrop-blur-md text-white text-[10px] sm:text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-lg border border-white/15 hover:bg-black transition-colors">
+                          <Tag className="w-3.5 h-3.5 text-[#E3A008]" />
+                          <span>
+                            Cupom: <strong className="text-[#E3A008] font-black">{couponCode}</strong> (Toque para aplicar)
+                          </span>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              ))}
+                  </div>
+                )
+              })}
             </div>
           </div>
 
-          {/* Navegação Manual (Desktop) */}
-          {validBanners.length > 1 && (
-            <>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setCurrentIndex((prev) => (prev - 1 + validBanners.length) % validBanners.length)
-                }}
-                className="hidden md:flex absolute -left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/95 border border-stone-200 text-stone-800 items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white active:scale-95 cursor-pointer z-10"
-                aria-label="Banner anterior"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
+          {/* Botões de Navegação Lateral (Desktop) */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              handlePrev()
+            }}
+            className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/95 border border-stone-200 text-stone-800 items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white active:scale-95 cursor-pointer z-30"
+            aria-label="Banner anterior"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
 
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setCurrentIndex((prev) => (prev + 1) % validBanners.length)
-                }}
-                className="hidden md:flex absolute -right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/95 border border-stone-200 text-stone-800 items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white active:scale-95 cursor-pointer z-10"
-                aria-label="Próximo banner"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              handleNext()
+            }}
+            className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/95 border border-stone-200 text-stone-800 items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white active:scale-95 cursor-pointer z-30"
+            aria-label="Próximo banner"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
 
-              {/* Paginação de Pontos */}
-              <div className="flex justify-center items-center gap-1.5 mt-2">
-                {validBanners.map((_, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setCurrentIndex(idx)}
-                    className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
-                      idx === safeIndex ? "w-6 bg-[#E3A008]" : "w-1.5 bg-stone-300"
-                    }`}
-                    aria-label={`Ir para banner ${idx + 1}`}
-                  />
-                ))}
-              </div>
-            </>
-          )}
+          {/* Paginação por Pontos (Idêntica ao dotsRow do App) */}
+          <div className="flex justify-center items-center gap-1.5 mt-2.5">
+            {validBanners.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => {
+                  setIsTransitioning(true)
+                  setDisplayIndex(idx + 1)
+                }}
+                className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
+                  idx === realIndex ? "w-5 bg-[#E3A008]" : "w-1.5 bg-stone-300 hover:bg-stone-400"
+                }`}
+                aria-label={`Ir para banner ${idx + 1}`}
+              />
+            ))}
+          </div>
         </div>
       </section>
     </>

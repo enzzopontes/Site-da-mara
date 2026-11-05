@@ -30,7 +30,7 @@ const MIN_ORDER_VALUE = 20.0
 export default function CheckoutPage() {
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
-  const { items, getTotalPrice, updateQuantity, removeItem, addItem, clearCart } = useCart()
+  const { items, getTotalPrice, updateQuantity, removeItem, addItem, clearCart, coupon: cartCoupon, setCoupon: setCartCoupon } = useCart()
 
   // Controle de etapas do fluxo (Padrão iFood: itens -> entrega -> pagamento)
   const [step, setStep] = useState<CheckoutStep>("itens")
@@ -268,14 +268,21 @@ export default function CheckoutPage() {
   }
 
   // ─── Cupons ────────────────────────────────────────────────────────────────
-  const handleApplyCoupon = async () => {
-    if (!couponCode.trim()) return
+  const handleApplyCoupon = async (codeOverride?: string) => {
+    const code = (codeOverride || couponCode).trim()
+    if (!code) return
     setValidandoCupom(true)
     setCouponError("")
     try {
-      const res = await couponsManager.validateCoupon(couponCode, user?.id)
+      const res = await couponsManager.validateCoupon(code, user?.id)
       if (res.valid && res.coupon) {
         setAppliedCoupon(res.coupon)
+        setCouponCode(res.coupon.code)
+        if (setCartCoupon) setCartCoupon(res.coupon)
+        try {
+          localStorage.setItem("batata top-coupon", JSON.stringify(res.coupon))
+          localStorage.setItem("batata_applied_coupon", res.coupon.code)
+        } catch {}
       } else {
         setCouponError(res.message || "Cupom inválido ou expirado.")
         setAppliedCoupon(null)
@@ -291,7 +298,40 @@ export default function CheckoutPage() {
     setAppliedCoupon(null)
     setCouponCode("")
     setCouponError("")
+    if (setCartCoupon) setCartCoupon(null)
+    try {
+      localStorage.removeItem("batata top-coupon")
+      localStorage.removeItem("batata_applied_coupon")
+      localStorage.removeItem("batata_pending_coupon")
+    } catch {}
   }
+
+  // Auto-aplica cupom vindo do banner da Home ou da sacola
+  useEffect(() => {
+    if (appliedCoupon) return
+
+    let pendingCode: string | null = null
+    if (cartCoupon?.code) {
+      pendingCode = cartCoupon.code
+    } else {
+      try {
+        const raw = localStorage.getItem("batata top-coupon")
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          if (parsed?.code) pendingCode = parsed.code
+        }
+        if (!pendingCode) {
+          pendingCode =
+            localStorage.getItem("batata_applied_coupon") ||
+            localStorage.getItem("batata_pending_coupon")
+        }
+      } catch {}
+    }
+
+    if (pendingCode && pendingCode.trim()) {
+      handleApplyCoupon(pendingCode.trim())
+    }
+  }, [cartCoupon, user])
 
   // Adição rápida pelo carrossel "Aproveite e peça também"
   const handleAddQuickItem = (product: any) => {
