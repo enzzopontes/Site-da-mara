@@ -109,7 +109,7 @@ export function CouponCard({
                   {discountLabel}
                 </h3>
                 {coupon?.code && (
-                  <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-[#FEF8EC] text-[#A16207] border border-[#E3A008]/40">
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-[#FEF8EC] text-[#A16207] border border-[#E3A008]/40">
                     {coupon.code}
                   </span>
                 )}

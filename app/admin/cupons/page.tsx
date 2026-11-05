@@ -796,7 +796,7 @@ export default function AdminCuponsPage() {
                 <button
                   type="button"
                   onClick={() => handleCopyCode(c.code, c.id)}
-                  className="font-mono font-black text-sm text-[#C1440E] px-2.5 py-0.5 rounded-lg bg-[#FEF2F2] border border-[#FECACA] flex items-center gap-1.5 cursor-pointer hover:bg-[#FEE2E2] transition-colors"
+                  className="font-black text-sm text-[#C1440E] px-2.5 py-0.5 rounded-lg bg-[#FEF2F2] border border-[#FECACA] flex items-center gap-1.5 cursor-pointer hover:bg-[#FEE2E2] transition-colors"
                   title="Clique para copiar o código"
                 >
                   <Ticket className="w-3.5 h-3.5 text-[#C1440E]" />
@@ -1216,7 +1216,7 @@ export default function AdminCuponsPage() {
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-stone-100 text-stone-700">
                             Mínimo R$ {tmpl.suggestedMinOrder}
                           </span>
-                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-stone-100 text-[#E3A008]">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-stone-100 text-[#E3A008]">
                             {tmpl.suggestedCode}
                           </span>
                         </div>
@@ -1299,7 +1299,7 @@ export default function AdminCuponsPage() {
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
                 placeholder="Vazio = gera automático (ex: DESCONTO10PCT)"
-                className="h-10 font-mono font-bold uppercase rounded-xl border-[#ECE7E0]"
+                className="h-10 font-bold uppercase rounded-xl border-[#ECE7E0]"
                 maxLength={20}
               />
             </div>
