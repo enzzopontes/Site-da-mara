@@ -77,12 +77,8 @@ export function CardapioContent({
 
     window.addEventListener("focus-search", handleFocusSearch)
 
-    if (searchParams.get("focus") === "search") {
-      setTimeout(handleFocusSearch, 300)
-    }
-
     return () => window.removeEventListener("focus-search", handleFocusSearch)
-  }, [searchParams])
+  }, [])
 
   // Sincronizar parâmetros de busca e categoria da URL
   useEffect(() => {

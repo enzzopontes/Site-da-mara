@@ -5,7 +5,6 @@ import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
 import {
   Home,
-  Search,
   Package,
   User,
   UtensilsCrossed,
@@ -30,27 +29,26 @@ export function MobileNavbar() {
   const isActive = (path: string) => {
     if (!pathname) return false
     if (path === "/" && pathname === "/") return true
-    if (path === "/perfil") return pathname === "/perfil" || pathname.startsWith("/perfil/")
+    if (path === "/cardapio" && pathname.startsWith("/cardapio")) return true
+    if (path === "/pedidos" && pathname.startsWith("/pedidos")) return true
+    if (path === "/perfil" && (pathname === "/perfil" || pathname.startsWith("/perfil/"))) return true
     if (path !== "/" && path !== "#" && pathname.startsWith(path)) return true
     return false
   }
 
-  const handleSearchClick = () => {
+  const handleCardapioClick = () => {
     if (pathname === "/cardapio") {
-      window.dispatchEvent(new CustomEvent("focus-search"))
-      router.replace(`/cardapio?focus=search&t=${Date.now()}`)
+      window.scrollTo({ top: 0, behavior: "smooth" })
     } else {
-      router.push("/cardapio?focus=search")
+      router.push("/cardapio")
     }
   }
 
   const navItems = [
     { href: "/", icon: Home, label: "Início", action: null },
-    { href: "#", icon: Search, label: "Buscar", action: handleSearchClick },
-    user
-      ? { href: "/pedidos", icon: Package, label: "Pedidos", action: null }
-      : { href: "/cardapio", icon: UtensilsCrossed, label: "Cardápio", action: null },
-    { href: "/perfil", icon: User, label: "Perfil", action: null },
+    { href: "/cardapio", icon: UtensilsCrossed, label: "Cardápio", action: handleCardapioClick },
+    { href: "/pedidos", icon: Package, label: "Pedidos", action: null },
+    { href: user ? "/perfil" : "/login", icon: User, label: user ? "Perfil" : "Entrar", action: null },
   ]
 
   return (
@@ -105,7 +103,7 @@ export function MobileNavbar() {
                   key={item.label}
                   onClick={item.action}
                   aria-label={item.label}
-                  className="flex flex-col items-center justify-center flex-1 h-full min-h-[44px] min-w-[44px] group active:scale-[0.98] transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] rounded-lg"
+                  className="flex flex-col items-center justify-center flex-1 h-full min-h-[44px] min-w-[44px] group active:scale-[0.98] transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] rounded-lg cursor-pointer"
                 >
                   <div className="relative flex items-center justify-center mb-0.5">
                     <Icon className={`h-6 w-6 sm:h-7 sm:w-7 transition-colors ${active ? "text-[#E3A008] fill-current" : "text-[#717171]"}`} aria-hidden="true" />
@@ -123,7 +121,7 @@ export function MobileNavbar() {
               <Link
                 key={item.href}
                 href={item.href}
-                className="flex flex-col items-center justify-center flex-1 h-full min-h-[44px] min-w-[44px] group active:scale-[0.98] transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] rounded-lg"
+                className="flex flex-col items-center justify-center flex-1 h-full min-h-[44px] min-w-[44px] group active:scale-[0.98] transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] rounded-lg cursor-pointer"
                 aria-label={item.label}
               >
                 <div className="relative flex items-center justify-center mb-0.5">
