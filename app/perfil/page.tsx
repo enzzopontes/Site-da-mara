@@ -44,6 +44,7 @@ import {
   X,
   WifiOff,
   Award,
+  CreditCard,
 } from "lucide-react"
 
 const ADMIN_EMAILS = ["enzzobaraldo2008@gmail.com", "maraysis9010@gmail.com"]
@@ -803,47 +804,31 @@ export default function PerfilPage() {
                   </div>
                 </div>
 
-                {/* 2. Card de Atalho Rápido: Cupons e Benefícios (Curva de Espiada estilo App) */}
+                {/* 2. Card de Pagamento (Fiel ao App Mobile) */}
                 <div className="mb-6">
                   <button
                     type="button"
-                    onClick={() => router.push("/cupons")}
+                    onClick={() => router.push("/perfil/pagamentos")}
                     className="w-full text-left group cursor-pointer active:scale-[0.98] transition-transform"
                   >
-                    <div className="relative z-10 bg-white rounded-2xl border border-[#ECE7E0] p-4 shadow-xs flex items-center justify-between">
-                      <div className="flex items-center gap-3.5">
-                        <div className="h-10 w-10 rounded-xl bg-[#FEF8EC] border border-[#E3A008]/30 flex items-center justify-center text-[#E3A008] shrink-0">
-                          <Ticket className="h-5 w-5" />
+                    <div className="relative z-10 bg-white rounded-2xl border border-[#F0F0F0] px-4 pt-0 pb-3.5 shadow-xs">
+                      <img
+                        src="/assets/batatatopestendida.png"
+                        alt="Batata Top"
+                        className="w-[100px] h-[50px] -mt-2.5 object-contain object-left"
+                      />
+                      <div className="flex items-center">
+                        <div className="w-8 h-8 rounded-[10px] bg-white flex items-center justify-center mr-3 shrink-0">
+                          <CreditCard className="w-[18px] h-[18px] text-[#4A4A4A]" />
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[15px] font-bold text-[#1A1A1A]">
-                              Cupons e Benefícios
-                            </span>
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#E3A008] text-white">
-                              {isLoadingCoupons
-                                ? "..."
-                                : `${activeCoupons.length} ${
-                                    activeCoupons.length === 1 ? "ativo" : "ativos"
-                                  }`}
-                            </span>
-                          </div>
-                          <p className="text-xs text-[#717171] mt-0.5">
-                            Toque para ver seus cupons disponíveis e economizar
-                          </p>
-                        </div>
+                        <span className="flex-1 text-[15px] font-bold text-[#1A1A1A]">
+                          Pagamentos
+                        </span>
+                        <ChevronRight className="w-4 h-4 text-[#CCCCCC] group-hover:translate-x-0.5 transition-transform shrink-0" />
                       </div>
-                      <ChevronRight className="h-5 w-5 text-[#717171] group-hover:translate-x-0.5 transition-transform shrink-0" />
                     </div>
-                    <div className="bg-[#F3F0EB] rounded-b-2xl -mt-3 pt-5 pb-2.5 px-4 border-x border-b border-[#ECE7E0] flex items-center justify-between text-xs text-[#717171]">
-                      <span className="font-medium">
-                        {activeCoupons.length > 0
-                          ? `Cupom destaque: ${activeCoupons[0].code}`
-                          : "Confira benefícios exclusivos de fidelidade"}
-                      </span>
-                      <span className="font-semibold text-[#C1440E]">
-                        Ver todos
-                      </span>
+                    <div className="bg-[#EDEDED] rounded-b-2xl -mt-4 pt-6 pb-2.5 px-4 text-[13px] text-[#71717A]">
+                      Gerencie suas formas de pagamento
                     </div>
                   </button>
                 </div>
@@ -876,124 +861,38 @@ export default function PerfilPage() {
 
                 {/* 3. Lista de Acordeões Expansíveis (Idêntico ao App Mobile) */}
                 <div className="divide-y divide-[#ECE7E0]">
-                  {/* ACORDEÃO 1: Recompensas */}
-                  <ProfileAccordionItem
-                    icon={<Gift className="h-5 w-5" />}
-                    title="Recompensas"
-                    subtitle="Meus cupons e histórico de fidelidade"
-                    expanded={openAccordion === "recompensas"}
-                    onToggle={() =>
-                      setOpenAccordion(
-                        openAccordion === "recompensas" ? null : "recompensas"
-                      )
-                    }
-                    items={[
-                      {
-                        label: "Meus Cupons",
-                        badge: `${activeCoupons.length}`,
-                        onPress: () => router.push("/cupons"),
-                        customContent: (
-                          <div className="p-3.5 rounded-xl bg-[#F7F5F0] border border-[#ECE7E0] space-y-3">
-                            {isLoadingCoupons ? (
-                              <div className="space-y-2">
-                                <div className="p-3 rounded-xl bg-white border border-[#ECE7E0] space-y-2">
-                                  <Skeleton className="h-4 w-28 rounded" />
-                                  <Skeleton className="h-3 w-40 rounded" />
-                                </div>
-                              </div>
-                            ) : activeCoupons.length === 0 ? (
-                              <div className="py-3 text-center space-y-2">
-                                <p className="text-xs text-[#717171]">
-                                  Nenhum cupom ativo disponível no momento.
-                                </p>
-                                <Link
-                                  href="/cardapio"
-                                  className="inline-block text-xs font-semibold text-[#C1440E] underline"
-                                >
-                                  Explorar promoções no cardápio
-                                </Link>
-                              </div>
-                            ) : (
-                              <div className="space-y-2.5">
-                                {activeCoupons.map((coupon) => (
-                                  <div
-                                    key={coupon.id}
-                                    className="p-3 rounded-xl bg-white border border-[#ECE7E0] flex items-center justify-between gap-3"
-                                  >
-                                    <div className="min-w-0 flex-1">
-                                      <div className="flex items-center gap-2">
-                                        <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-[#FEF8EC] text-[#A16207] border border-[#E3A008]/40">
-                                          {coupon.code}
-                                        </span>
-                                        <span className="text-xs font-bold text-[#22C55E]">
-                                          {coupon.type === "percentage"
-                                            ? `${coupon.discount}% OFF`
-                                            : `R$ ${coupon.discount.toFixed(2)} OFF`}
-                                        </span>
-                                      </div>
-                                      <p className="text-xs text-[#717171] mt-1 truncate">
-                                        {coupon.description ||
-                                          coupon.title ||
-                                          "Válido para pedidos no site"}
-                                      </p>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleCopyCoupon(coupon.code)}
-                                      className="px-3 py-1.5 rounded-lg bg-[#E3A008] hover:bg-[#CA8A04] text-white text-xs font-semibold inline-flex items-center gap-1.5 shrink-0 active:scale-[0.98] transition-transform cursor-pointer"
-                                    >
-                                      {copiedCode === coupon.code ? (
-                                        <>
-                                          <Check className="h-3.5 w-3.5" />
-                                          <span>Copiado</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Copy className="h-3.5 w-3.5" />
-                                          <span>Copiar</span>
-                                        </>
-                                      )}
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
+                  {/* ITEM: Cupons */}
+                  <div className="border-b border-[#ECE7E0] last:border-b-0">
+                    <button
+                      type="button"
+                      onClick={() => router.push("/cupons")}
+                      className="w-full flex items-center justify-between py-4 px-1 text-left cursor-pointer active:scale-[0.98] transition-transform group"
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0 flex-1 pr-3">
+                        <div className="w-6 flex items-center justify-center text-[#717171] shrink-0">
+                          <Ticket className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="text-[15px] text-[#1A1A1A] font-medium truncate">
+                              Cupons
+                            </p>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#E3A008] text-white">
+                              {isLoadingCoupons
+                                ? "..."
+                                : `${activeCoupons.length} ${
+                                    activeCoupons.length === 1 ? "ativo" : "ativos"
+                                  }`}
+                            </span>
                           </div>
-                        ),
-                      },
-                      {
-                        label: "Histórico de Fidelidade e Pedidos",
-                        isExpandedContent: activeSubPanel === "fidelidade",
-                        onPress: () => toggleSubPanel("recompensas", "fidelidade"),
-                        customContent: (
-                          <div className="p-4 rounded-xl bg-[#F7F5F0] border border-[#ECE7E0] space-y-3">
-                            <div className="flex items-center gap-3">
-                              <div className="h-10 w-10 rounded-xl bg-[#FEF8EC] border border-[#E3A008]/30 flex items-center justify-center text-[#E3A008] shrink-0">
-                                <Award className="h-5 w-5" />
-                              </div>
-                              <div>
-                                <p className="text-xs font-bold text-[#1A1A1A]">
-                                  Você já realizou {ordersCount}{" "}
-                                  {ordersCount === 1 ? "pedido" : "pedidos"}
-                                </p>
-                                <p className="text-xs text-[#717171]">
-                                  Acompanhe seus pedidos em andamento ou peça novamente.
-                                </p>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => router.push("/pedidos")}
-                              className="w-full py-2.5 px-4 rounded-xl bg-white border border-[#ECE7E0] hover:bg-[#F3F0EB] text-xs font-semibold text-[#1A1A1A] flex items-center justify-between active:scale-[0.98] transition-all cursor-pointer"
-                            >
-                              <span>Acessar histórico completo de pedidos</span>
-                              <ChevronRight className="h-4 w-4 text-[#717171]" />
-                            </button>
-                          </div>
-                        ),
-                      },
-                    ]}
-                  />
+                          <p className="text-xs text-[#717171] mt-0.5 truncate">
+                            Meus cupons e descontos disponíveis
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-[#717171] shrink-0 group-hover:translate-x-0.5 transition-transform" />
+                    </button>
+                  </div>
 
                   {/* ACORDEÃO 2: Minha Conta */}
                   <ProfileAccordionItem
