@@ -24,29 +24,8 @@ export default function DetalhesPedidoPage() {
   const [showPaymentSuccessBanner, setShowPaymentSuccessBanner] = useState(false)
   const hasCelebratedRef = useRef(false)
 
-  const handlePaymentApproved = () => {
-    if (!hasCelebratedRef.current) {
-      hasCelebratedRef.current = true
-      setShowPaymentSuccessBanner(true)
-      triggerPixConfettiCannons()
-    }
-    loadOrder(true)
-  }
-
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push("/login")
-    }
-  }, [user, loading, router])
-
-  useEffect(() => {
-    if (user && orderId) {
-      loadOrder()
-    }
-  }, [user, orderId])
-
-  const loadOrder = async (isSilent = false) => {
-    if (!isSilent && !order) {
+  const loadOrder = useCallback(async (isSilent = false) => {
+    if (!isSilent) {
       setIsLoading(true)
     }
     try {
@@ -65,7 +44,28 @@ export default function DetalhesPedidoPage() {
         setIsLoading(false)
       }
     }
-  }
+  }, [orderId])
+
+  const handlePaymentApproved = useCallback(() => {
+    if (!hasCelebratedRef.current) {
+      hasCelebratedRef.current = true
+      setShowPaymentSuccessBanner(true)
+      triggerPixConfettiCannons()
+    }
+    loadOrder(true)
+  }, [loadOrder])
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login")
+    }
+  }, [user, loading, router])
+
+  useEffect(() => {
+    if (user && orderId) {
+      loadOrder()
+    }
+  }, [user, orderId, loadOrder])
 
   const getStatusLabel = (status: string) => {
     const labels: Record<string, string> = {
