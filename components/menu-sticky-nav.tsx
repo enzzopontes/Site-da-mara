@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useEffect } from "react"
+import { memo, useState, useEffect, useRef } from "react"
 import { AnimatedSearchBar } from "./animated-search-bar"
 
 export interface MenuCategory {
@@ -32,19 +32,52 @@ export const MenuStickyNav = memo(function MenuStickyNav({
   searchInputRef
 }: MenuStickyNavProps) {
   const [isScrolled, setIsScrolled] = useState(false)
+  const isScrolledRef = useRef(false)
 
-  // Detecta rolagem para exibir o carrinho com animação suave apenas após o topo
+  // Sincroniza estado de scroll com o Header (Header sobe e barra de busca desce)
   useEffect(() => {
-    const handleScroll = () => {
+    let rafId: number | null = null
+
+    const checkScroll = () => {
       const scrolled = window.scrollY > 45
-      setIsScrolled((prev) => (prev !== scrolled ? scrolled : prev))
+      if (scrolled !== isScrolledRef.current) {
+        isScrolledRef.current = scrolled
+        setIsScrolled(scrolled)
+        window.dispatchEvent(
+          new CustomEvent("header-scroll-swap", { detail: { headerHidden: scrolled } })
+        )
+      }
     }
 
-    window.addEventListener("scroll", handleScroll, { passive: true })
-    handleScroll()
+    const onScroll = () => {
+      if (rafId !== null) return
+      rafId = window.requestAnimationFrame(() => {
+        checkScroll()
+        rafId = null
+      })
+    }
 
-    return () => window.removeEventListener("scroll", handleScroll)
+    checkScroll()
+    window.addEventListener("scroll", onScroll, { passive: true })
+
+    return () => {
+      window.removeEventListener("scroll", onScroll)
+      if (rafId !== null) window.cancelAnimationFrame(rafId)
+      window.dispatchEvent(
+        new CustomEvent("header-scroll-swap", { detail: { headerHidden: false } })
+      )
+    }
   }, [])
+
+  const handleSearchChange = (val: string) => {
+    onSearchChange(val)
+    window.dispatchEvent(new CustomEvent("catalog-search", { detail: { query: val } }))
+  }
+
+  const handleSearchClear = () => {
+    onSearchClear()
+    window.dispatchEvent(new CustomEvent("catalog-search", { detail: { query: "" } }))
+  }
 
   return (
     <nav
@@ -53,13 +86,19 @@ export const MenuStickyNav = memo(function MenuStickyNav({
         isScrolled ? "shadow-[0_4px_16px_rgba(0,0,0,0.06)]" : "shadow-xs"
       }`}
     >
-      <div className="max-w-5xl mx-auto px-3 sm:px-6 pt-2.5 pb-2.5 flex flex-col items-center gap-2.5">
-        {/* Barra de Busca + Carrinho Animado no Scroll (Centralizada no Desktop) */}
-        <div className="w-full max-w-2xl flex items-center justify-center">
+      <div className="max-w-5xl mx-auto px-3 sm:px-6 pt-2 pb-2.5 flex flex-col items-center">
+        {/* Barra de Busca + Carrinho: Sempre ativa no Mobile; No Desktop, desce suavemente no scroll */}
+        <div
+          className={`w-full max-w-2xl flex items-center justify-center transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+            isScrolled
+              ? "max-h-16 opacity-100 translate-y-0 mb-2.5 pointer-events-auto"
+              : "max-h-16 opacity-100 translate-y-0 mb-2 md:max-h-0 md:opacity-0 md:-translate-y-4 md:mb-0 md:pointer-events-none md:overflow-hidden"
+          }`}
+        >
           <AnimatedSearchBar
             value={searchQuery}
-            onChange={onSearchChange}
-            onClear={onSearchClear}
+            onChange={handleSearchChange}
+            onClear={handleSearchClear}
             inputRef={searchInputRef}
             showCart={isScrolled}
           />

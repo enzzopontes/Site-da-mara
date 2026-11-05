@@ -12,9 +12,9 @@ export function CardapioSkeleton() {
     >
       {/* Bloco Sticky Flush: Busca + Categorias */}
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#ECE7E0] shadow-xs">
-        <div className="max-w-5xl mx-auto px-3 sm:px-6 pt-2.5 pb-2.5 flex flex-col items-center gap-2.5">
-          {/* Busca Skeleton Centralizada */}
-          <div className="w-full max-w-2xl">
+        <div className="max-w-5xl mx-auto px-3 sm:px-6 pt-2 pb-2.5 flex flex-col items-center">
+          {/* Busca Skeleton (visível no mobile, oculta no desktop no topo) */}
+          <div className="w-full max-w-2xl mb-2 md:hidden">
             <Skeleton className="h-11 w-full rounded-xl" />
           </div>
 

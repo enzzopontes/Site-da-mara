@@ -148,7 +148,7 @@ export function Header({ variant = "default" }: HeaderProps) {
 
   // Sincronização de scroll suave entre Header e CategoryBar
   useEffect(() => {
-    if (pathname !== "/") {
+    if (pathname !== "/" && pathname !== "/cardapio") {
       hiddenRef.current = false
       setIsHeaderHidden(false)
       return
@@ -176,6 +176,18 @@ export function Header({ variant = "default" }: HeaderProps) {
       window.removeEventListener("header-scroll-swap", onHeaderScrollSwap)
       window.removeEventListener("scroll", handleScroll)
     }
+  }, [pathname])
+
+  useEffect(() => {
+    if (pathname !== "/cardapio") return
+    const onCatalogSearch = (e: Event) => {
+      const customEvent = e as CustomEvent<{ query?: string }>
+      if (typeof customEvent.detail?.query === "string") {
+        setSearchTerm(customEvent.detail.query)
+      }
+    }
+    window.addEventListener("catalog-search", onCatalogSearch)
+    return () => window.removeEventListener("catalog-search", onCatalogSearch)
   }, [pathname])
 
   const handleSearch = (e: React.FormEvent) => {
@@ -211,15 +223,14 @@ export function Header({ variant = "default" }: HeaderProps) {
     )
   }
 
-  const hideOnHome = isHeaderHidden && pathname === "/"
-  const isCardapio = pathname === "/cardapio"
+  const hideHeader = isHeaderHidden && (pathname === "/" || pathname === "/cardapio")
   const isInitialLoading = !mounted || authLoading || addressLoading
 
   return (
     <>
       <header
-        className={`${isCardapio ? "relative" : "sticky top-0"} z-40 w-full h-16 bg-[#FFFFFF] border-b border-[#ECE7E0] transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-          hideOnHome
+        className={`sticky top-0 z-40 w-full h-16 bg-[#FFFFFF] border-b border-[#ECE7E0] transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          hideHeader
             ? "-translate-y-full pointer-events-none"
             : "translate-y-0 opacity-100 pointer-events-auto"
         }`}
@@ -275,21 +286,24 @@ export function Header({ variant = "default" }: HeaderProps) {
               </div>
             )}
 
-            {!isCardapio && (
             <form onSubmit={handleSearch} className="hidden lg:block w-44 xl:w-72">
               <div className="relative flex items-center w-full">
                 <Search className="absolute left-3 h-4 w-4 text-[#717171] pointer-events-none" />
                 <input
                   type="text"
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value)
+                    if (pathname === "/cardapio") {
+                      window.dispatchEvent(new CustomEvent("catalog-search", { detail: { query: e.target.value } }))
+                    }
+                  }}
                   placeholder="Buscar no cardápio..."
                   aria-label="Buscar produtos"
                   className="w-full bg-[#F7F5F0] border border-[#ECE7E0] focus:border-[#E3A008] focus:bg-white rounded-full h-10 pl-9 pr-4 text-sm text-[#1A1A1A] placeholder:text-[#717171] outline-none transition-colors"
                 />
               </div>
             </form>
-            )}
           </div>
 
           {/* Right: Desktop Quick Links + Minimalist Circular Cart Button */}

@@ -80,6 +80,19 @@ export function CardapioContent({
     return () => window.removeEventListener("focus-search", handleFocusSearch)
   }, [])
 
+  // Sincronizar busca vinda do Header Desktop
+  useEffect(() => {
+    const handleCatalogSearch = (e: Event) => {
+      const customEvent = e as CustomEvent<{ query?: string }>
+      if (typeof customEvent.detail?.query === "string") {
+        setSearchQuery(customEvent.detail.query)
+      }
+    }
+
+    window.addEventListener("catalog-search", handleCatalogSearch)
+    return () => window.removeEventListener("catalog-search", handleCatalogSearch)
+  }, [])
+
   // Sincronizar parâmetros de busca e categoria da URL
   useEffect(() => {
     const q = searchParams.get("q")
