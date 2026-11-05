@@ -407,10 +407,10 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="fixed inset-0 top-0 left-0 right-0 bottom-0 h-full h-[100dvh] max-h-none w-full max-w-none p-0 border-none rounded-none bg-white flex flex-col overflow-hidden duration-200 translate-x-0 translate-y-0 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:right-auto sm:bottom-auto sm:-translate-x-1/2 sm:-translate-y-1/2 sm:h-auto sm:max-h-[92vh] sm:w-full sm:max-w-xl sm:rounded-3xl sm:border sm:border-gray-100 sm:shadow-2xl"
+        className="fixed inset-0 top-0 left-0 right-0 bottom-0 h-full h-[100dvh] max-h-none w-full max-w-none p-0 border-none rounded-none bg-white flex flex-col overflow-hidden duration-200 translate-x-0 translate-y-0 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:right-auto sm:bottom-auto sm:-translate-x-1/2 sm:-translate-y-1/2 sm:h-auto sm:max-h-[92vh] sm:w-full sm:max-w-xl sm:rounded-3xl sm:border sm:border-gray-100 sm:shadow-2xl no-scrollbar [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {/* CORPO COM SCROLL FLUIDO */}
-        <div className="flex-1 overflow-y-auto overscroll-contain bg-white">
+        <div className="flex-1 overflow-y-auto overscroll-contain bg-white no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           {/* HERO IMAGE & BOTÃO VOLTAR */}
           <div className="relative h-[340px] sm:h-[380px] w-full overflow-hidden shrink-0 bg-[#F7F4EF]">
             {!dialogImageLoaded && (
