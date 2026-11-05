@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { token, payment_method_id, cardholder_name, is_default, doc_number } = body;
+    const { token, payment_method_id, cardholder_name, is_default, doc_number, card_type } = body;
 
     if (!token) {
       return NextResponse.json({ success: false, error: 'Token do cartão obrigatório' }, { status: 400 });
@@ -174,7 +174,7 @@ export async function POST(req: NextRequest) {
       mp_card_id: String(mpCard.id),
       last_four: mpCard.last_four_digits || String(mpCard.id).slice(-4),
       payment_method_id: payment_method_id || mpCard.payment_method?.id || 'visa',
-      card_type: mpCard.payment_method?.payment_type_id || 'credit_card',
+      card_type: card_type === 'debit_card' ? 'debit_card' : (card_type === 'credit_card' ? 'credit_card' : (mpCard.payment_method?.payment_type_id || 'credit_card')),
       cardholder_name: cardholder_name || mpCard.cardholder?.name || 'Cliente',
       is_default: !!is_default || count === 0,
     };

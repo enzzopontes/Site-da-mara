@@ -827,7 +827,7 @@ export default function PerfilPage() {
                         <ChevronRight className="w-4 h-4 text-[#CCCCCC] group-hover:translate-x-0.5 transition-transform shrink-0" />
                       </div>
                     </div>
-                    <div className="bg-[#EDEDED] rounded-b-2xl -mt-4 pt-6 pb-2.5 px-4 text-[13px] text-[#71717A]">
+                    <div className="relative z-0 bg-[#EDEDED] rounded-b-2xl -mt-4 pt-[26px] pb-2.5 px-4 text-xs text-[#888888]">
                       Gerencie suas formas de pagamento
                     </div>
                   </button>

@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { ShoppingBag, ArrowLeft, Loader2, AlertCircle } from "lucide-react"
+import { toast } from "sonner"
 
 import { useCart } from "@/lib/cart-context"
 import { useAuth } from "@/lib/auth-context"
@@ -13,6 +14,8 @@ import { storeStatusManager, type StoreStatus } from "@/lib/store-status-manager
 import { addressesManager, type Address } from "@/lib/addresses-manager"
 import { ordersManager } from "@/lib/orders-manager"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
+import { usePaymentCards } from "@/hooks/use-payment-cards"
+import { tokenizeSavedCardCvv, isValidCpf } from "@/lib/mercado-pago-client"
 
 import { CartHeader, type CheckoutStep } from "@/components/checkout/cart-header"
 import { CartFooter } from "@/components/checkout/cart-footer"
@@ -58,7 +61,20 @@ export default function CheckoutPage() {
   const [buscandoCep, setBuscandoCep] = useState(false)
 
   // Pagamento e opções do pedido
-  const [formaPagamento, setFormaPagamento] = useState<"pix" | "cartao_entrega" | "dinheiro">("pix")
+  const [formaPagamento, setFormaPagamento] = useState<
+    | "pix"
+    | "cartao_credito"
+    | "cartao_debito"
+    | "cartao_entrega"
+    | "cartao_credito_entrega"
+    | "cartao_debito_entrega"
+    | "dinheiro"
+  >("pix")
+  const [selectedSavedCard, setSelectedSavedCard] = useState<any | null>(null)
+  const [savedCardCvv, setSavedCardCvv] = useState("")
+  const [cardCpf, setCardCpf] = useState("")
+  const [installments, setInstallments] = useState(1)
+  const { cards: savedCards, loadCards, addCard, savingCard } = usePaymentCards()
   const [troco, setTroco] = useState("")
   const [precisaTalheres, setPrecisaTalheres] = useState<"sim" | "nao" | "">("")
   const [observacoes, setObservacoes] = useState("")
@@ -79,6 +95,11 @@ export default function CheckoutPage() {
   const [isLoadingData, setIsLoadingData] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const pendingOrderIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    pendingOrderIdRef.current = null
+  }, [items, formaPagamento, appliedCoupon, deliveryType])
 
   // ─── 1. Carregamento inicial de status da loja, usuário e produtos ─────────────
   useEffect(() => {
@@ -100,6 +121,8 @@ export default function CheckoutPage() {
           setDeliveryFee(0)
         }
 
+        const supabase = getSupabaseBrowserClient()
+
         // Dados do Usuário e Endereços
         if (user) {
           setNome(user.user_metadata?.full_name || "")
@@ -118,10 +141,24 @@ export default function CheckoutPage() {
           } else {
             setUseNewAddress(true)
           }
+
+          loadCards()
+          const supabase = getSupabaseBrowserClient()
+          try {
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("cpf")
+              .eq("id", user.id)
+              .maybeSingle()
+            if (profile?.cpf) {
+              setCardCpf(profile.cpf)
+            }
+          } catch {
+            // Silêncio
+          }
         }
 
         // Busca produtos disponíveis para o carrossel "Aproveite e peça também"
-        const supabase = getSupabaseBrowserClient()
         const { data: prods } = await supabase
           .from("products")
           .select("*")
@@ -150,6 +187,33 @@ export default function CheckoutPage() {
       router.push("/login?redirect=/checkout")
     }
   }, [user, authLoading, router])
+
+  // Pré-seleciona cartão padrão se usuário escolher pagamento com cartão
+  useEffect(() => {
+    if (formaPagamento === "cartao_credito" || formaPagamento === "cartao_debito") {
+      if (selectedSavedCard) {
+        const expectedMethod =
+          selectedSavedCard.card_type === "cartão de débito" ? "cartao_debito" : "cartao_credito"
+        if (formaPagamento !== expectedMethod) {
+          setFormaPagamento(expectedMethod)
+        }
+      } else if (savedCards.length > 0) {
+        const targetType =
+          formaPagamento === "cartao_debito" ? "cartão de débito" : "cartão de crédito"
+        const matchingCards = savedCards.filter((c) => c.card_type === targetType)
+        const pool = matchingCards.length > 0 ? matchingCards : savedCards
+        const def = pool.find((c) => c.is_default) || pool[0]
+        setSelectedSavedCard(def)
+        if (def?.card_type) {
+          const actualMethod =
+            def.card_type === "cartão de débito" ? "cartao_debito" : "cartao_credito"
+          if (formaPagamento !== actualMethod) {
+            setFormaPagamento(actualMethod)
+          }
+        }
+      }
+    }
+  }, [formaPagamento, selectedSavedCard, savedCards])
 
   // ─── Cálculos Financeiros ──────────────────────────────────────────────────
   const subtotal = getTotalPrice()
@@ -291,6 +355,21 @@ export default function CheckoutPage() {
   }
 
   const validateStep3 = (): boolean => {
+    if (formaPagamento === "cartao_credito" || formaPagamento === "cartao_debito") {
+      if (!selectedSavedCard) {
+        setErrorMessage("Selecione ou adicione um cartão para realizar o pagamento.")
+        return false
+      }
+      const cleanCvv = savedCardCvv.trim()
+      if (cleanCvv.length < 3) {
+        setErrorMessage("Informe o CVV do cartão salvo (3 ou 4 dígitos).")
+        return false
+      }
+      if (!isValidCpf(cardCpf)) {
+        setErrorMessage("Informe um CPF válido do titular do cartão.")
+        return false
+      }
+    }
     if (!precisaTalheres) {
       setErrorMessage("Por favor, informe se você precisa de colher descartável.")
       return false
@@ -367,13 +446,15 @@ export default function CheckoutPage() {
         }
       }
 
+      const isOnlineCard = formaPagamento === "cartao_credito" || formaPagamento === "cartao_debito"
       const isOnlinePix = formaPagamento === "pix"
+      const isPaymentOnline = isOnlinePix || isOnlineCard
       const mappedPaymentMethod =
         formaPagamento === "pix"
           ? "pix"
-          : formaPagamento === "cartao_entrega"
-          ? "cartao"
-          : "dinheiro"
+          : formaPagamento === "dinheiro"
+          ? "dinheiro"
+          : "cartao"
 
       const orderPayload = {
         customerName: nome.trim(),
@@ -382,7 +463,7 @@ export default function CheckoutPage() {
         customerNeighborhood: bairroFormatado,
         customerComplement: complementoFormatado,
         paymentMethod: mappedPaymentMethod,
-        paymentOnline: isOnlinePix,
+        paymentOnline: isPaymentOnline,
         couponCode: appliedCoupon?.code || null,
         wantsCutlery: precisaTalheres === "sim",
         notes: `${observacoes ? `${observacoes}\n` : ""}Precisa de colher: ${precisaTalheres === "sim" ? "SIM" : "NÃO"}${formaPagamento === "dinheiro" && troco ? `\nTroco para: R$ ${troco}` : ""}`,
@@ -391,6 +472,19 @@ export default function CheckoutPage() {
           source: "site",
           troco: formaPagamento === "dinheiro" && troco ? troco : null,
           deliveryFee: currentDeliveryFee,
+          card_type:
+            formaPagamento === "cartao_credito" || formaPagamento === "cartao_credito_entrega"
+              ? "credit"
+              : formaPagamento === "cartao_debito" || formaPagamento === "cartao_debito_entrega"
+              ? "debit"
+              : undefined,
+          ...(isOnlineCard
+            ? {
+                installments: formaPagamento === "cartao_credito" ? installments : 1,
+                saved_card_id: selectedSavedCard?.id,
+                card_last_four: selectedSavedCard?.last_four,
+              }
+            : {}),
         },
         items: items.map((item) => ({
           product_id: item.id.slice(0, 36),
@@ -400,10 +494,110 @@ export default function CheckoutPage() {
         })),
       }
 
-      // Salva o pedido atomicamente no Supabase via RPC
-      const createdOrder = await ordersManager.createOrder(orderPayload)
-      if (!createdOrder?.id) {
-        throw new Error("Não foi possível gerar seu pedido. Tente novamente.")
+      // Reutiliza o pedido pendente em caso de nova tentativa de pagamento online
+      let orderId = pendingOrderIdRef.current
+      if (!orderId) {
+        const createdOrder = await ordersManager.createOrder(orderPayload)
+        if (!createdOrder?.id) {
+          throw new Error("Não foi possível gerar seu pedido. Tente novamente.")
+        }
+        orderId = createdOrder.id
+        if (isPaymentOnline) {
+          pendingOrderIdRef.current = orderId
+        }
+      }
+
+      // Se for Cartão de Crédito ou Débito Online
+      if (isOnlineCard) {
+        const tokenResult = await tokenizeSavedCardCvv({
+          cardId: selectedSavedCard.mp_card_id,
+          securityCode: savedCardCvv.trim(),
+        })
+
+        if (!tokenResult.success || !tokenResult.token) {
+          const msg =
+            tokenResult.error || "Não foi possível validar o código de segurança do cartão."
+          setErrorMessage(msg)
+          toast.error(msg)
+          setIsSubmitting(false)
+          return
+        }
+
+        const supabase = getSupabaseBrowserClient()
+        const { data: sessionRes } = await supabase.auth.getSession()
+        const token = sessionRes?.session?.access_token
+
+        if (!token) {
+          const msg = "Sessão expirada. Faça login novamente para concluir o pagamento."
+          setErrorMessage(msg)
+          toast.error(msg)
+          setIsSubmitting(false)
+          return
+        }
+
+        const cardRes = await fetch("/api/mercadopago/card-payment", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            orderId,
+            token: tokenResult.token,
+            savedCardId: selectedSavedCard.id,
+            paymentMethodId: selectedSavedCard.payment_method_id,
+            docNumber: cardCpf.replace(/\D/g, ""),
+            installments: formaPagamento === "cartao_credito" ? installments : 1,
+            installmentsBaseAmount: finalTotal,
+          }),
+        })
+
+        const cardData = await cardRes.json().catch(() => ({}))
+        if (
+          !cardRes.ok ||
+          !cardData.success ||
+          cardData.status === "rejected" ||
+          (cardData.status !== "approved" && cardData.status !== "in_process")
+        ) {
+          let rejectMsg =
+            cardData.error || "Pagamento não aprovado. Verifique os dados do cartão."
+          if (cardData.status === "rejected") {
+            switch (cardData.statusDetail) {
+              case "cc_rejected_insufficient_amount":
+                rejectMsg = "Saldo insuficiente"
+                break
+              case "cc_rejected_bad_filled_security_code":
+                rejectMsg = "Código de segurança (CVV) inválido"
+                break
+              case "cc_rejected_bad_filled_date":
+                rejectMsg = "Cartão vencido ou data inválida"
+                break
+              case "cc_rejected_call_for_authorize":
+                rejectMsg = "Autorize a transação junto ao seu banco"
+                break
+              default:
+                rejectMsg = "Pagamento recusado pelo banco emissor"
+            }
+          }
+          setErrorMessage(rejectMsg)
+          toast.error(rejectMsg)
+          setIsSubmitting(false)
+          return
+        }
+
+        fetch("/api/notify-new-order", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ orderId }),
+        }).catch(() => {})
+
+        pendingOrderIdRef.current = null
+        clearCart()
+        router.push(`/pedidos/${orderId}`)
+        return
       }
 
       // Se for PIX, aciona a rota interna do Mercado Pago para gerar a chave e QR Code imediatamente
@@ -420,7 +614,7 @@ export default function CheckoutPage() {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${token}`,
               },
-              body: JSON.stringify({ orderId: createdOrder.id }),
+              body: JSON.stringify({ orderId }),
             })
           }
         } catch (pixErr) {
@@ -432,14 +626,14 @@ export default function CheckoutPage() {
           .auth.getSession()
           .then((sessionRes: any) => {
             const token = sessionRes?.data?.session?.access_token
-            if (token && createdOrder?.id) {
+            if (token && orderId) {
               fetch("/api/notify-new-order", {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
                   Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify({ orderId: createdOrder.id }),
+                body: JSON.stringify({ orderId }),
               }).catch(() => {})
             }
           })
@@ -447,8 +641,9 @@ export default function CheckoutPage() {
       }
 
       // Limpa a sacola e redireciona direto para a tela de acompanhamento/pagamento
+      pendingOrderIdRef.current = null
       clearCart()
-      router.push(`/pedidos/${createdOrder.id}`)
+      router.push(`/pedidos/${orderId}`)
     } catch (err: any) {
       console.error("[Checkout] Erro ao finalizar:", err)
       setErrorMessage(
@@ -574,6 +769,26 @@ export default function CheckoutPage() {
         {step === "pagamento" && (
           <StepPagamento
             formaPagamento={formaPagamento}
+            selectedSavedCard={selectedSavedCard}
+            setSelectedSavedCard={setSelectedSavedCard}
+            savedCardCvv={savedCardCvv}
+            setSavedCardCvv={setSavedCardCvv}
+            cardCpf={cardCpf}
+            setCardCpf={setCardCpf}
+            installments={installments}
+            setInstallments={setInstallments}
+            savedCards={savedCards}
+            addCard={addCard}
+            savingCard={savingCard}
+            onAddCardSuccess={async () => {
+              const list = await loadCards()
+              if (list && list.length > 0) {
+                setSelectedSavedCard(list[0])
+                setFormaPagamento(
+                  list[0].card_type === "cartão de débito" ? "cartao_debito" : "cartao_credito"
+                )
+              }
+            }}
             setFormaPagamento={setFormaPagamento}
             troco={troco}
             setTroco={setTroco}
