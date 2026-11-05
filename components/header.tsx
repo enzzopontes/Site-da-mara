@@ -49,7 +49,7 @@ export function Header({ variant = "default" }: HeaderProps) {
   const { user, loading: authLoading } = useAuth()
 
   const [mounted, setMounted] = useState(false)
-  const [timeGreeting, setTimeGreeting] = useState("OlÃ¡")
+  const [timeGreeting, setTimeGreeting] = useState("Olá")
   const [searchTerm, setSearchTerm] = useState(searchParams.get("q") || "")
   const [defaultAddress, setDefaultAddress] = useState<string>("Iacanga - SP")
   const [addressLoading, setAddressLoading] = useState(true)
@@ -147,7 +147,7 @@ export function Header({ variant = "default" }: HeaderProps) {
     }
   }, [])
 
-  // SincronizaÃ§Ã£o de scroll suave entre Header e CategoryBar
+  // Sincronização de scroll suave entre Header e CategoryBar
   useEffect(() => {
     if (pathname !== "/" && pathname !== "/cardapio") {
       hiddenRef.current = false
@@ -249,7 +249,7 @@ export function Header({ variant = "default" }: HeaderProps) {
               type="button"
               onClick={() => setIsAddressModalOpen(true)}
               className="flex flex-col items-start min-w-0 text-left active:scale-[0.98] transition-transform cursor-pointer group"
-              title="Alterar endereÃ§o de entrega"
+              title="Alterar endereço de entrega"
             >
               {isInitialLoading ? (
                 <div className="flex flex-col gap-1.5 py-0.5">
@@ -305,7 +305,7 @@ export function Header({ variant = "default" }: HeaderProps) {
                       window.dispatchEvent(new CustomEvent("catalog-search", { detail: { query: e.target.value } }))
                     }
                   }}
-                  placeholder="Buscar no cardÃ¡pio..."
+                  placeholder="Buscar no cardápio..."
                   aria-label="Buscar produtos"
                   className="w-full bg-[#F7F5F0] border border-[#ECE7E0] focus:border-[#E3A008] focus:bg-white rounded-full h-10 pl-9 pr-4 text-sm text-[#1A1A1A] placeholder:text-[#717171] outline-none transition-colors"
                 />
@@ -316,7 +316,7 @@ export function Header({ variant = "default" }: HeaderProps) {
           {/* Right: Desktop Quick Links + Minimalist Circular Cart Button */}
           <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
             <nav
-              aria-label="NavegaÃ§Ã£o principal"
+              aria-label="Navegação principal"
               className="hidden lg:flex items-center gap-3 xl:gap-5 text-sm font-semibold"
             >
               <Link
@@ -327,7 +327,7 @@ export function Header({ variant = "default" }: HeaderProps) {
                 }`}
               >
                 <Home className="h-4 w-4" />
-                <span>InÃ­cio</span>
+                <span>Início</span>
               </Link>
               <Link
                 href="/cardapio"
@@ -337,7 +337,7 @@ export function Header({ variant = "default" }: HeaderProps) {
                 }`}
               >
                 <UtensilsCrossed className="h-4 w-4" />
-                <span>CardÃ¡pio</span>
+                <span>Cardápio</span>
               </Link>
               <Link
                 href="/pedidos"
