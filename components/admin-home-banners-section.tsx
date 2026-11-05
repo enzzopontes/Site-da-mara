@@ -1,18 +1,21 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import type React from "react"
+import { useState, useEffect, useRef } from "react"
 import { bannersManager, isSafeImageUrl, type HomeBannerItem } from "@/lib/banners-manager"
 import { couponsManager, type Coupon } from "@/lib/cupons-manager"
 import { imageUploadManager, type UploadedImage } from "@/lib/image-upload-manager"
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Plus, Trash2, Edit2, Image as ImageIcon, Tag, ArrowUpDown, Sparkles } from "lucide-react"
+import { Plus, Trash2, Edit2, Image as ImageIcon, Tag, ArrowUpDown, Sparkles, Upload } from "lucide-react"
 
 export function AdminHomeBannersSection() {
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [banners, setBanners] = useState<HomeBannerItem[]>([])
   const [coupons, setCoupons] = useState<Coupon[]>([])
   const [promoImages, setPromoImages] = useState<UploadedImage[]>([])
@@ -20,6 +23,7 @@ export function AdminHomeBannersSection() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingBanner, setEditingBanner] = useState<HomeBannerItem | null>(null)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
 
   const [imageUrl, setImageUrl] = useState("")
   const [title, setTitle] = useState("")
@@ -31,8 +35,8 @@ export function AdminHomeBannersSection() {
     setLoading(true)
     try {
       const [bannersList, couponsList, imagesList] = await Promise.all([
-        bannersManager.getAllBanners(),
-        couponsManager.getCoupons(),
+        bannersManager.getAllBanners().catch(() => []),
+        couponsManager.getCoupons().catch(() => []),
         imageUploadManager.getImagesByCategory("promo").catch(() => []),
       ])
       setBanners(bannersList)
@@ -67,11 +71,53 @@ export function AdminHomeBannersSection() {
     setModalOpen(true)
   }
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploading(true)
+    try {
+      const supabase = getSupabaseBrowserClient()
+      const ext = file.name.split(".").pop() || "jpg"
+      const fileName = `home-banner-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${ext}`
+
+      const { error: storageErr } = await supabase.storage
+        .from("coupon-banners")
+        .upload(fileName, file, {
+          contentType: file.type || "image/jpeg",
+          upsert: true,
+        })
+
+      if (!storageErr) {
+        const { data: pubData } = supabase.storage
+          .from("coupon-banners")
+          .getPublicUrl(fileName)
+        if (pubData?.publicUrl) {
+          setImageUrl(pubData.publicUrl)
+          return
+        }
+      }
+
+      const base64DataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(String(reader.result))
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+      setImageUrl(base64DataUrl)
+    } catch {
+      alert("Não foi possível carregar a imagem selecionada.")
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ""
+    }
+  }
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     const cleanUrl = imageUrl.trim()
     if (!cleanUrl) {
-      alert("A URL da imagem é obrigatória.")
+      alert("A URL ou imagem do banner é obrigatória.")
       return
     }
 
@@ -157,7 +203,7 @@ export function AdminHomeBannersSection() {
                 key={b.id}
                 className="group relative rounded-xl border border-stone-200 overflow-hidden bg-white shadow-2xs hover:shadow-md transition-shadow"
               >
-                <div className="aspect-[21/9] relative bg-stone-100 overflow-hidden">
+                <div className="aspect-[16/9] relative bg-stone-100 overflow-hidden">
                   <img src={b.image_url} alt={b.title || "Banner"} className="w-full h-full object-cover" />
                   {!b.is_active && (
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center text-white text-xs font-bold uppercase tracking-wider">
@@ -205,8 +251,34 @@ export function AdminHomeBannersSection() {
 
             <form onSubmit={handleSave} className="space-y-4 pt-2">
               <div>
-                <Label className="text-xs font-semibold">URL da Imagem (Obrigatório)</Label>
-                <Input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://..." required className="mt-1 text-xs" />
+                <Label className="text-xs font-semibold">Imagem do Banner 16:9 (Obrigatório)</Label>
+                <div className="flex gap-2 mt-1">
+                  <Input
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                    placeholder="https://... ou envie do computador"
+                    required
+                    className="text-xs flex-1"
+                  />
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={uploading}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-xs shrink-0 gap-1 cursor-pointer"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    {uploading ? "..." : "Subir"}
+                  </Button>
+                </div>
+
                 {promoImages.length > 0 && (
                   <div className="mt-2">
                     <span className="text-[10px] font-bold text-stone-400 flex items-center gap-1 mb-1">
@@ -218,12 +290,18 @@ export function AdminHomeBannersSection() {
                           key={img.id}
                           type="button"
                           onClick={() => setImageUrl(`data:${img.mimeType};base64,${img.data}`)}
-                          className="w-12 h-8 rounded border border-stone-200 overflow-hidden shrink-0 hover:border-[#E3A008] transition-colors"
+                          className="w-12 h-8 rounded border border-stone-200 overflow-hidden shrink-0 hover:border-[#E3A008] transition-colors cursor-pointer"
                         >
                           <img src={`data:${img.mimeType};base64,${img.data}`} alt="Thumb" className="w-full h-full object-cover" />
                         </button>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {Boolean(imageUrl) && (
+                  <div className="mt-2 aspect-[16/9] rounded-lg overflow-hidden border border-stone-200 bg-stone-100">
+                    <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
                   </div>
                 )}
               </div>
@@ -263,8 +341,8 @@ export function AdminHomeBannersSection() {
               </div>
 
               <DialogFooter className="pt-2">
-                <Button type="button" variant="outline" onClick={() => setModalOpen(false)} className="text-xs">Cancelar</Button>
-                <Button type="submit" disabled={saving} className="bg-[#E3A008] hover:bg-[#C88A00] text-black font-semibold text-xs">
+                <Button type="button" variant="outline" onClick={() => setModalOpen(false)} className="text-xs cursor-pointer">Cancelar</Button>
+                <Button type="submit" disabled={saving} className="bg-[#E3A008] hover:bg-[#C88A00] text-black font-semibold text-xs cursor-pointer">
                   {saving ? "Salvando..." : "Salvar Banner"}
                 </Button>
               </DialogFooter>

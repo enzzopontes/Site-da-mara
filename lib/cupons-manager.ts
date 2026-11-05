@@ -22,6 +22,36 @@ export interface Coupon {
   badgeLabel?: string | null
   isBannerHighlight?: boolean
   templateOrigin?: string
+  rulesText?: string | null
+  showCodeInTitle?: boolean
+  restrictedCategories?: string[] | null
+}
+
+function mapRowToCoupon(c: any): Coupon {
+  return {
+    id: c.id,
+    code: c.code,
+    title: c.title,
+    description: c.description,
+    discount: Number(c.discount_value),
+    type: c.discount_type as "percentage" | "fixed",
+    minOrderValue: c.min_order_value != null ? Number(c.min_order_value) : null,
+    expiresAt: c.expires_at ? new Date(c.expires_at) : null,
+    isActive: c.active,
+    createdAt: new Date(c.created_at),
+    usageCount: c.current_uses || 0,
+    maxUsage: c.max_uses,
+    maxUsagePerUser: c.max_uses_per_user,
+    showOnHome: !!c.show_on_home,
+    homePriority: Number(c.home_priority || 0),
+    bannerImageUrl: c.banner_image_url || null,
+    badgeLabel: c.badge_label || null,
+    isBannerHighlight: !!c.is_banner_highlight,
+    templateOrigin: c.template_origin || "custom",
+    rulesText: c.rules_text || null,
+    showCodeInTitle: !!c.show_code_in_title,
+    restrictedCategories: Array.isArray(c.restricted_categories) ? c.restricted_categories : [],
+  }
 }
 
 class CouponsManager {
@@ -38,29 +68,7 @@ class CouponsManager {
       return []
     }
 
-    return (
-      data?.map((c: any) => ({
-        id: c.id,
-        code: c.code,
-        title: c.title,
-        description: c.description,
-        discount: Number(c.discount_value),
-        type: c.discount_type as "percentage" | "fixed",
-        minOrderValue: c.min_order_value != null ? Number(c.min_order_value) : null,
-        expiresAt: c.expires_at ? new Date(c.expires_at) : null,
-        isActive: c.active,
-        createdAt: new Date(c.created_at),
-        usageCount: c.current_uses || 0,
-        maxUsage: c.max_uses,
-        maxUsagePerUser: c.max_uses_per_user,
-        showOnHome: !!c.show_on_home,
-        homePriority: Number(c.home_priority || 0),
-        bannerImageUrl: c.banner_image_url || null,
-        badgeLabel: c.badge_label || null,
-        isBannerHighlight: !!c.is_banner_highlight,
-        templateOrigin: c.template_origin || "custom",
-      })) || []
-    )
+    return data?.map(mapRowToCoupon) || []
   }
 
   async getActiveHomeCoupon(): Promise<Coupon | null> {
@@ -81,27 +89,7 @@ class CouponsManager {
         .maybeSingle()
 
       if (!error && data) {
-        return {
-          id: data.id,
-          code: data.code,
-          title: data.title,
-          description: data.description,
-          discount: Number(data.discount_value),
-          type: data.discount_type as "percentage" | "fixed",
-          minOrderValue: data.min_order_value != null ? Number(data.min_order_value) : null,
-          expiresAt: data.expires_at ? new Date(data.expires_at) : null,
-          isActive: data.active,
-          createdAt: new Date(data.created_at),
-          usageCount: data.current_uses || 0,
-          maxUsage: data.max_uses,
-          maxUsagePerUser: data.max_uses_per_user,
-          showOnHome: !!data.show_on_home,
-          homePriority: Number(data.home_priority || 0),
-          bannerImageUrl: data.banner_image_url || null,
-          badgeLabel: data.badge_label || null,
-          isBannerHighlight: !!data.is_banner_highlight,
-          templateOrigin: data.template_origin || "custom",
-        }
+        return mapRowToCoupon(data)
       }
 
       // Fallback: Cupom ativo de maior desconto
@@ -115,33 +103,52 @@ class CouponsManager {
         .maybeSingle()
 
       if (fallbackData) {
-        return {
-          id: fallbackData.id,
-          code: fallbackData.code,
-          title: fallbackData.title,
-          description: fallbackData.description,
-          discount: Number(fallbackData.discount_value),
-          type: fallbackData.discount_type as "percentage" | "fixed",
-          minOrderValue: fallbackData.min_order_value != null ? Number(fallbackData.min_order_value) : null,
-          expiresAt: fallbackData.expires_at ? new Date(fallbackData.expires_at) : null,
-          isActive: fallbackData.active,
-          createdAt: new Date(fallbackData.created_at),
-          usageCount: fallbackData.current_uses || 0,
-          maxUsage: fallbackData.max_uses,
-          maxUsagePerUser: fallbackData.max_uses_per_user,
-          showOnHome: !!fallbackData.show_on_home,
-          homePriority: Number(fallbackData.home_priority || 0),
-          bannerImageUrl: fallbackData.banner_image_url || null,
-          badgeLabel: fallbackData.badge_label || null,
-          isBannerHighlight: !!fallbackData.is_banner_highlight,
-          templateOrigin: fallbackData.template_origin || "custom",
-        }
+        return mapRowToCoupon(fallbackData)
       }
 
       return null
     } catch (err) {
       console.warn("Erro ao buscar cupom ativo da Home:", err)
       return null
+    }
+  }
+
+  private async syncCouponBannerWithHomeBanners(coupon: Coupon): Promise<void> {
+    try {
+      const { data: existing } = await this.supabase
+        .from("home_banners")
+        .select("id")
+        .eq("coupon_id", coupon.id)
+        .maybeSingle()
+
+      if (coupon.isBannerHighlight && coupon.bannerImageUrl) {
+        if (existing?.id) {
+          await this.supabase
+            .from("home_banners")
+            .update({
+              image_url: coupon.bannerImageUrl,
+              title: coupon.title || coupon.code,
+              display_order: coupon.homePriority || 0,
+              is_active: coupon.isActive,
+            })
+            .eq("id", existing.id)
+        } else {
+          await this.supabase.from("home_banners").insert({
+            image_url: coupon.bannerImageUrl,
+            title: coupon.title || coupon.code,
+            coupon_id: coupon.id,
+            display_order: coupon.homePriority || 0,
+            is_active: coupon.isActive,
+          })
+        }
+      } else if (existing?.id) {
+        await this.supabase
+          .from("home_banners")
+          .update({ is_active: false })
+          .eq("id", existing.id)
+      }
+    } catch {
+      // Silencioso caso home_banners ainda não exista
     }
   }
 
@@ -152,13 +159,19 @@ class CouponsManager {
         code: coupon.code.toUpperCase(),
         title: coupon.title || null,
         description: coupon.description || null,
+        rules_text: coupon.rulesText || null,
         discount_type: coupon.type,
         discount_value: coupon.discount,
         min_order_value: coupon.minOrderValue != null ? coupon.minOrderValue : null,
+        restricted_categories:
+          coupon.restrictedCategories && coupon.restrictedCategories.length > 0
+            ? coupon.restrictedCategories
+            : null,
         max_uses: coupon.maxUsage || null,
         max_uses_per_user: coupon.maxUsagePerUser || null,
         active: coupon.isActive ?? true,
         expires_at: coupon.expiresAt?.toISOString() || null,
+        show_code_in_title: !!coupon.showCodeInTitle,
         show_on_home: !!coupon.showOnHome,
         home_priority: coupon.homePriority || 0,
         banner_image_url: coupon.bannerImageUrl || null,
@@ -177,27 +190,9 @@ class CouponsManager {
 
     if (!data) return null
 
-    return {
-      id: data.id,
-      code: data.code,
-      title: data.title,
-      description: data.description,
-      discount: Number(data.discount_value),
-      type: data.discount_type as "percentage" | "fixed",
-      minOrderValue: data.min_order_value != null ? Number(data.min_order_value) : null,
-      expiresAt: data.expires_at ? new Date(data.expires_at) : null,
-      isActive: data.active,
-      createdAt: new Date(data.created_at),
-      usageCount: data.current_uses || 0,
-      maxUsage: data.max_uses,
-      maxUsagePerUser: data.max_uses_per_user,
-      showOnHome: !!data.show_on_home,
-      homePriority: Number(data.home_priority || 0),
-      bannerImageUrl: data.banner_image_url || null,
-      badgeLabel: data.badge_label || null,
-      isBannerHighlight: !!data.is_banner_highlight,
-      templateOrigin: data.template_origin || "custom",
-    }
+    const mapped = mapRowToCoupon(data)
+    await this.syncCouponBannerWithHomeBanners(mapped)
+    return mapped
   }
 
   async updateCoupon(id: string, updates: Partial<Omit<Coupon, "id" | "createdAt">>): Promise<boolean> {
@@ -205,13 +200,21 @@ class CouponsManager {
     if (updates.code) updateData.code = updates.code.toUpperCase()
     if (updates.title !== undefined) updateData.title = updates.title
     if (updates.description !== undefined) updateData.description = updates.description
+    if (updates.rulesText !== undefined) updateData.rules_text = updates.rulesText
     if (updates.discount !== undefined) updateData.discount_value = updates.discount
     if (updates.type) updateData.discount_type = updates.type
     if (updates.minOrderValue !== undefined) updateData.min_order_value = updates.minOrderValue
+    if (updates.restrictedCategories !== undefined) {
+      updateData.restricted_categories =
+        updates.restrictedCategories && updates.restrictedCategories.length > 0
+          ? updates.restrictedCategories
+          : null
+    }
     if (updates.isActive !== undefined) updateData.active = updates.isActive
     if (updates.maxUsage !== undefined) updateData.max_uses = updates.maxUsage
     if (updates.maxUsagePerUser !== undefined) updateData.max_uses_per_user = updates.maxUsagePerUser
     if (updates.expiresAt !== undefined) updateData.expires_at = updates.expiresAt?.toISOString() || null
+    if (updates.showCodeInTitle !== undefined) updateData.show_code_in_title = updates.showCodeInTitle
     if (updates.showOnHome !== undefined) updateData.show_on_home = updates.showOnHome
     if (updates.homePriority !== undefined) updateData.home_priority = updates.homePriority
     if (updates.bannerImageUrl !== undefined) updateData.banner_image_url = updates.bannerImageUrl
@@ -219,11 +222,20 @@ class CouponsManager {
     if (updates.isBannerHighlight !== undefined) updateData.is_banner_highlight = updates.isBannerHighlight
     if (updates.templateOrigin !== undefined) updateData.template_origin = updates.templateOrigin
 
-    const { error } = await this.supabase.from("coupons").update(updateData).eq("id", id)
+    const { data, error } = await this.supabase
+      .from("coupons")
+      .update(updateData)
+      .eq("id", id)
+      .select()
+      .maybeSingle()
 
     if (error) {
       console.error("Error updating coupon:", error.message)
       return false
+    }
+
+    if (data) {
+      await this.syncCouponBannerWithHomeBanners(mapRowToCoupon(data))
     }
 
     return true
@@ -269,27 +281,7 @@ class CouponsManager {
       return { valid: false, message: "Cupom não encontrado" }
     }
 
-    const coupon: Coupon = {
-      id: data.id,
-      code: data.code,
-      title: data.title,
-      description: data.description,
-      discount: Number(data.discount_value),
-      type: data.discount_type as "percentage" | "fixed",
-      minOrderValue: data.min_order_value != null ? Number(data.min_order_value) : null,
-      expiresAt: data.expires_at ? new Date(data.expires_at) : null,
-      isActive: data.active,
-      createdAt: new Date(data.created_at),
-      usageCount: data.current_uses || 0,
-      maxUsage: data.max_uses,
-      maxUsagePerUser: data.max_uses_per_user,
-      showOnHome: !!data.show_on_home,
-      homePriority: Number(data.home_priority || 0),
-      bannerImageUrl: data.banner_image_url || null,
-      badgeLabel: data.badge_label || null,
-      isBannerHighlight: !!data.is_banner_highlight,
-      templateOrigin: data.template_origin || "custom",
-    }
+    const coupon = mapRowToCoupon(data)
 
     if (coupon.expiresAt && new Date() > coupon.expiresAt) {
       return { valid: false, message: "Cupom expirado" }
