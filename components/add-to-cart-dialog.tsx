@@ -44,13 +44,47 @@ interface AddToCartDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
-const CATEGORY_PHRASES: Record<string, string[]> = {
-  molhos: ["Que tal um molho?", "Bora escolher um molho?", "Dá um toque com molho?"],
-  queijos: ["Mais queijo, por favor?", "Bora caprichar no queijo?", "Queijo nunca é demais"],
-  proteinas: ["Reforça a carne?", "Mais proteína, por favor?", "Dá um up na carne?"],
-  bacon: ["Bacon nunca é demais", "Bora colocar bacon?", "Dá um crocante com bacon?"],
-  geral: ["Que tal um extra?", "Bora dar um upgrade?", "Escolha seu adicional"],
+// Frases fixas idênticas ao aplicativo mobile (5 variações cada com sorteio/rodízio a cada abertura)
+const FRASES_CATEGORIA: Record<string, string[]> = {
+  molho: ["Que tal um molho?", "Bora escolher um molho?", "Um molhinho especial?", "Qual molho vai ser?", "Dá um toque com molho?"],
+  molhos: ["Que tal um molho?", "Bora escolher um molho?", "Um molhinho especial?", "Qual molho vai ser?", "Dá um toque com molho?"],
+  bebida: ["Bora escolher uma bebida?", "Vai querer algo pra beber?", "Que tal matar a sede?", "Escolha sua bebida", "Falta a bebida, hein?"],
+  bebidas: ["Bora escolher uma bebida?", "Vai querer algo pra beber?", "Que tal matar a sede?", "Escolha sua bebida", "Falta a bebida, hein?"],
+  borda: ["Vamos turbinar a borda?", "Que tal recheiar a borda?", "Borda recheada, bora?", "Dá um up na borda?", "Escolha sua borda"],
+  bordas: ["Vamos turbinar a borda?", "Que tal recheiar a borda?", "Borda recheada, bora?", "Dá um up na borda?", "Escolha sua borda"],
+  sabor: ["Qual vai ser o sabor?", "Escolha o seu sabor", "Bora escolher o sabor?", "Qual sabor você quer?", "Hora de escolher o sabor"],
+  sabores: ["Qual vai ser o sabor?", "Escolha o seu sabor", "Bora escolher o sabor?", "Qual sabor você quer?", "Hora de escolher o sabor"],
+  extra: ["Vai querer um extra?", "Bora caprichar com um extra?", "Que tal um extra?", "Dá um upgrade extra?", "Adiciona um extra?"],
+  extras: ["Vai querer um extra?", "Bora caprichar com um extra?", "Que tal um extra?", "Dá um upgrade extra?", "Adiciona um extra?"],
+  adicional: ["Bora dar um upgrade?", "Que tal turbinar o pedido?", "Vai querer adicionar algo?", "Capricha no pedido?", "Adiciona um extra especial?"],
+  adicionais: ["Bora dar um upgrade?", "Que tal turbinar o pedido?", "Vai querer adicionar algo?", "Capricha no pedido?", "Adiciona um extra especial?"],
+  queijo: ["Mais queijo, por favor?", "Bora caprichar no queijo?", "Um queijo a mais?", "Reforça o queijo?", "Queijo nunca é demais"],
+  queijos: ["Mais queijo, por favor?", "Bora caprichar no queijo?", "Um queijo a mais?", "Reforça o queijo?", "Queijo nunca é demais"],
+  carne: ["Reforça a carne?", "Bora turbinar a carne?", "Mais carne, por favor?", "Dá um up na carne?", "Capricha na carne?"],
+  carnes: ["Reforça a carne?", "Bora turbinar a carne?", "Mais carne, por favor?", "Dá um up na carne?", "Capricha na carne?"],
+  bacon: ["Bacon nunca é demais", "Bora colocar bacon?", "Um bacon a mais?", "Que tal reforçar com bacon?", "Dá um crocante com bacon?"],
+  acompanhamento: ["Que tal um acompanhamento?", "Falta um acompanhamento", "Vai querer acompanhar com algo?", "Escolha seu acompanhamento", "Bora completar o pedido?"],
+  acompanhamentos: ["Que tal um acompanhamento?", "Falta um acompanhamento", "Vai querer acompanhar com algo?", "Escolha seu acompanhamento", "Bora completar o pedido?"],
+  cobertura: ["Escolha sua cobertura", "Que tal uma cobertura?", "Bora escolher a cobertura?", "Vai de qual cobertura?", "Capricha na cobertura?"],
+  coberturas: ["Escolha sua cobertura", "Que tal uma cobertura?", "Bora escolher a cobertura?", "Vai de qual cobertura?", "Capricha na cobertura?"],
+  recheio: ["Qual recheio hoje?", "Escolha o recheio", "Bora escolher o recheio?", "Vai de qual recheio?", "Que tal um recheio especial?"],
+  recheios: ["Qual recheio hoje?", "Escolha o recheio", "Bora escolher o recheio?", "Vai de qual recheio?", "Que tal um recheio especial?"],
+  proteina: ["Quer reforçar a proteína?", "Bora turbinar a proteína?", "Mais proteína, por favor?", "Dá um up na proteína?", "Capricha na proteína?"],
+  proteinas: ["Quer reforçar a proteína?", "Bora turbinar a proteína?", "Mais proteína, por favor?", "Dá um up na proteína?", "Capricha na proteína?"],
+  doce: ["Um docinho pra fechar?", "Que tal uma sobremesa?", "Bora fechar com um doce?", "Falta um docinho", "Vai de sobremesa?"],
+  doces: ["Um docinho pra fechar?", "Que tal uma sobremesa?", "Bora fechar com um doce?", "Falta um docinho", "Vai de sobremesa?"],
+  sobremesa: ["Um docinho pra fechar?", "Que tal uma sobremesa?", "Bora fechar com um doce?", "Falta um docinho", "Vai de sobremesa?"],
+  sobremesas: ["Um docinho pra fechar?", "Que tal uma sobremesa?", "Bora fechar com um doce?", "Falta um docinho", "Vai de sobremesa?"],
 }
+
+// Frases genéricas de fallback (5 templates)
+const FRASES_GENERICAS = [
+  (cat: string) => `Que tal um ${cat.toLowerCase()}?`,
+  (cat: string) => `Bora incrementar com ${cat.toLowerCase()}?`,
+  (cat: string) => `Dá um up com ${cat.toLowerCase()}`,
+  (cat: string) => `Escolha seu ${cat.toLowerCase()}`,
+  (cat: string) => `Vai de ${cat.toLowerCase()}?`,
+]
 
 const FALLBACK_BEBIDAS: DrinkProduct[] = [
   {
@@ -110,12 +144,12 @@ function classifyAdicional(item: Adicional): string {
   if (name.includes("bacon")) return "bacon"
 
   if (item.adicional_categoria) {
-    const raw = item.adicional_categoria.toLowerCase()
+    const raw = item.adicional_categoria.toLowerCase().trim()
     if (raw.includes("queijo") || raw.includes("recheio")) return "queijos"
     if (raw.includes("molho") || raw.includes("creme")) return "molhos"
     if (raw.includes("proteina") || raw.includes("carne")) return "proteinas"
     if (raw.includes("bacon")) return "bacon"
-    return "geral"
+    return raw
   }
 
   if (
@@ -163,14 +197,22 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
   const [isPromoActive, setIsPromoActive] = useState(false)
   const [promoPrice, setPromoPrice] = useState(24.99)
   const [dialogImageLoaded, setDialogImageLoaded] = useState(false)
-  const [phraseSeed, setPhraseSeed] = useState(0)
+
+  // Mapas de frases sorteadas a cada abertura da tela
+  const [fraseIndices, setFraseIndices] = useState<Record<string, number>>({})
+  const [fraseBebidaIndex, setFraseBebidaIndex] = useState(0)
 
   const { addItem } = useCart()
   const { toast } = useToast()
 
-  const isBebida = product.category === "bebida"
+  const isBebida =
+    product.category === "bebida" ||
+    (product.category as string) === "bebidas" ||
+    product.name.toLowerCase().includes("coca-cola") ||
+    product.name.toLowerCase().includes("fanta")
+
   const isMacarrao = product.category === "macarrao"
-  const isBatata = product.category === "batata"
+  const isBatata = product.category === "batata" || !product.category
 
   useEffect(() => {
     const checkPromo = async () => {
@@ -193,7 +235,26 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
       setObservacoes("")
       setPastaType("penne")
       setDialogImageLoaded(false)
-      setPhraseSeed(Math.floor(Math.random() * 10))
+
+      // Sorteia 1 das 5 frases para a seção de bebidas
+      setFraseBebidaIndex(Math.floor(Math.random() * 5))
+
+      // Sorteia aleatoriamente novas frases para cada categoria de adicionais
+      const randomMap: Record<string, number> = {
+        molho: Math.floor(Math.random() * 5),
+        molhos: Math.floor(Math.random() * 5),
+        queijo: Math.floor(Math.random() * 5),
+        queijos: Math.floor(Math.random() * 5),
+        carne: Math.floor(Math.random() * 5),
+        carnes: Math.floor(Math.random() * 5),
+        proteina: Math.floor(Math.random() * 5),
+        proteinas: Math.floor(Math.random() * 5),
+        bacon: Math.floor(Math.random() * 5),
+        geral: Math.floor(Math.random() * 5),
+        adicionais: Math.floor(Math.random() * 5),
+        extra: Math.floor(Math.random() * 5),
+      }
+      setFraseIndices(randomMap)
 
       if (product.adicionais && product.adicionais.length > 0) {
         setAdicionaisDisponiveis(product.adicionais)
@@ -323,6 +384,19 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
     return present
   }, [groupedAdicionais])
 
+  // Gerador de frase humanizada no padrão exato do aplicativo
+  const getFraseCategoria = (categoriaKey: string) => {
+    const chave = categoriaKey.trim().toLowerCase()
+    const idx = fraseIndices[chave] ?? Math.floor(Math.random() * 5)
+    if (FRASES_CATEGORIA[chave]) {
+      const lista = FRASES_CATEGORIA[chave]
+      return lista[idx % lista.length]
+    }
+    return FRASES_GENERICAS[idx % FRASES_GENERICAS.length](categoriaKey)
+  }
+
+  const fraseBebida = FRASES_CATEGORIA.bebidas[fraseBebidaIndex % FRASES_CATEGORIA.bebidas.length]
+
   const calculateTotal = useMemo(() => {
     const adicionaisTotal = Object.entries(selectedAdicionais).reduce((sum, [id, qty]) => {
       const adicional = adicionaisDisponiveis.find((a) => a.id === id)
@@ -409,7 +483,7 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
         showCloseButton={false}
         className="fixed inset-0 top-0 left-0 right-0 bottom-0 h-full h-[100dvh] max-h-none w-full max-w-none p-0 border-none rounded-none bg-white flex flex-col overflow-hidden duration-200 translate-x-0 translate-y-0 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:right-auto sm:bottom-auto sm:-translate-x-1/2 sm:-translate-y-1/2 sm:h-auto sm:max-h-[92vh] sm:w-full sm:max-w-xl sm:rounded-3xl sm:border sm:border-gray-100 sm:shadow-2xl no-scrollbar [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {/* CORPO COM SCROLL FLUIDO */}
+        {/* CORPO COM SCROLL FLUIDO (SEM BARRA DE ROLAGEM VISÍVEL) */}
         <div className="flex-1 overflow-y-auto overscroll-contain bg-white no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           {/* HERO IMAGE & BOTÃO VOLTAR */}
           <div className="relative h-[340px] sm:h-[380px] w-full overflow-hidden shrink-0 bg-[#F7F4EF]">
@@ -515,7 +589,7 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
               </div>
             )}
 
-            {/* SEÇÃO DE ADICIONAIS AGRUPADOS ESTILO IFOOD */}
+            {/* SEÇÃO DE ADICIONAIS AGRUPADOS ESTILO IFOOD (COM FRASES EM RODÍZIO IDÊNTICAS AO APP) */}
             {!isBebida && activeCategories.length > 0 && (
               <div className="space-y-4 pt-1">
                 <div className="flex items-center justify-between">
@@ -526,10 +600,9 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
                 </div>
 
                 <div className="space-y-5">
-                  {activeCategories.map((catKey, index) => {
+                  {activeCategories.map((catKey) => {
                     const items = groupedAdicionais[catKey] || []
-                    const phrases = CATEGORY_PHRASES[catKey] || CATEGORY_PHRASES.geral
-                    const phrase = phrases[(phraseSeed + index) % phrases.length]
+                    const phrase = getFraseCategoria(catKey)
 
                     return (
                       <div key={catKey} className="space-y-1">
@@ -605,12 +678,12 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
               </div>
             )}
 
-            {/* SEÇÃO DE CROSS-SELL DE BEBIDAS (EMBAIXO DOS ADICIONAIS) */}
+            {/* SEÇÃO DE CROSS-SELL DE BEBIDAS (EMBAIXO DOS ADICIONAIS COM RODÍZIO DE FRASES) */}
             {!isBebida && (
               <div className="space-y-2 pt-1">
                 {/* BANNER DE CABEÇALHO */}
                 <div className="-mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-[#F7F5F1] border-y border-gray-100">
-                  <h5 className="font-bold text-[15px] text-[#1F1B16]">Bora escolher uma bebida?</h5>
+                  <h5 className="font-bold text-[15px] text-[#1F1B16]">{fraseBebida}</h5>
                   <p className="text-[12px] text-gray-500">Escolha até 10 opções</p>
                 </div>
 
