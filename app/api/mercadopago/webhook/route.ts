@@ -6,6 +6,7 @@ import {
   buildNewOrderPushContent,
   sendExpoPush,
 } from '@/lib/push-notifications';
+import { sendBarkNotification } from '@/lib/bark-service';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -206,6 +207,30 @@ export async function POST(req: NextRequest) {
               const content = buildNewOrderPushContent(orderData, orderData.order_items || []);
               const messages = buildExpoPushMessages(uniqueTokens, content);
               await sendExpoPush(messages);
+
+              // Disparo imediato do alarme crítico via Bark (iOS)
+              (async () => {
+                try {
+                  const barkRes = await sendBarkNotification({
+                    id: orderData.id,
+                    order_number: orderData.order_number,
+                    customer_name: orderData.customer_name,
+                    total_amount: orderData.total_amount,
+                    payment_method: orderData.payment_method,
+                  });
+                  if (barkRes.success) {
+                    await supabase.rpc('merge_order_metadata', {
+                      order_id: externalRef,
+                      patch: {
+                        bark_attempts: 1,
+                        bark_last_sent_at: new Date().toISOString(),
+                      },
+                    });
+                  }
+                } catch (err: any) {
+                  console.warn('[webhook] Bark push fail-safe:', err?.message || err);
+                }
+              })();
 
               // Marca como notificado via rpc merge_order_metadata para a rota manual não duplicar
               await supabase.rpc('merge_order_metadata', {

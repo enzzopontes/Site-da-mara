@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { sendBarkNotification } from '@/lib/bark-service';
 
 import {
   ADMIN_ORDERS_CHANNEL_ID,
@@ -234,6 +235,30 @@ export async function POST(req: NextRequest) {
         { status: 500, headers: corsHeaders },
       );
     }
+
+    // Disparo imediato do alarme sonoro crítico via Bark (iOS)
+    (async () => {
+      try {
+        const barkRes = await sendBarkNotification({
+          id: order.id,
+          order_number: order.order_number,
+          customer_name: order.customer_name,
+          total_amount: order.total_amount,
+          payment_method: order.payment_method,
+        });
+        if (barkRes.success) {
+          await supabase.rpc('merge_order_metadata', {
+            order_id: order.id,
+            patch: {
+              bark_attempts: 1,
+              bark_last_sent_at: new Date().toISOString(),
+            },
+          });
+        }
+      } catch (err: any) {
+        console.warn('[notify-new-order] Bark push fail-safe:', err?.message || err);
+      }
+    })();
 
     return NextResponse.json(
       {

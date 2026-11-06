@@ -121,6 +121,28 @@ export default function AdminPedidosPage() {
   const [permissionStatus, setPermissionStatus] = useState<string>("default")
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null)
   const lastOrdersCount = useRef<number>(0)
+  const [isTestingBark, setIsTestingBark] = useState(false)
+
+  const handleTestBarkAlarm = async () => {
+    setIsTestingBark(true)
+    try {
+      const res = await fetch("/api/bark", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "test" }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.success) {
+        alert("🚨 Alarme sonoro crítico de teste disparado com sucesso no iPhone!")
+      } else {
+        alert("⚠️ Falha ao testar alarme: " + (data.error || "Verifique a BARK_DEVICE_KEY no arquivo .env"))
+      }
+    } catch (err: any) {
+      alert("⚠️ Erro ao acionar teste: " + (err?.message || "Erro de rede"))
+    } finally {
+      setIsTestingBark(false)
+    }
+  }
 
   useEffect(() => {
     if ("Notification" in window) {
@@ -349,7 +371,18 @@ export default function AdminPedidosPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  onClick={handleTestBarkAlarm}
+                  disabled={isTestingBark}
+                  variant="outline"
+                  className="border-2 border-red-300 hover:bg-red-50 text-red-600 font-bold rounded-2xl gap-2 shadow-sm h-11 px-4 cursor-pointer transition-all"
+                  title="Disparar som de alarme crítico no iPhone via Bark"
+                >
+                  <BellRing className={`h-4 w-4 ${isTestingBark ? "animate-bounce text-red-600" : "text-red-500"}`} />
+                  {isTestingBark ? "Disparando..." : "🔔 Testar Alarme no iPhone"}
+                </Button>
+
                 <Button
                   onClick={handleRefresh}
                   disabled={isRefreshing}

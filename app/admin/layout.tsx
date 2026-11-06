@@ -163,6 +163,79 @@ export default function AdminLayout({
     isPlayingAudioRef.current = false
   }
 
+  // Gerenciador de alertas repetidos do Bark (iOS) a cada 60s enquanto o pedido for 'pending' (máx 5x)
+  const pendingBarkOrdersRef = useRef<Map<string, { attempts: number; lastSent: number }>>(new Map())
+
+  const triggerBarkPendingOrder = async (orderId: string) => {
+    try {
+      const res = await fetch("/api/bark", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "notify", orderId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (data.skipped || data.attempt >= 5) {
+        pendingBarkOrdersRef.current.delete(orderId)
+      } else if (data.attempt) {
+        const item = pendingBarkOrdersRef.current.get(orderId)
+        if (item) {
+          item.attempts = data.attempt
+          item.lastSent = Date.now()
+        }
+      }
+    } catch (err) {
+      console.warn("[BarkWatchdog] Falha ao disparar Bark para pedido pendente:", orderId, err)
+    }
+  }
+
+  // Intervalo do Bark Watchdog a cada 60 segundos
+  useEffect(() => {
+    if (!isAdmin) return
+
+    // Carregar pedidos atualmente pendentes no banco
+    const initPendingOrders = async () => {
+      try {
+        const sb = getSupabaseBrowserClient()
+        const { data } = await sb
+          .from("orders")
+          .select("id, status, metadata")
+          .eq("status", "pending")
+          .limit(20)
+
+        if (data) {
+          data.forEach((o: any) => {
+            const attempts = Number(o.metadata?.bark_attempts || 0)
+            if (attempts < 5) {
+              pendingBarkOrdersRef.current.set(o.id, {
+                attempts,
+                lastSent: Date.now(),
+              })
+            }
+          })
+        }
+      } catch (err) {
+        console.warn("[BarkWatchdog] Falha ao pré-carregar pedidos pendentes:", err)
+      }
+    }
+    initPendingOrders()
+
+    const interval = setInterval(() => {
+      const now = Date.now()
+      pendingBarkOrdersRef.current.forEach((info, orderId) => {
+        if (info.attempts >= 5) {
+          pendingBarkOrdersRef.current.delete(orderId)
+          return
+        }
+        // Dispara se passou pelo menos 55 segundos desde o último envio
+        if (now - info.lastSent >= 55000) {
+          triggerBarkPendingOrder(orderId)
+        }
+      })
+    }, 15000) // Checa a cada 15s para precisão do intervalo de 60s
+
+    return () => clearInterval(interval)
+  }, [isAdmin])
+
   // Listener global do Supabase Realtime para novos pedidos (ativo em qualquer tela do admin)
   useEffect(() => {
     if (!isAdmin) return
@@ -217,6 +290,19 @@ export default function AdminLayout({
           // Toca apenas quando o pedido é confirmado:
           // 1. Dinheiro / Cartão na entrega (INSERT com status 'pending')
           // 2. PIX aceito e pago (UPDATE com status passando para 'preparing' ou 'pending')
+          // Gerenciamento da fila anti-perda do Bark:
+          if (status === "pending") {
+            if (!pendingBarkOrdersRef.current.has(orderId)) {
+              pendingBarkOrdersRef.current.set(orderId, {
+                attempts: 1,
+                lastSent: Date.now(),
+              })
+            }
+          } else {
+            // Pedido foi aceito, em preparo, cancelado ou entregue -> cancela repetição do Bark
+            pendingBarkOrdersRef.current.delete(orderId)
+          }
+
           if (status === "pending" || status === "preparing") {
             processedOrdersRef.current.add(orderId)
             triggerOrderAlert()
