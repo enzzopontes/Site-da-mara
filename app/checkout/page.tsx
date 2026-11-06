@@ -625,6 +625,12 @@ export default function CheckoutPage() {
           return
         }
 
+        fetch("/api/bark", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "notify", orderId }),
+        }).catch(() => {})
+
         fetch("/api/notify-new-order", {
           method: "POST",
           headers: {
@@ -661,6 +667,13 @@ export default function CheckoutPage() {
           console.warn("[Checkout] Geração de Pix em segundo plano falhou:", pixErr)
         }
       } else {
+        // Disparo incondicional do alarme crítico Bark (iOS) para novos pedidos pendentes
+        fetch("/api/bark", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "notify", orderId }),
+        }).catch(() => {})
+
         // Dispara notificação push para os administradores
         getSupabaseBrowserClient()
           .auth.getSession()

@@ -297,6 +297,8 @@ export default function AdminLayout({
                 attempts: 1,
                 lastSent: Date.now(),
               })
+              // Dispara alarme crítico Bark imediatamente no primeiro instante
+              triggerBarkPendingOrder(orderId)
             }
           } else {
             // Pedido foi aceito, em preparo, cancelado ou entregue -> cancela repetição do Bark
