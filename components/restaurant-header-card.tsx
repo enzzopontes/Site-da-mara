@@ -169,22 +169,12 @@ export function RestaurantHeaderCard({
                   </p>
                 </div>
 
-                {/* Coluna Direita: Selo Super Restaurante + Status Aberto/Fechado logo abaixo */}
-                <div className="flex flex-col items-end gap-1 shrink-0">
+                {/* Coluna Direita: Selo Super Restaurante */}
+                <div className="flex flex-col items-end justify-center shrink-0">
                   <span className="inline-flex items-center gap-1 bg-[#FEF8EC] text-[#8A6100] border border-[#FCE8C3] text-[10px] sm:text-xs font-bold px-2 sm:px-2.5 py-0.5 rounded-full shrink-0 shadow-2xs">
                     <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#E3A008]" />
                     <span>Super Restaurante</span>
                   </span>
-
-                  <div
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-bold border shrink-0 ${
-                      isOpen
-                        ? "bg-[#E8F8EE] text-[#1E824C] border-[#BDE8CE]"
-                        : "bg-red-50 text-red-700 border-red-200"
-                    }`}
-                  >
-                    <span>{isOpen ? "Aberto agora •" : "Fechado agora"}</span>
-                  </div>
                 </div>
               </div>
 
