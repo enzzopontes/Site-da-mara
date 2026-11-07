@@ -293,6 +293,31 @@ class CouponsManager {
 
     if (coupon.maxUsage != null && coupon.usageCount >= coupon.maxUsage) {
       return { valid: false, message: "Limite de usos atingido" }
+
+    // 1. Regra de Primeiro Pedido (Boas-vindas para novos clientes cadastrados)
+    if (coupon.templateOrigin === "first_order" || coupon.code?.startsWith("BEMVINDO")) {
+      if (!userId) {
+        return { valid: false, message: "Faça login para usar cupom de 1º pedido" }
+      }
+      try {
+        const { count: orderCount, error: countError } = await this.supabase
+          .from("orders")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .neq("status", "cancelled")
+
+        if (!countError && orderCount !== null && orderCount > 0) {
+          return { valid: false, message: "Válido apenas no seu primeiro pedido" }
+        }
+      } catch {}
+    }
+
+    // 2. Regra Exclusiva para Clientes Cadastrados / Aniversário
+    if (coupon.templateOrigin === "registered_only" || coupon.templateOrigin === "aniversario") {
+      if (!userId) {
+        return { valid: false, message: "Exclusivo para clientes cadastrados. Faça login!" }
+      }
+    }
     }
 
     if (coupon.maxUsagePerUser != null && userId) {

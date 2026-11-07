@@ -20,17 +20,17 @@ function CuponsContent() {
 
   const currentTotal = getTotalPrice()
 
+  const [code, setCode] = useState("")
+  const [applying, setApplying] = useState(false)
+  const [rejectCoupon, setRejectCoupon] = useState(false)
+
   const {
     coupons,
     freeCoupons,
     loading,
     validateCoupon,
     getCouponMissingAmount,
-  } = useCoupons(currentTotal)
-
-  const [code, setCode] = useState("")
-  const [applying, setApplying] = useState(false)
-  const [rejectCoupon, setRejectCoupon] = useState(false)
+  } = useCoupons(currentTotal, !rejectCoupon ? selectedCoupon?.id : null)
 
   const handleReturn = () => {
     if (from === "cart" || from === "carrinho" || from === "checkout") {
@@ -204,16 +204,35 @@ function CuponsContent() {
           </div>
         ) : (
           <div className="space-y-3">
-            {coupons.map((coupon) => (
-              <CouponCard
-                key={coupon.id}
-                coupon={coupon}
-                currentTotal={currentTotal}
-                missingAmount={getCouponMissingAmount(coupon)}
-                isSelected={!rejectCoupon && selectedCoupon?.id === coupon.id}
-                onSelect={handleSelect}
-              />
-            ))}
+            {coupons.map((coupon, index) => {
+              const missing = getCouponMissingAmount(coupon)
+              const isApplicable = missing === 0 && !coupon.isExhausted
+
+              const prevCoupon = index > 0 ? coupons[index - 1] : null
+              const prevApplicable = prevCoupon
+                ? getCouponMissingAmount(prevCoupon) === 0 && !prevCoupon.isExhausted
+                : false
+              const showUnavailableDivider = !isApplicable && prevApplicable
+
+              return (
+                <React.Fragment key={coupon.id}>
+                  {showUnavailableDivider && (
+                    <div className="pt-2 pb-0.5">
+                      <p className="text-[11px] font-black uppercase tracking-wider text-[#8C827A]">
+                        Indisponíveis para este pedido
+                      </p>
+                    </div>
+                  )}
+                  <CouponCard
+                    coupon={coupon}
+                    currentTotal={currentTotal}
+                    missingAmount={missing}
+                    isSelected={!rejectCoupon && selectedCoupon?.id === coupon.id}
+                    onSelect={handleSelect}
+                  />
+                </React.Fragment>
+              )
+            })}
           </div>
         )}
       </main>

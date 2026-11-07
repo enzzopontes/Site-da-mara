@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context"
 
-export function useCoupons(currentOrderTotal = 0) {
+export function useCoupons(currentOrderTotal = 0, selectedCouponId?: string | null) {
   const [coupons, setCoupons] = useState<any[]>([])
   const [freeCoupons, setFreeCoupons] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -70,14 +70,18 @@ export function useCoupons(currentOrderTotal = 0) {
         }
       }
 
-      // Validação antecipada de limite de usos (global e por cliente)
+      // Validação antecipada de limite de usos (global e por cliente) e expiração
+      const nowMs = Date.now()
       const mappedCoupons = (activeCoupons ?? []).map((c: any) => {
         const code = String(c.code || "").toUpperCase().trim()
         const userUses = userUsageMap[code] || 0
         const isGlobalExhausted = c.max_uses != null && (c.current_uses ?? 0) >= c.max_uses
         const isUserExhausted = c.max_uses_per_user != null && userUses >= c.max_uses_per_user
-        const isExhausted = isGlobalExhausted || isUserExhausted
-        const exhaustedReason = isGlobalExhausted
+        const isExpired = c.expires_at ? new Date(c.expires_at).getTime() < nowMs : false
+        const isExhausted = isGlobalExhausted || isUserExhausted || isExpired
+        const exhaustedReason = isExpired
+          ? "Cupom expirado"
+          : isGlobalExhausted
           ? "Limite de usos atingido"
           : isUserExhausted
           ? `Você já atingiu o limite de ${c.max_uses_per_user} uso(s) deste cupom`
@@ -112,6 +116,55 @@ export function useCoupons(currentOrderTotal = 0) {
     },
     [currentOrderTotal]
   )
+
+  // Ordenação inteligente:
+  // 1. Cupom atualmente selecionado no topo
+  // 2. Cupons LIBERADOS (valor mínimo atingido e não esgotados)
+  // 3. Cupons NÃO LIBERADOS que apenas faltam valor (ordenados pelo que falta menos para liberar)
+  // 4. Cupons ESGOTADOS / EXPIRADOS no final
+  // 5. Desempate sempre pelo maior desconto
+  const sortedCoupons = useMemo(() => {
+    return [...coupons].sort((a, b) => {
+      const isSelectedA = selectedCouponId && a.id === selectedCouponId
+      const isSelectedB = selectedCouponId && b.id === selectedCouponId
+      if (isSelectedA && !isSelectedB) return -1
+      if (!isSelectedA && isSelectedB) return 1
+
+      const minA = Number(a?.min_order_value ?? 0)
+      const minB = Number(b?.min_order_value ?? 0)
+      const missingA = Math.max(0, minA - currentOrderTotal)
+      const missingB = Math.max(0, minB - currentOrderTotal)
+
+      const isExpiredA = a.expires_at ? new Date(a.expires_at).getTime() < Date.now() : false
+      const isExpiredB = b.expires_at ? new Date(b.expires_at).getTime() < Date.now() : false
+
+      const isExhaustedA = Boolean(a.isExhausted) || isExpiredA
+      const isExhaustedB = Boolean(b.isExhausted) || isExpiredB
+
+      const isLiberadoA = !isExhaustedA && missingA === 0
+      const isLiberadoB = !isExhaustedB && missingB === 0
+
+      // 1. Liberados sempre primeiro
+      if (isLiberadoA && !isLiberadoB) return -1
+      if (!isLiberadoA && isLiberadoB) return 1
+
+      // 2. Entre não-liberados: cupons que só faltam valor vêm antes de esgotados/expirados
+      if (!isLiberadoA && !isLiberadoB) {
+        if (!isExhaustedA && isExhaustedB) return -1
+        if (isExhaustedA && !isExhaustedB) return 1
+
+        // Se ambos apenas faltam valor, ordenar pelo que está mais perto de liberar (menor valor restante)
+        if (!isExhaustedA && !isExhaustedB && missingA !== missingB) {
+          return missingA - missingB
+        }
+      }
+
+      // 3. Desempate por maior desconto
+      const valA = Number(a.discount_value ?? 0)
+      const valB = Number(b.discount_value ?? 0)
+      return valB - valA
+    })
+  }, [coupons, currentOrderTotal, selectedCouponId])
 
   const validateCoupon = useCallback(
     async (code: string) => {
@@ -169,7 +222,7 @@ export function useCoupons(currentOrderTotal = 0) {
   )
 
   return {
-    coupons,
+    coupons: sortedCoupons,
     freeCoupons,
     loading,
     error,

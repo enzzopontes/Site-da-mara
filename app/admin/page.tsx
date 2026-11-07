@@ -27,6 +27,7 @@ import {
   ArrowRight,
   RefreshCw,
   Sparkles,
+  Bell,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -115,6 +116,16 @@ export default function AdminPage() {
       badgeVariant: "neutral",
       colorClass: "from-stone-700 to-stone-800 text-stone-700",
       btnText: "Editar Cardápio",
+    },
+    {
+      title: "Campanhas Push",
+      description: "Dispare notificações em massa para os celulares com cupom e templates temáticos.",
+      href: "/admin/campanhas",
+      icon: Bell,
+      badgeText: "Marketing",
+      badgeVariant: "neutral",
+      colorClass: "from-amber-600 to-rose-600 text-amber-600",
+      btnText: "Gerenciar Push",
     },
     {
       title: "Cupons de Desconto",
@@ -372,7 +383,7 @@ export default function AdminPage() {
             </p>
           </div>
           <span className="text-xs text-stone-400 font-medium">
-            8 módulos integrados
+            9 módulos integrados
           </span>
         </div>
 

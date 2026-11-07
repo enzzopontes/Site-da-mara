@@ -29,6 +29,7 @@ import {
   Store,
   ChevronRight,
   Flame,
+  Bell,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -45,6 +46,7 @@ const navItems = [
   { name: "Gestor de Pedidos", href: "/admin/pedidos", icon: ShoppingBag },
   { name: "Cardápio & Itens", href: "/admin/produtos", icon: Package },
   { name: "Cupons de Desconto", href: "/admin/cupons", icon: Ticket },
+  { name: "Campanhas Push", href: "/admin/campanhas", icon: Bell },
   { name: "Gestão Financeira", href: "/admin/caixa", icon: DollarSign },
   { name: "Banco de Imagens", href: "/admin/imagens", icon: ImageIcon },
   { name: "Banner & Promoções", href: "/admin/promocoes", icon: Megaphone },

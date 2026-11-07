@@ -24,7 +24,10 @@ interface CouponModalProps {
 export function CouponModal({ open, onOpenChange, onCouponApplied }: CouponModalProps) {
   const { getTotalPrice, coupon: selectedCoupon, setCoupon } = useCart()
   const currentTotal = getTotalPrice()
-  const { coupons, loading, validateCoupon, getCouponMissingAmount } = useCoupons(currentTotal)
+  const { coupons, loading, validateCoupon, getCouponMissingAmount } = useCoupons(
+    currentTotal,
+    selectedCoupon?.id
+  )
 
   const [code, setCode] = useState("")
   const [applying, setApplying] = useState(false)
@@ -157,31 +160,46 @@ export function CouponModal({ open, onOpenChange, onCouponApplied }: CouponModal
               <p className="text-xs text-gray-400">Fique atento aos nossos banners e redes sociais!</p>
             </div>
           ) : (
-            coupons.map((coupon) => {
+            coupons.map((coupon, index) => {
               const missing = getCouponMissingAmount(coupon)
               const isSelected = selectedCoupon?.id === coupon.id
-              const isApplicable = missing === 0
+              const isApplicable = missing === 0 && !coupon.isExhausted
+
+              const prevCoupon = index > 0 ? coupons[index - 1] : null
+              const prevApplicable = prevCoupon
+                ? getCouponMissingAmount(prevCoupon) === 0 && !prevCoupon.isExhausted
+                : false
+              const showUnavailableDivider = !isApplicable && prevApplicable
 
               return (
-                <div
-                  key={coupon.id}
-                  onClick={() => isApplicable && handleSelect(coupon)}
-                  data-vaul-no-drag
-                  className={`rounded-2xl border transition-all ${
-                    isSelected
-                      ? "border-[#E3A008] bg-[#FEF8EC] shadow-sm ring-1 ring-[#E3A008]"
-                      : isApplicable
-                      ? "border-gray-200 bg-white hover:border-gray-300 cursor-pointer"
-                      : "border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed"
-                  }`}
-                >
-                  <CouponCard
-                    coupon={coupon}
-                    isSelected={isSelected}
-                    missingAmount={missing}
-                    onSelect={() => isApplicable && handleSelect(coupon)}
-                  />
-                </div>
+                <React.Fragment key={coupon.id}>
+                  {showUnavailableDivider && (
+                    <div className="pt-2 pb-0.5">
+                      <p className="text-[11px] font-black uppercase tracking-wider text-[#8C827A]">
+                        Indisponíveis para este pedido
+                      </p>
+                    </div>
+                  )}
+                  <div
+                    onClick={() => isApplicable && handleSelect(coupon)}
+                    data-vaul-no-drag
+                    className={`rounded-2xl border transition-all ${
+                      isSelected
+                        ? "border-[#E3A008] bg-[#FEF8EC] shadow-sm ring-1 ring-[#E3A008]"
+                        : isApplicable
+                        ? "border-gray-200 bg-white hover:border-gray-300 cursor-pointer"
+                        : "border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed"
+                    }`}
+                  >
+                    <CouponCard
+                      coupon={coupon}
+                      currentTotal={currentTotal}
+                      isSelected={isSelected}
+                      missingAmount={missing}
+                      onSelect={() => isApplicable && handleSelect(coupon)}
+                    />
+                  </div>
+                </React.Fragment>
               )
             })
           )}

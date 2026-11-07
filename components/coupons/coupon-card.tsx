@@ -46,8 +46,10 @@ export function CouponCard({
     return () => clearInterval(id)
   }, [coupon?.expires_at])
 
+  const isExpired = coupon?.expires_at ? new Date(coupon.expires_at).getTime() < Date.now() : false
   const isExhausted =
     Boolean(coupon?.isExhausted) ||
+    isExpired ||
     (coupon?.max_uses != null && (coupon.current_uses ?? 0) >= coupon.max_uses) ||
     (coupon?.max_uses_per_user != null && (coupon.user_uses ?? 0) >= coupon.max_uses_per_user)
 
