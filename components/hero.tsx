@@ -81,7 +81,7 @@ export function Hero({
 
   return (
     <section className="bg-[#FAF8F5] border-b border-[#ECE7E0]">
-      {/* Capa de Restaurante Estilo iFood - altura ampliada no mobile para ver a comida totalmente */}
+      {/* Capa de Restaurante Estilo iFood */}
       <div className="relative h-36 sm:h-52 md:h-64 w-full bg-[#1F1B16] overflow-hidden">
         <img
           src="/products/costela.jpg"
@@ -92,13 +92,14 @@ export function Hero({
       </div>
 
       <div className="container mx-auto px-2 sm:px-4 max-w-5xl">
-        {/* Card de Identidade do Restaurante com Barra de Fidelidade */}
+        {/* Card de Identidade do Restaurante com Barra de Fidelidade e Métricas Reais */}
         <RestaurantHeaderCard
           isOpen={isStoreOpen}
           waitTimeMin={waitTime.min}
           waitTimeMax={waitTime.max}
           isDeliveryFeeEnabled={isDeliveryFeeEnabled}
           deliveryFee={deliveryFee}
+          totalOrders={totalOrders}
         />
 
         {/* Banner de Oferta Especial */}
