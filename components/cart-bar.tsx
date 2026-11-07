@@ -1,16 +1,13 @@
 "use client"
 
-import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { useCart } from "@/lib/cart-context"
-import { CartDrawer } from "@/components/cart-drawer"
 
 export function CartBar() {
   const pathname = usePathname()
   const { items, getTotalPrice } = useCart()
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0)
   const totalPrice = getTotalPrice()
@@ -56,8 +53,8 @@ export function CartBar() {
       <div className="max-w-xl mx-auto px-3 sm:px-4">
         <div className="bg-white border border-[#ECE7E0] shadow-[0_8px_30px_rgba(0,0,0,0.12)] rounded-2xl sm:rounded-3xl p-3 flex items-center justify-between gap-3">
           {/* Logo + Preço */}
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            <div className="relative w-11 h-11 sm:w-12 sm:h-12 flex-shrink-0 rounded-full overflow-hidden bg-[#F7F5F0] border border-[#ECE7E0] flex items-center justify-center">
+          <Link href="/checkout" className="flex items-center gap-3 min-w-0 flex-1 group cursor-pointer">
+            <div className="relative w-11 h-11 sm:w-12 sm:h-12 flex-shrink-0 rounded-full overflow-hidden bg-[#F7F5F0] border border-[#ECE7E0] flex items-center justify-center group-hover:border-[#E3A008] transition-colors">
               <Image
                 src="/logo.png"
                 alt="Batata Top Logo"
@@ -71,7 +68,7 @@ export function CartBar() {
                 Total com <strong className="font-bold text-[#1F1B16]">entrega grátis</strong>
               </span>
               <div className="flex items-baseline gap-1.5">
-                <span className="text-base sm:text-lg font-black text-[#1F1B16] tracking-tight">
+                <span className="text-base sm:text-lg font-black text-[#1F1B16] tracking-tight group-hover:text-[#E3A008] transition-colors">
                   R$ {totalPrice.toFixed(2).replace(".", ",")}
                 </span>
                 <span className="text-xs text-[#9C9188] font-bold">
@@ -79,20 +76,17 @@ export function CartBar() {
                 </span>
               </div>
             </div>
-          </div>
+          </Link>
 
-          {/* Botão Pill Amarelo "Ver sacola" abrindo Bottom Sheet no Mobile e Dialog no Desktop */}
-          <button
-            type="button"
-            onClick={() => setIsDrawerOpen(true)}
+          {/* Botão Pill Amarelo "Ver sacola" levando direto para a primeira etapa do carrinho (/checkout) */}
+          <Link
+            href="/checkout"
             className="flex-shrink-0 h-11 sm:h-12 px-5 sm:px-6 bg-[#E3A008] hover:bg-[#C1440E] active:scale-[0.98] text-white font-black text-sm sm:text-base rounded-full shadow-md flex items-center justify-center transition-all duration-200 cursor-pointer"
           >
             Ver sacola
-          </button>
+          </Link>
         </div>
       </div>
-
-      <CartDrawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen} />
     </aside>
   )
 }
