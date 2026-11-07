@@ -11,6 +11,14 @@ export interface Product {
   name: string
   description: string
   price: number
+  originalPrice?: number | null
+  original_price?: number | null
+  discountPercentage?: number | null
+  discount_percentage?: number | null
+  badgeText?: string | null
+  badge_text?: string | null
+  isFeatured?: boolean
+  is_featured?: boolean
   image: string
   category: "batata" | "bebida" | "macarrao"
   available: boolean
@@ -287,6 +295,14 @@ class ProductsManager {
         name: p.name,
         description: p.description || "",
         price: Number(p.price),
+        originalPrice: p.original_price != null ? Number(p.original_price) : null,
+        original_price: p.original_price != null ? Number(p.original_price) : null,
+        discountPercentage: p.discount_percentage != null ? Number(p.discount_percentage) : null,
+        discount_percentage: p.discount_percentage != null ? Number(p.discount_percentage) : null,
+        badgeText: p.badge_text || null,
+        badge_text: p.badge_text || null,
+        isFeatured: Boolean(p.is_featured),
+        is_featured: Boolean(p.is_featured),
         image: p.image_url || "/products/placeholder.jpg",
         category: p.category,
         available: p.available,
@@ -371,7 +387,11 @@ class ProductsManager {
           price: product.price,
           image_url: product.image,
           category: product.category,
-          available: product.available ?? true
+          available: product.available ?? true,
+          original_price: product.originalPrice ?? product.original_price ?? null,
+          discount_percentage: product.discountPercentage ?? product.discount_percentage ?? null,
+          badge_text: product.badgeText ?? product.badge_text ?? null,
+          is_featured: product.isFeatured ?? product.is_featured ?? false,
         }])
         .select()
         .single()
@@ -406,6 +426,18 @@ class ProductsManager {
       if (updates.image !== undefined) dataToUpdate.image_url = updates.image
       if (updates.category !== undefined) dataToUpdate.category = updates.category
       if (updates.available !== undefined) dataToUpdate.available = updates.available
+      if (updates.originalPrice !== undefined || (updates as any).original_price !== undefined) {
+        dataToUpdate.original_price = updates.originalPrice ?? (updates as any).original_price ?? null
+      }
+      if (updates.discountPercentage !== undefined || (updates as any).discount_percentage !== undefined) {
+        dataToUpdate.discount_percentage = updates.discountPercentage ?? (updates as any).discount_percentage ?? null
+      }
+      if (updates.badgeText !== undefined || (updates as any).badge_text !== undefined) {
+        dataToUpdate.badge_text = updates.badgeText ?? (updates as any).badge_text ?? null
+      }
+      if (updates.isFeatured !== undefined || (updates as any).is_featured !== undefined) {
+        dataToUpdate.is_featured = updates.isFeatured ?? (updates as any).is_featured ?? false
+      }
 
       const { error } = await supabase
         .from("products")
@@ -567,3 +599,4 @@ class ProductsManager {
 }
 
 export const productsManager = new ProductsManager()
+

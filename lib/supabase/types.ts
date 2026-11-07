@@ -12,6 +12,10 @@ export interface Product {
   name: string
   description: string | null
   price: number
+  original_price: number | null
+  discount_percentage: number | null
+  badge_text: string | null
+  is_featured: boolean
   category: string
   image_url: string | null
   available: boolean

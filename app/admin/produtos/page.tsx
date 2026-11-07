@@ -1,5 +1,7 @@
 "use client"
 
+import { appToast } from "@/lib/app-toast"
+
 import type React from "react"
 import { useEffect, useState, useMemo } from "react"
 import { useAuth } from "@/lib/auth-context"
@@ -72,6 +74,11 @@ export default function AdminProdutosPage() {
   const [formName, setFormName] = useState("")
   const [formDescription, setFormDescription] = useState("")
   const [formPrice, setFormPrice] = useState("")
+  const [formOriginalPrice, setFormOriginalPrice] = useState("")
+  const [formDiscountPercentage, setFormDiscountPercentage] = useState("")
+  const [formBadgeText, setFormBadgeText] = useState("")
+  const [formIsFeatured, setFormIsFeatured] = useState(false)
+  const [pricingWarning, setPricingWarning] = useState<string | null>(null)
   const [formImage, setFormImage] = useState("")
   const [formCategory, setFormCategory] = useState<"batata" | "bebida" | "macarrao">("batata")
   const [selectedAdicionais, setSelectedAdicionais] = useState<string[]>([])
@@ -80,6 +87,89 @@ export default function AdminProdutosPage() {
   const [formAdicionalName, setFormAdicionalName] = useState("")
   const [formAdicionalPrice, setFormAdicionalPrice] = useState("")
   const [formAdicionalCategoria, setFormAdicionalCategoria] = useState("proteinas")
+
+  // Sincronização reativa bidirecional sem loop infinito
+  const handleFinalPriceChange = (val: string) => {
+    setFormPrice(val)
+    const p = parseFloat(val.replace(",", "."))
+    const o = parseFloat(formOriginalPrice.replace(",", "."))
+
+    if (!isNaN(p) && p > 0 && !isNaN(o) && o > 0) {
+      if (o > p) {
+        setPricingWarning(null)
+        const pct = Math.round(((o - p) / o) * 100)
+        setFormDiscountPercentage(pct.toString())
+      } else {
+        setPricingWarning("O preço riscado (De) deve ser maior que o preço final.")
+        setFormDiscountPercentage("")
+      }
+    } else if (isNaN(o) && formDiscountPercentage.trim()) {
+      const pct = parseFloat(formDiscountPercentage.replace(",", "."))
+      if (!isNaN(pct) && pct > 0 && pct < 100 && !isNaN(p) && p > 0) {
+        const calculatedOriginal = p / (1 - pct / 100)
+        setFormOriginalPrice(calculatedOriginal.toFixed(2))
+        setPricingWarning(null)
+      }
+    }
+  }
+
+  const handleOriginalPriceChange = (val: string) => {
+    setFormOriginalPrice(val)
+    if (!val.trim()) {
+      setFormDiscountPercentage("")
+      setPricingWarning(null)
+      return
+    }
+
+    const o = parseFloat(val.replace(",", "."))
+    const p = parseFloat(formPrice.replace(",", "."))
+
+    if (isNaN(o)) return
+
+    if (!isNaN(p) && p > 0) {
+      if (o > p) {
+        setPricingWarning(null)
+        const pct = Math.round(((o - p) / o) * 100)
+        setFormDiscountPercentage(pct.toString())
+      } else {
+        setPricingWarning(
+          `O preço riscado (De: R$ ${o.toFixed(2).replace(".", ",")}) deve ser maior que o preço final (Por: R$ ${p.toFixed(2).replace(".", ",")}).`,
+        )
+        setFormDiscountPercentage("")
+      }
+    } else {
+      setPricingWarning(null)
+    }
+  }
+
+  const handleDiscountPercentageChange = (val: string) => {
+    setFormDiscountPercentage(val)
+    if (!val.trim()) {
+      setFormOriginalPrice("")
+      setPricingWarning(null)
+      return
+    }
+
+    const pct = parseFloat(val.replace(",", "."))
+    const p = parseFloat(formPrice.replace(",", "."))
+
+    if (isNaN(pct) || pct <= 0) {
+      setFormOriginalPrice("")
+      setPricingWarning(null)
+      return
+    }
+
+    if (pct >= 100) {
+      setPricingWarning("O desconto percentual deve ser menor que 100%.")
+      return
+    }
+
+    if (!isNaN(p) && p > 0) {
+      const calculatedOriginal = p / (1 - pct / 100)
+      setFormOriginalPrice(calculatedOriginal.toFixed(2))
+      setPricingWarning(null)
+    }
+  }
 
   useEffect(() => {
     if (!loading) {
@@ -115,6 +205,11 @@ export default function AdminProdutosPage() {
       setFormName(product.name)
       setFormDescription(product.description)
       setFormPrice(product.price.toString())
+      setFormOriginalPrice((product.originalPrice ?? product.original_price)?.toString() || "")
+      setFormDiscountPercentage((product.discountPercentage ?? product.discount_percentage)?.toString() || "")
+      setFormBadgeText(product.badgeText ?? product.badge_text ?? "")
+      setFormIsFeatured(Boolean(product.isFeatured ?? product.is_featured))
+      setPricingWarning(null)
       setFormImage(product.image)
       setFormCategory(product.category)
       setSelectedAdicionais(product.adicionais?.map((a) => a.id) || [])
@@ -123,6 +218,11 @@ export default function AdminProdutosPage() {
       setFormName("")
       setFormDescription("")
       setFormPrice("")
+      setFormOriginalPrice("")
+      setFormDiscountPercentage("")
+      setFormBadgeText("")
+      setFormIsFeatured(false)
+      setPricingWarning(null)
       setFormImage("")
       setFormCategory(activeTab === "adicionais" ? "batata" : activeTab)
       setSelectedAdicionais([])
@@ -150,29 +250,56 @@ export default function AdminProdutosPage() {
 
     const price = Number.parseFloat(formPrice.replace(",", "."))
     if (Number.isNaN(price) || price <= 0) {
-      alert("Preço inválido")
+      appToast.warning("Preço inválido", "Informe um preço válido.")
       return
     }
 
+    let originalPrice: number | null = null
+    let discountPercentage: number | null = null
+
+    if (formOriginalPrice.trim()) {
+      const parsedOriginal = Number.parseFloat(formOriginalPrice.replace(",", "."))
+      if (!isNaN(parsedOriginal) && parsedOriginal > 0) {
+        if (parsedOriginal <= price) {
+          appToast.warning(
+            "Preço Riscado Inválido",
+            "O preço riscado ('De') deve ser estritamente maior que o preço final ('Por').",
+          )
+          return
+        }
+        originalPrice = parsedOriginal
+        discountPercentage = Math.round(((originalPrice - price) / originalPrice) * 100)
+      }
+    }
+
+    const badgeText = formBadgeText.trim() || null
+    const isFeatured = formIsFeatured
+
+    const productPayload = {
+      name: formName.trim(),
+      description: formDescription.trim(),
+      price,
+      originalPrice,
+      original_price: originalPrice,
+      discountPercentage,
+      discount_percentage: discountPercentage,
+      badgeText,
+      badge_text: badgeText,
+      isFeatured,
+      is_featured: isFeatured,
+      image: formImage.trim() || "/placeholder.svg?height=300&width=300&query=" + encodeURIComponent(formName),
+      category: formCategory,
+    }
+
     if (editingProduct) {
-      const updated = await productsManager.updateProduct(editingProduct.id, {
-        name: formName.trim(),
-        description: formDescription.trim(),
-        price,
-        image: formImage.trim() || "/placeholder.svg?height=300&width=300&query=" + encodeURIComponent(formName),
-        category: formCategory,
-      })
+      const updated = await productsManager.updateProduct(editingProduct.id, productPayload)
 
       if (updated) {
         await productsManager.setProductAdicionais(editingProduct.id, selectedAdicionais)
       }
     } else {
       const created = await productsManager.createProduct({
-        name: formName.trim(),
-        description: formDescription.trim(),
-        price,
-        image: formImage.trim() || "/placeholder.svg?height=300&width=300&query=" + encodeURIComponent(formName),
-        category: formCategory,
+        ...productPayload,
         available: true,
       })
 
@@ -180,20 +307,20 @@ export default function AdminProdutosPage() {
         await productsManager.setProductAdicionais(created.id, selectedAdicionais)
       }
     }
-
     loadProducts()
     setIsDialogOpen(false)
+    return
   }
 
   const handleSaveAdicional = async () => {
     if (!formAdicionalName.trim() || !formAdicionalPrice) {
-      alert("Preencha todos os campos obrigatórios")
+      appToast.warning("Campos obrigatórios", "Preencha todos os campos obrigatórios.")
       return
     }
 
     const price = Number.parseFloat(formAdicionalPrice.replace(",", "."))
     if (isNaN(price) || price <= 0) {
-      alert("Preço inválido")
+      appToast.warning("Preço inválido", "Informe um preço válido.")
       return
     }
 
@@ -509,7 +636,36 @@ export default function AdminProdutosPage() {
                               {product.description || "Sem descrição informada."}
                             </p>
 
-                            <div className="mt-2 flex items-baseline gap-2">
+                            <div className="mt-2 flex flex-wrap items-baseline gap-1.5 sm:gap-2">
+                              {(product.originalPrice ?? product.original_price) &&
+                                (product.originalPrice ?? product.original_price)! > product.price && (
+                                  <span className="text-xs text-gray-400 line-through font-medium">
+                                    R$ {(product.originalPrice ?? product.original_price)!.toFixed(2).replace(".", ",")}
+                                  </span>
+                                )}
+                              <span className="text-base font-black text-gray-900">
+                                R$ {product.price.toFixed(2).replace(".", ",")}
+                              </span>
+                              {(product.originalPrice ?? product.original_price) &&
+                                (product.originalPrice ?? product.original_price)! > product.price && (
+                                  <span className="text-[10px] font-black bg-[#008941] text-white px-1.5 py-0.5 rounded-full">
+                                    -{Math.round(
+                                      (((product.originalPrice ?? product.original_price)! - product.price) /
+                                        (product.originalPrice ?? product.original_price)!) *
+                                        100,
+                                    )}%
+                                  </span>
+                                )}
+                              {(product.isFeatured || product.is_featured) && (
+                                <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                                  <Sparkles className="w-2.5 h-2.5 text-[#E3A008]" /> Destaque
+                                </span>
+                              )}
+                              {(product.badgeText || product.badge_text) && (
+                                <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200/60 px-1.5 py-0.5 rounded-md">
+                                  {product.badgeText || product.badge_text}
+                                </span>
+                              )}
                               <span className="text-base font-black text-gray-900">
                                 R$ {product.price.toFixed(2).replace(".", ",")}
                               </span>
@@ -617,16 +773,129 @@ export default function AdminProdutosPage() {
 
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold text-gray-700">Preço Base (R$) *</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={formPrice}
-                    onChange={(e) => setFormPrice(e.target.value)}
-                    placeholder="0.00"
-                    className="rounded-xl text-xs h-10 border-gray-200"
-                    required
-                  />
                 </div>
+
+                {/* Bloco de Precificação Psicológica & Promoção Reativa */}
+                <div className="p-3.5 bg-gradient-to-br from-amber-50/60 to-orange-50/40 rounded-2xl border border-amber-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-[#8A6100] flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-[#E3A008]" />
+                      Precificação & Promoção (iFood)
+                    </span>
+                    {formDiscountPercentage && Number(formDiscountPercentage) > 0 && (
+                      <span className="bg-[#008941] text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-2xs">
+                        -{formDiscountPercentage}%
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Preço de Venda Final */}
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-gray-800">
+                      Preço Final de Venda ("Por") *
+                    </Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500">
+                        R$
+                      </span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={formPrice}
+                        onChange={(e) => handleFinalPriceChange(e.target.value)}
+                        placeholder="28.99"
+                        className="rounded-xl text-xs h-10 pl-9 font-extrabold text-gray-900 border-gray-200 bg-white"
+                        required
+                      />
+                    </div>
+                    <p className="text-[10px] text-gray-500">
+                      Preço real cobrado no carrinho e no pedido
+                    </p>
+                  </div>
+
+                  {/* Sincronização Bidirecional: Preço Riscado "De" e Desconto "%" */}
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-bold text-gray-700">
+                        Preço Riscado ("De")
+                      </Label>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-gray-400">
+                          R$
+                        </span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={formOriginalPrice}
+                          onChange={(e) => handleOriginalPriceChange(e.target.value)}
+                          placeholder="32.99"
+                          className="rounded-xl text-xs h-9 pl-8 border-gray-200 bg-white font-medium"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-bold text-gray-700">
+                        Desconto (%)
+                      </Label>
+                      <div className="relative">
+                        <Input
+                          type="number"
+                          step="1"
+                          min="1"
+                          max="99"
+                          value={formDiscountPercentage}
+                          onChange={(e) => handleDiscountPercentageChange(e.target.value)}
+                          placeholder="12"
+                          className="rounded-xl text-xs h-9 pr-7 border-gray-200 bg-white font-medium"
+                        />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-gray-400">
+                          %
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Mensagem de Erro/Alerta se original_price <= price */}
+                  {pricingWarning && (
+                    <div className="flex items-center gap-1.5 p-2 rounded-lg bg-red-50 text-red-700 text-[11px] border border-red-200">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{pricingWarning}</span>
+                    </div>
+                  )}
+
+                  {/* Tag de Destaque e Flag de Home */}
+                  <div className="space-y-2 pt-2 border-t border-amber-200/50">
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-bold text-gray-700">
+                        Tag no Topo do Card (Opcional)
+                      </Label>
+                      <Input
+                        value={formBadgeText}
+                        onChange={(e) => setFormBadgeText(e.target.value)}
+                        placeholder="Ex: Mais pedido, Promoção, Especial"
+                        className="rounded-xl text-xs h-9 border-gray-200 bg-white"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <div className="space-y-0.5">
+                        <Label className="text-xs font-bold text-gray-800 cursor-pointer">
+                          Destaque na Home
+                        </Label>
+                        <p className="text-[10px] text-gray-500">
+                          Exibir no carrossel de destaques da página inicial
+                        </p>
+                      </div>
+                      <Switch
+                        checked={formIsFeatured}
+                        onCheckedChange={setFormIsFeatured}
+                        className="data-[state=checked]:bg-[#E3A008]"
+                      />
+                    </div>
+                  </div>
+                </div>
+
               </div>
 
               <div className="space-y-3">
