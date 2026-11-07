@@ -5,13 +5,11 @@ import React, {
   useEffect,
   useRef,
   useCallback,
-  useTransition,
 } from "react";
 import {
   APIProvider,
   Map,
   useMap,
-  useMapsLibrary,
   MapCameraChangedEvent,
 } from "@vis.gl/react-google-maps";
 import {
@@ -23,8 +21,8 @@ import {
   Check,
   MoreVertical,
   Pencil,
+  Trash2,
   Loader2,
-  X,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { addressesManager, Address } from "@/lib/addresses-manager";
@@ -51,16 +49,14 @@ const DEFAULT_IACANGA_COORDS: Coords = {
 const GUEST_STORAGE_KEY = "batata_top_guest_address";
 
 // -------------------------------------------------------------
-// Componente do Pino Amarelo Central com Furo (Identico ao App)
+// Pino Amarelo com Furo Central (Identico ao App)
 // -------------------------------------------------------------
 const FloatingCenterPin: React.FC<{ isMoving: boolean }> = ({ isMoving }) => {
   return (
     <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-full flex flex-col items-center">
       <div
-        className={`transition-all duration-200 ease-out will-change-transform ${
-          isMoving
-            ? "-translate-y-3 scale-105"
-            : "translate-y-0 scale-100"
+        className={`transition-all duration-180 ease-out will-change-transform ${
+          isMoving ? "-translate-y-3.5 scale-105" : "translate-y-0 scale-100"
         }`}
       >
         <svg
@@ -71,20 +67,17 @@ const FloatingCenterPin: React.FC<{ isMoving: boolean }> = ({ isMoving }) => {
           xmlns="http://www.w3.org/2000/svg"
           className="drop-shadow-md"
         >
-          {/* Corpo do Pino (Amarelo vibrante ou cinza durante movimento) */}
           <path
             d="M21 0C9.402 0 0 9.402 0 21C0 34.125 18.375 46.725 20.055 47.775a1.5 1.5 0 001.89 0C23.625 46.725 42 34.125 42 21 42 9.402 32.598 0 21 0Z"
             fill={isMoving ? "#9CA3AF" : "#E59500"}
           />
-          {/* Furo central do pino (transparente com anel branco como nas capturas) */}
           <circle cx="21" cy="19" r="6" fill="#FFFFFF" />
           <circle cx="21" cy="19" r="3" fill={isMoving ? "#9CA3AF" : "#E59500"} />
         </svg>
       </div>
 
-      {/* Sombra no chão */}
       <div
-        className={`h-2.5 w-6 rounded-full bg-black/40 blur-[1px] transition-all duration-200 ${
+        className={`h-2.5 w-6 rounded-full bg-black/40 blur-[1px] transition-all duration-180 ${
           isMoving ? "scale-75 opacity-25" : "scale-100 opacity-60"
         }`}
       />
@@ -93,7 +86,7 @@ const FloatingCenterPin: React.FC<{ isMoving: boolean }> = ({ isMoving }) => {
 };
 
 // -------------------------------------------------------------
-// Subcomponente de Mapa para a Tela de Seleção Interativa
+// Mapa em Tela Cheia
 // -------------------------------------------------------------
 interface MapSelectorViewProps {
   center: Coords;
@@ -117,6 +110,13 @@ const MapSelectorView: React.FC<MapSelectorViewProps> = ({
   const map = useMap();
   const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Recentraliza o mapa imediatamente se a coordenada do centro mudar
+  useEffect(() => {
+    if (map && center) {
+      map.panTo(center);
+    }
+  }, [map, center]);
+
   const handleCameraChange = useCallback(
     (ev: MapCameraChangedEvent) => {
       const c = ev.detail.center;
@@ -124,7 +124,7 @@ const MapSelectorView: React.FC<MapSelectorViewProps> = ({
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
       idleTimerRef.current = setTimeout(() => {
         onCameraIdle({ lat: c.lat, lng: c.lng });
-      }, 250);
+      }, 200);
     },
     [onCameraIdle]
   );
@@ -132,7 +132,7 @@ const MapSelectorView: React.FC<MapSelectorViewProps> = ({
   return (
     <div className="relative flex flex-col h-full w-full bg-[#E5F2E9] overflow-hidden">
       {/* Header do Mapa com cantos inferiores arredondados */}
-      <div className="z-30 flex items-center justify-between px-4 py-3 bg-white rounded-b-2xl shadow-sm">
+      <div className="z-30 flex items-center justify-between px-4 py-3.5 bg-white rounded-b-2xl shadow-sm shrink-0">
         <button
           type="button"
           onClick={onBack}
@@ -147,7 +147,7 @@ const MapSelectorView: React.FC<MapSelectorViewProps> = ({
         <div className="w-6" />
       </div>
 
-      {/* Mapa em Tela Cheia */}
+      {/* Mapa */}
       <div className="relative flex-1 w-full h-full">
         <Map
           defaultCenter={center}
@@ -159,12 +159,10 @@ const MapSelectorView: React.FC<MapSelectorViewProps> = ({
           className="h-full w-full"
         />
 
-        {/* Pino Flutuante */}
         <FloatingCenterPin isMoving={isMoving} />
 
-        {/* Loading de endereço suave */}
         {isResolving && (
-          <div className="pointer-events-none absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 rounded-full bg-white/90 px-3.5 py-1.5 shadow-md backdrop-blur-xs">
+          <div className="pointer-events-none absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 rounded-full bg-white/95 px-3.5 py-1.5 shadow-md backdrop-blur-xs">
             <Loader2 className="w-3.5 h-3.5 animate-spin text-[#E59500]" />
             <span className="text-xs font-semibold text-slate-700">
               Identificando rua...
@@ -196,7 +194,7 @@ const MapSelectorView: React.FC<MapSelectorViewProps> = ({
 };
 
 // -------------------------------------------------------------
-// Componente Principal de Fluxo de Endereço (Identico ao App)
+// Componente Principal
 // -------------------------------------------------------------
 export const AddressFlow: React.FC<AddressFlowProps> = ({
   onClose,
@@ -208,10 +206,9 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
   const { user } = useAuth();
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
 
-  // Estados de navegação: "initial" (Lista/GPS) -> "map" (Pino Uber) -> "details" (Formulário)
   const [step, setStep] = useState<"initial" | "map" | "details">("initial");
 
-  // Localização do GPS e Endereço Detectado em Tempo Real
+  // Localização rápida do GPS (sem travar)
   const [currentCoords, setCurrentCoords] = useState<Coords>(DEFAULT_IACANGA_COORDS);
   const [gpsAddressText, setGpsAddressText] = useState<string>("");
   const [isDetectingGps, setIsDetectingGps] = useState<boolean>(true);
@@ -221,14 +218,14 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
   const [isMapMoving, setIsMapMoving] = useState<boolean>(false);
   const [isResolvingAddress, setIsResolvingAddress] = useState<boolean>(false);
 
-  // Endereço Selecionado/Decodificado
+  // Endereço Decodificado
   const [selectedStreet, setSelectedStreet] = useState<string>("");
   const [selectedNeighborhood, setSelectedNeighborhood] = useState<string>("");
   const [selectedCity, setSelectedCity] = useState<string>("Iacanga");
   const [selectedState, setSelectedState] = useState<string>("SP");
   const [selectedCep, setSelectedCep] = useState<string>("");
 
-  // Estados da Tela de Detalhes (Formulário)
+  // Formulário de Detalhes
   const [numero, setNumero] = useState<string>("");
   const [semNumero, setSemNumero] = useState<boolean>(false);
   const [complemento, setComplemento] = useState<string>("");
@@ -237,8 +234,12 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
   const [labelFavorito, setLabelFavorito] = useState<"Casa" | "Trabalho" | null>("Casa");
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
-  // Endereços salvos do usuário
+  // Lista de Endereços Salvos
   const [savedAddresses, setSavedAddresses] = useState<Address[]>([]);
+  
+  // Modal de Ações dos 3 Pontos (Excluir / Editar)
+  const [menuAddress, setMenuAddress] = useState<Address | null>(null);
+
   const geocoderRef = useRef<google.maps.Geocoder | null>(null);
 
   // 1. Carrega endereços salvos
@@ -265,7 +266,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
     loadSavedAddresses();
   }, [loadSavedAddresses]);
 
-  // 2. Geocodificação reversa usando Geocoder do Google
+  // 2. Geocodificador
   const reverseGeocode = useCallback(
     (coords: Coords): Promise<{ street: string; neighborhood: string; city: string; state: string; cep: string; formatted: string }> => {
       return new Promise((resolve) => {
@@ -327,41 +328,48 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
     []
   );
 
-  // 3. Captura localização do GPS em segundo plano ao abrir a tela
+  // 3. Obtenção ultrarrápida de geolocalização com cache e sem bloquear
   useEffect(() => {
     if (!navigator.geolocation) {
       setIsDetectingGps(false);
-      setGpsAddressText("Localização não disponível no navegador");
+      setGpsAddressText("Iacanga - SP");
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
-      async (pos) => {
+      (pos) => {
         const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setCurrentCoords(coords);
         setMapCoords(coords);
-
-        const decoded = await reverseGeocode(coords);
-        if (decoded.formatted) {
-          setGpsAddressText(decoded.formatted);
-        } else {
-          setGpsAddressText("Localização atual encontrada");
-        }
         setIsDetectingGps(false);
+
+        // Decodifica em background sem travar nada
+        reverseGeocode(coords).then((decoded) => {
+          if (decoded.formatted) {
+            setGpsAddressText(decoded.formatted);
+          } else {
+            setGpsAddressText(`${decoded.city} - ${decoded.state}`);
+          }
+        });
       },
       () => {
         setIsDetectingGps(false);
-        setGpsAddressText("Clique para buscar e selecionar no mapa");
+        setGpsAddressText("Iacanga - SP");
       },
-      { enableHighAccuracy: true, timeout: 6000 }
+      {
+        enableHighAccuracy: false, // Rápido em desktops e celulares
+        timeout: 3000,
+        maximumAge: 300000, // 5 min cache
+      }
     );
   }, [reverseGeocode]);
 
-  // 4. Ao clicar na linha "Usar localização atual", abre o mapa
+  // 4. Clicar em "Usar localização atual": ABRE O MAPA INSTANTANEAMENTE
   const handleUseCurrentLocation = () => {
     setMapCoords(currentCoords);
-    setStep("map");
-    // Já decodifica o endereço da coordenada atual
+    setStep("map"); // Abre na hora!
+
+    // Inicia a resolução em background
     setIsResolvingAddress(true);
     reverseGeocode(currentCoords).then((data) => {
       setSelectedStreet(data.street);
@@ -373,7 +381,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
     });
   };
 
-  // 5. Parou o mapa -> Decodifica coordenadas
+  // 5. Câmera do mapa estabilizou
   const handleCameraIdle = useCallback(
     async (coords: Coords) => {
       setIsMapMoving(false);
@@ -390,13 +398,82 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
     [reverseGeocode]
   );
 
-  // 6. Confirma mapa -> Avança para detalhes
+  // 6. Confirma no mapa -> vai para detalhes
   const handleConfirmMap = () => {
     if (isResolvingAddress) return;
     setStep("details");
   };
 
-  // 7. Salva o endereço final (botão "Ver batatas")
+  // 7. Clicar em cima do endereço cadastrado: APENAS SELECIONA! Não abre mapa.
+  const handleSelectSavedAddress = async (addr: Address) => {
+    if (user) {
+      await addressesManager.setDefaultAddress(user.id, addr.id);
+    } else {
+      localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify({ ...addr, is_default: true }));
+    }
+
+    window.dispatchEvent(new Event("address-changed"));
+    appToast.success("Endereço selecionado!", `${addr.street}, ${addr.number}`);
+
+    if (onSuccess) onSuccess(addr);
+    if (onClose) onClose();
+    else router.push(redirectUrl);
+  };
+
+  // 8. Ação do Menu 3 Pontos: Excluir
+  const handleMenuDelete = async () => {
+    if (!menuAddress) return;
+    const toDelete = menuAddress;
+    setMenuAddress(null);
+
+    if (user) {
+      await addressesManager.deleteAddress(toDelete.id);
+    } else {
+      localStorage.removeItem(GUEST_STORAGE_KEY);
+    }
+
+    await loadSavedAddresses();
+    window.dispatchEvent(new Event("address-changed"));
+    appToast.success("Endereço removido com sucesso.");
+  };
+
+  // 9. Ação do Menu 3 Pontos: Editar
+  const handleMenuEdit = () => {
+    if (!menuAddress) return;
+    const addr = menuAddress;
+    setMenuAddress(null);
+
+    // Preenche os campos para edição
+    setSelectedStreet(addr.street);
+    setSelectedNeighborhood(addr.neighborhood);
+    setSelectedCity(addr.city);
+    setSelectedState(addr.state);
+    setSelectedCep(addr.cep);
+
+    if (addr.number === "S/N") {
+      setSemNumero(true);
+      setNumero("");
+    } else {
+      setSemNumero(false);
+      setNumero(addr.number || "");
+    }
+
+    if (!addr.complement) {
+      setSemComplemento(true);
+      setComplemento("");
+    } else {
+      setSemComplemento(false);
+      setComplemento(addr.complement);
+    }
+
+    setPontoReferencia("");
+    setLabelFavorito("Casa");
+
+    // Abre direto na tela de detalhes
+    setStep("details");
+  };
+
+  // 10. Salva endereço final
   const handleSaveFinalAddress = async () => {
     const finalNumber = semNumero ? "S/N" : numero.trim();
     const finalComplement = semComplemento ? "" : complemento.trim();
@@ -426,57 +503,37 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
       };
 
       let saved: Address | null = null;
-
       if (user) {
         saved = await addressesManager.addAddress(addressData);
       } else {
-        saved = {
-          id: "guest-default",
-          ...addressData,
-        };
+        saved = { id: "guest-default", ...addressData };
         localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(saved));
       }
 
       window.dispatchEvent(new Event("address-changed"));
       appToast.success("Endereço salvo com sucesso!", `${saved?.street}, ${saved?.number}`);
 
-      if (onSuccess && saved) {
-        onSuccess(saved);
-      }
-
-      if (onClose) {
-        onClose();
-      } else {
-        router.push(redirectUrl);
-      }
+      if (onSuccess && saved) onSuccess(saved);
+      if (onClose) onClose();
+      else router.push(redirectUrl);
     } catch (e) {
       console.error(e);
-      appToast.error("Erro ao salvar endereço", "Tente novamente.");
+      appToast.error("Erro ao salvar endereço.");
     } finally {
       setIsSaving(false);
     }
   };
 
-  // 8. Seleção rápida de endereço já salvo da lista
-  const handleSelectSaved = (addr: Address) => {
-    window.dispatchEvent(new Event("address-changed"));
-    appToast.success("Endereço selecionado!", `${addr.street}, ${addr.number}`);
-    if (onSuccess) onSuccess(addr);
-    if (onClose) onClose();
-    else router.push(redirectUrl);
-  };
-
-  // Validação para habilitar o botão "Ver batatas"
   const isDetailsValid =
     (semNumero || numero.trim().length > 0) &&
     (semComplemento || complemento.trim().length > 0);
 
   return (
     <APIProvider apiKey={apiKey} libraries={["places", "geocoding"]}>
-      <div className={`w-full h-full flex flex-col bg-[#FAF8F5] text-slate-800 ${isModal ? "max-h-[92vh] rounded-3xl overflow-hidden shadow-2xl" : "min-h-screen"}`}>
+      <div className={`relative w-full h-full flex flex-col bg-[#FAF8F5] text-slate-800 ${isModal ? "max-h-[92vh] rounded-3xl overflow-hidden shadow-2xl" : "min-h-screen"}`}>
 
         {/* ======================================================== */}
-        {/* ESTADO 1: LISTA DE ENDEREÇOS E GPS (IDÊNTICO À IMAGEM 3) */}
+        {/* ESTADO 1: LISTA DE ENDEREÇOS E GPS (IDÊNTICO À FOTO)     */}
         {/* ======================================================== */}
         {step === "initial" && (
           <div className="flex flex-col h-full flex-1">
@@ -497,9 +554,9 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
             </div>
 
             <div className="p-4 space-y-4 flex-1 overflow-y-auto">
-              {/* Campo de Busca de Endereço */}
+              {/* Campo de Busca */}
               <div
-                onClick={() => setStep("map")}
+                onClick={handleUseCurrentLocation}
                 className="flex items-center gap-2.5 px-3.5 py-3 bg-[#F0ECE4]/70 rounded-2xl cursor-pointer hover:bg-[#EAE4DC] transition-colors"
               >
                 <Search className="w-4 h-4 text-[#E59500]" />
@@ -508,7 +565,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
                 </span>
               </div>
 
-              {/* Botão Usar Localização Atual (com subtítulo dinâmico do GPS) */}
+              {/* Botão Usar Localização Atual (com subtítulo instantâneo do GPS) */}
               <div
                 onClick={handleUseCurrentLocation}
                 className="flex items-start gap-3 p-2.5 rounded-2xl hover:bg-white/80 active:scale-[0.99] transition-all cursor-pointer group"
@@ -527,22 +584,21 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
                         Obtendo sua localização atual...
                       </span>
                     ) : (
-                      gpsAddressText || "Clique para abrir o mapa na sua posição"
+                      gpsAddressText || "Novo Horizonte - SP"
                     )}
                   </p>
                 </div>
               </div>
 
-              {/* Divisor Visual */}
               <div className="pt-2 border-t border-slate-200/60" />
 
-              {/* Lista de Endereços Salvos (Card Dourado Idêntico à Imagem 3) */}
+              {/* Card de Endereço Salvo (Borda Dourada - Clicar apenas seleciona!) */}
               {savedAddresses.length > 0 && (
                 <div className="space-y-3">
                   {savedAddresses.map((addr, idx) => (
                     <div
                       key={addr.id || idx}
-                      onClick={() => handleSelectSaved(addr)}
+                      onClick={() => handleSelectSavedAddress(addr)}
                       className="relative flex items-center justify-between p-4 bg-white border-2 border-[#E59500] rounded-2xl shadow-xs cursor-pointer active:scale-[0.99] transition-all"
                     >
                       <div className="flex items-center gap-3.5 min-w-0 flex-1">
@@ -563,14 +619,15 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
                         <div className="flex items-center justify-center w-5 h-5 rounded-full bg-[#E59500] text-white">
                           <Check className="w-3.5 h-3.5 stroke-[3]" />
                         </div>
+                        {/* Botão dos 3 Pontos - Abre o Modal de Excluir / Editar */}
                         <button
                           type="button"
                           onClick={(e) => {
-                            e.stopPropagation();
-                            // Abre para editar no mapa
-                            handleUseCurrentLocation();
+                            e.stopPropagation(); // NÃO seleciona o endereço!
+                            setMenuAddress(addr);
                           }}
-                          className="p-1 text-slate-400 hover:text-slate-600"
+                          className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                          title="Opções do endereço"
                         >
                           <MoreVertical className="w-4 h-4" />
                         </button>
@@ -580,11 +637,64 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
                 </div>
               )}
             </div>
+
+            {/* ======================================================== */}
+            {/* BOTTOM SHEET DOS 3 PONTOS (EXCLUIR / EDITAR / CANCELAR)   */}
+            {/* ======================================================== */}
+            {menuAddress && (
+              <div
+                onClick={() => setMenuAddress(null)}
+                className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-xs transition-opacity"
+              >
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full sm:max-w-md bg-white rounded-t-3xl p-5 shadow-2xl animate-in slide-in-from-bottom duration-200"
+                >
+                  {/* Handle cinza no topo */}
+                  <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto mb-4" />
+
+                  {/* Nome do endereço */}
+                  <h3 className="text-base font-extrabold text-center text-slate-900 mb-5">
+                    Casa
+                  </h3>
+
+                  {/* Botões Lado a Lado: Excluir e Editar */}
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <button
+                      type="button"
+                      onClick={handleMenuDelete}
+                      className="flex items-center justify-center gap-2 py-3 px-4 border border-slate-200 rounded-2xl hover:bg-red-50 hover:border-red-200 hover:text-red-600 active:scale-[0.98] transition-all cursor-pointer text-slate-800 font-semibold text-sm"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>Excluir</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleMenuEdit}
+                      className="flex items-center justify-center gap-2 py-3 px-4 border border-slate-200 rounded-2xl hover:bg-slate-50 active:scale-[0.98] transition-all cursor-pointer text-slate-800 font-semibold text-sm"
+                    >
+                      <Pencil className="w-4 h-4" />
+                      <span>Editar</span>
+                    </button>
+                  </div>
+
+                  {/* Botão Cancelar Dourado */}
+                  <button
+                    type="button"
+                    onClick={() => setMenuAddress(null)}
+                    className="w-full py-2.5 text-center text-[#E59500] font-bold text-sm hover:opacity-80 active:scale-95 transition-all cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {/* ======================================================== */}
-        {/* ESTADO 2: MAPA EM TELA CHEIA (IDÊNTICO ÀS IMAGENS 1 E 2) */}
+        {/* ESTADO 2: MAPA EM TELA CHEIA                             */}
         {/* ======================================================== */}
         {step === "map" && (
           <MapSelectorView
@@ -599,7 +709,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
         )}
 
         {/* ======================================================== */}
-        {/* ESTADO 3: FORMULÁRIO DE COMPLEMENTO (IDÊNTICO À IMAGEM 4) */}
+        {/* ESTADO 3: FORMULÁRIO DE COMPLEMENTO                      */}
         {/* ======================================================== */}
         {step === "details" && (
           <div className="flex flex-col h-full flex-1 bg-white">
@@ -620,7 +730,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
             </div>
 
             <div className="flex-1 overflow-y-auto pb-24">
-              {/* Miniatura do Mapa com o Pino Amarelo e Pílula "Ajustar marcador" */}
+              {/* Miniatura do Mapa com Ajustar Marcador */}
               <div className="relative h-44 w-full bg-[#E5F2E9] overflow-hidden border-b border-slate-100">
                 <Map
                   defaultCenter={mapCoords}
@@ -630,7 +740,6 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
                   className="h-full w-full pointer-events-none"
                 />
 
-                {/* Pino Central Fixo Amarelo na Miniatura */}
                 <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full flex flex-col items-center">
                   <svg width="34" height="40" viewBox="0 0 42 48" fill="none">
                     <path
@@ -643,7 +752,6 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
                   <div className="h-2 w-5 rounded-full bg-black/40 blur-[1px]" />
                 </div>
 
-                {/* Pílula branca sobreposta "Ajustar marcador" */}
                 <button
                   type="button"
                   onClick={() => setStep("map")}
@@ -653,7 +761,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
                 </button>
               </div>
 
-              {/* Nome da Rua e Bairro com Lápis de Edição */}
+              {/* Rua e Bairro */}
               <div className="flex items-start justify-between px-5 py-4 border-b border-slate-100">
                 <div className="min-w-0 flex-1">
                   <h2 className="text-sm font-extrabold text-slate-900 leading-snug">
@@ -674,9 +782,9 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
                 </button>
               </div>
 
-              {/* Campos do Formulário (Número, Complemento, Ponto de Referência) */}
+              {/* Campos */}
               <div className="p-5 space-y-4">
-                {/* Campo Número */}
+                {/* Número */}
                 <div>
                   <input
                     type="text"
@@ -712,7 +820,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
                   </div>
                 </div>
 
-                {/* Campo Complemento */}
+                {/* Complemento */}
                 <div>
                   <input
                     type="text"
@@ -748,7 +856,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
                   </div>
                 </div>
 
-                {/* Campo Ponto de Referência (Opcional) */}
+                {/* Referência */}
                 <div>
                   <input
                     type="text"
@@ -765,7 +873,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
                   </div>
                 </div>
 
-                {/* Seção Favoritar Endereço */}
+                {/* Favoritar */}
                 <div className="pt-2">
                   <p className="text-xs font-bold text-slate-800 mb-2.5">
                     Favoritar endereço
@@ -807,7 +915,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
               </div>
             </div>
 
-            {/* Botão Inferior Fixo "Ver batatas" */}
+            {/* Botão Ver batatas */}
             <div className="fixed sm:static bottom-0 inset-x-0 p-4 bg-white border-t border-slate-100 shadow-md">
               <button
                 type="button"
