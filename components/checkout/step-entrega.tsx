@@ -166,7 +166,21 @@ export function StepEntrega({
                   <span>Previsão: <strong>40 - 55 min</strong></span>
                 </div>
                 <div>
-                  <span>Taxa: <strong className="text-[#1F1B16]">R$ {deliveryFee.toFixed(2).replace(".", ",")}</strong></span>
+                  <span>
+                    Taxa:{" "}
+                    {deliveryFee > 0 ? (
+                      <strong className="text-[#1F1B16]">
+                        R$ {deliveryFee.toFixed(2).replace(".", ",")}
+                      </strong>
+                    ) : (
+                      <span className="inline-flex items-center gap-1">
+                        <span className="line-through text-stone-400 text-[11px] font-normal">R$ 5,00</span>
+                        <strong className="text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 text-[11px]">
+                          Grátis
+                        </strong>
+                      </span>
+                    )}
+                  </span>
                 </div>
               </div>
             </div>

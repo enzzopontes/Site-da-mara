@@ -309,7 +309,18 @@ export function StepPagamento({
           <div className="flex justify-between text-[#6B6157]">
             <span>Taxa de Entrega</span>
             <span className="font-bold text-[#1F1B16]">
-              {deliveryType === "pickup" ? "Grátis" : `R$ ${deliveryFee.toFixed(2).replace(".", ",")}`}
+              {deliveryType === "pickup" ? (
+                <span className="text-emerald-700">Grátis</span>
+              ) : deliveryFee > 0 ? (
+                `R$ ${deliveryFee.toFixed(2).replace(".", ",")}`
+              ) : (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="line-through text-stone-400 text-xs font-normal">R$ 5,00</span>
+                  <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 text-xs">
+                    Grátis
+                  </span>
+                </span>
+              )}
             </span>
           </div>
           <div className="pt-2 border-t border-[#F3F0EB] flex justify-between items-baseline text-sm">
