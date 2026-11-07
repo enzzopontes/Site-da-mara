@@ -809,27 +809,28 @@ export default function CheckoutPage() {
     return <CheckoutSkeleton />
   }
 
-  // ─── Sacola Vazia ──────────────────────────────────────────────────────────
+  // ─── Sacola Vazia (Copiado do App) ──────────────────────────────────────────
   if (items.length === 0) {
     return (
       <div className="min-h-screen flex flex-col bg-[#F7F4EF]">
         <main className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto">
-          <div className="relative w-44 h-44 mb-4">
+          <div className="relative w-[200px] h-[200px] mb-4">
             <Image
-              src="/logo.png"
-              alt="Sacola Vazia"
-              width={160}
-              height={160}
-              className="w-full h-full object-contain mx-auto opacity-80"
+              src="/assets/pedidos.png"
+              alt="Sua sacola está vazia"
+              width={200}
+              height={200}
+              className="w-full h-full object-contain mx-auto"
+              priority
             />
           </div>
-          <h2 className="text-2xl font-black text-[#1F1B16] mb-2">Sua sacola está vazia</h2>
-          <p className="text-sm text-[#6B6157] font-medium mb-6 leading-relaxed">
-            Que tal escolher deliciosas batatas recheadas e acompanhamentos direto do cardápio?
+          <h2 className="text-[18px] font-bold text-[#1F1B16] mb-2">Sua sacola está vazia</h2>
+          <p className="text-[14px] text-[#6B6157] text-center leading-5 mb-6 max-w-xs">
+            Que tal adicionar algumas deliciosas batatas recheadas para começar?
           </p>
-          <Link href="/cardapio" className="w-full">
-            <button className="w-full h-14 bg-[#E3A008] hover:bg-[#C1440E] active:scale-[0.98] text-white font-black text-base rounded-2xl shadow-md transition-all cursor-pointer">
-              Ver Cardápio Completo
+          <Link href="/cardapio">
+            <button className="bg-[#E3A008] hover:bg-[#B5860A] active:scale-[0.98] text-white font-bold text-[15px] px-6 py-3 rounded-lg shadow-sm transition-all cursor-pointer">
+              Ver Cardápio
             </button>
           </Link>
         </main>

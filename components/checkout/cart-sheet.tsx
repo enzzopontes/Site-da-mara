@@ -3,6 +3,7 @@
 import * as React from "react"
 import { useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import { Trash2, X, Plus, Minus, ArrowRight, ShoppingBag } from "lucide-react"
 import { toast } from "sonner"
 import * as SheetPrimitive from "@radix-ui/react-dialog"
@@ -113,14 +114,30 @@ export function CartSheet({ open, onOpenChange }: CartSheetProps) {
             {/* Lista de Itens */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {items.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-center py-12">
-                  <div className="w-16 h-16 rounded-3xl bg-[#F7F5F0] border border-[#ECE7E0] flex items-center justify-center text-stone-400 mb-3">
-                    <ShoppingBag className="w-8 h-8" />
+                <div className="flex flex-col items-center justify-center h-full text-center py-12 px-6">
+                  <div className="relative w-[180px] h-[180px] mb-3">
+                    <Image
+                      src="/assets/pedidos.png"
+                      alt="Sua sacola está vazia"
+                      width={180}
+                      height={180}
+                      className="w-full h-full object-contain mx-auto"
+                    />
                   </div>
-                  <h3 className="text-base font-black text-[#1F1B16]">Sua sacola está vazia</h3>
-                  <p className="text-xs text-[#6B6157] mt-1 max-w-xs">
-                    Adicione itens deliciosos para iniciar seu pedido.
+                  <h3 className="text-[18px] font-bold text-[#1F1B16] mb-2">Sua sacola está vazia</h3>
+                  <p className="text-[14px] text-[#6B6157] text-center leading-5 mb-6 max-w-xs">
+                    Que tal adicionar algumas deliciosas batatas recheadas para começar?
                   </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenChange(false)
+                      router.push("/cardapio")
+                    }}
+                    className="bg-[#E3A008] hover:bg-[#B5860A] active:scale-[0.98] text-white font-bold text-[15px] px-6 py-3 rounded-lg shadow-sm transition-all cursor-pointer"
+                  >
+                    Ver Cardápio
+                  </button>
                 </div>
               ) : (
                 items.map((item: CartItem) => {

@@ -147,13 +147,19 @@ export function CartDrawer({ open, onOpenChange }: CartDrawerProps) {
 
         {/* CORPO: ITENS OU VAZIO */}
         {items.length === 0 ? (
-          <div className="flex-1 p-8 text-center flex flex-col items-center justify-center gap-3">
-            <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center text-gray-400">
-              <ShoppingBag className="w-8 h-8" />
+          <div className="flex-1 p-8 text-center flex flex-col items-center justify-center">
+            <div className="relative w-[180px] h-[180px] mb-3">
+              <Image
+                src="/assets/pedidos.png"
+                alt="Sua sacola está vazia"
+                width={180}
+                height={180}
+                className="w-full h-full object-contain mx-auto"
+              />
             </div>
-            <h3 className="text-base font-bold text-[#1F1B16]">Sua sacola está vazia</h3>
-            <p className="text-xs text-gray-500 max-w-xs">
-              Escolha suas batatas recheadas, massas artesanais e bebidas favoritas para montar seu pedido.
+            <h3 className="text-[18px] font-bold text-[#1F1B16] mb-2">Sua sacola está vazia</h3>
+            <p className="text-[14px] text-[#6B6157] text-center leading-5 mb-6 max-w-xs">
+              Que tal adicionar algumas deliciosas batatas recheadas para começar?
             </p>
             <button
               type="button"
@@ -161,9 +167,9 @@ export function CartDrawer({ open, onOpenChange }: CartDrawerProps) {
                 onOpenChange(false)
                 router.push("/cardapio")
               }}
-              className="mt-2 px-5 py-2.5 bg-[#E3A008] hover:bg-[#C68A07] active:scale-95 text-white font-bold text-xs rounded-full shadow-sm transition-all"
+              className="bg-[#E3A008] hover:bg-[#B5860A] active:scale-[0.98] text-white font-bold text-[15px] px-6 py-3 rounded-lg shadow-sm transition-all cursor-pointer"
             >
-              Explorar Cardápio
+              Ver Cardápio
             </button>
           </div>
         ) : (
