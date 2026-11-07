@@ -11,6 +11,7 @@ import {
   Sparkles,
 } from "lucide-react"
 import { CartItem } from "@/lib/cart-context"
+import { CouponModal } from "@/components/coupons/coupon-modal"
 
 interface StepItensProps {
   items: CartItem[]
@@ -63,6 +64,7 @@ export function StepItens({
   onAddQuickItem,
 }: StepItensProps) {
   const router = useRouter()
+  const [isCouponModalOpen, setIsCouponModalOpen] = useState(false)
 
   // Filtra produtos recomendados que já estão na sacola
   const cartProductIds = new Set(items.map((i) => i.id.split("-")[0]))
@@ -285,7 +287,16 @@ export function StepItens({
       )}
 
       {/* 4. Bloco de Cupom (Idêntico ao Aplicativo) */}
-      <div className="flex items-center justify-between bg-white rounded-2xl p-3 border border-[#ECE7E0] shadow-xs">
+      <div
+        onClick={() => {
+          if (!appliedCoupon) {
+            router.push("/cupons?from=cart")
+          }
+        }}
+        className={`flex items-center justify-between bg-white rounded-2xl p-3 border border-[#ECE7E0] shadow-xs ${
+          !appliedCoupon ? "cursor-pointer hover:border-[#E3A008]/50 transition-colors" : ""
+        }`}
+      >
         <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
           <div className="relative w-8 h-8 flex-shrink-0">
             <Image
@@ -326,7 +337,10 @@ export function StepItens({
         {appliedCoupon ? (
           <button
             type="button"
-            onClick={onRemoveCoupon}
+            onClick={(e) => {
+              e.stopPropagation()
+              onRemoveCoupon()
+            }}
             className="text-sm font-bold text-[#DC2626] hover:opacity-80 active:scale-95 transition-all px-2 py-1 cursor-pointer flex-shrink-0"
           >
             Remover
@@ -334,10 +348,13 @@ export function StepItens({
         ) : (
           <button
             type="button"
-            onClick={() => router.push("/cupons")}
+            onClick={(e) => {
+              e.stopPropagation()
+              setIsCouponModalOpen(true)
+            }}
             className="text-sm font-bold text-[#E3A008] hover:opacity-80 active:scale-95 transition-all px-2 py-1 cursor-pointer flex-shrink-0"
           >
-            Adicionar
+            Ver cupons
           </button>
         )}
       </div>
@@ -382,6 +399,11 @@ export function StepItens({
           </div>
         </div>
       </div>
+
+      <CouponModal
+        open={isCouponModalOpen}
+        onOpenChange={setIsCouponModalOpen}
+      />
     </div>
   )
 }

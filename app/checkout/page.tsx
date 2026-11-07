@@ -1,11 +1,11 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { ShoppingBag, ArrowLeft, Loader2, AlertCircle } from "lucide-react"
-import { toast } from "sonner"
+import { appToast } from "@/lib/app-toast"
 
 import { useCart } from "@/lib/cart-context"
 import { useAuth } from "@/lib/auth-context"
@@ -274,18 +274,26 @@ export default function CheckoutPage() {
     setValidandoCupom(true)
     setCouponError("")
     try {
-      const res = await couponsManager.validateCoupon(code, user?.id)
+      const res = await couponsManager.validateCoupon(code, user?.id, subtotal)
       if (res.valid && res.coupon) {
         setAppliedCoupon(res.coupon)
         setCouponCode(res.coupon.code)
         if (setCartCoupon) setCartCoupon(res.coupon)
         try {
-          localStorage.setItem("batata top-coupon", JSON.stringify(res.coupon))
-          localStorage.setItem("batata_applied_coupon", res.coupon.code)
+          sessionStorage.setItem("batata top-coupon", JSON.stringify(res.coupon))
+          localStorage.removeItem("batata top-coupon")
+          localStorage.removeItem("batata_applied_coupon")
+          localStorage.removeItem("batata_pending_coupon")
         } catch {}
       } else {
-        setCouponError(res.message || "Cupom inválido ou expirado.")
+        const errorMsg = res.message || "Cupom inválido ou esgotado."
+        setCouponError(errorMsg)
         setAppliedCoupon(null)
+        if (setCartCoupon) setCartCoupon(null)
+        try {
+          sessionStorage.removeItem("batata top-coupon")
+        } catch {}
+        appToast.error(errorMsg)
       }
     } catch {
       setCouponError("Erro ao validar cupom.")
@@ -300,13 +308,14 @@ export default function CheckoutPage() {
     setCouponError("")
     if (setCartCoupon) setCartCoupon(null)
     try {
+      sessionStorage.removeItem("batata top-coupon")
       localStorage.removeItem("batata top-coupon")
       localStorage.removeItem("batata_applied_coupon")
       localStorage.removeItem("batata_pending_coupon")
     } catch {}
   }
 
-  // Auto-aplica cupom vindo do banner da Home ou da sacola
+  // Auto-aplica cupom vindo do banner da Home ou da sacola (sessão única)
   useEffect(() => {
     if (appliedCoupon) return
 
@@ -315,15 +324,10 @@ export default function CheckoutPage() {
       pendingCode = cartCoupon.code
     } else {
       try {
-        const raw = localStorage.getItem("batata top-coupon")
+        const raw = sessionStorage.getItem("batata top-coupon")
         if (raw) {
           const parsed = JSON.parse(raw)
           if (parsed?.code) pendingCode = parsed.code
-        }
-        if (!pendingCode) {
-          pendingCode =
-            localStorage.getItem("batata_applied_coupon") ||
-            localStorage.getItem("batata_pending_coupon")
         }
       } catch {}
     }
@@ -345,6 +349,51 @@ export default function CheckoutPage() {
       adicionais: [],
     })
   }
+
+  // ─── Esvaziamento e Remoção de Itens da Sacola ────────────────────────────
+  const handleEmptyCart = useCallback(() => {
+    clearCart()
+    setAppliedCoupon(null)
+    setCouponCode("")
+    try {
+      localStorage.removeItem("batata top-cart")
+      localStorage.removeItem("batata top-coupon")
+      localStorage.removeItem("batata_applied_coupon")
+      localStorage.removeItem("batata_pending_coupon")
+      sessionStorage.removeItem("batata top-coupon")
+      sessionStorage.removeItem("batata_applied_coupon")
+      sessionStorage.removeItem("batata_pending_coupon")
+    } catch {}
+
+    router.push("/")
+    appToast.info("Sacola esvaziada", "Sua sacola foi esvaziada. Escolha novos produtos!")
+  }, [clearCart, router])
+
+  const handleRemoveItem = useCallback(
+    (id: string) => {
+      if (items.length <= 1) {
+        handleEmptyCart()
+        return
+      }
+      removeItem(id)
+    },
+    [items.length, handleEmptyCart, removeItem]
+  )
+
+  const handleUpdateQuantity = useCallback(
+    (id: string, quantity: number) => {
+      if (quantity <= 0) {
+        if (items.length <= 1) {
+          handleEmptyCart()
+          return
+        }
+        removeItem(id)
+        return
+      }
+      updateQuantity(id, quantity)
+    },
+    [items.length, handleEmptyCart, removeItem, updateQuantity]
+  )
 
   // ─── Validações por Etapa ──────────────────────────────────────────────────
   const validateStep1 = (): boolean => {
@@ -534,6 +583,23 @@ export default function CheckoutPage() {
         })),
       }
 
+      // Validação antecipada do cupom antes de enviar ao backend
+      if (appliedCoupon?.code) {
+        const couponCheck = await couponsManager.validateCoupon(appliedCoupon.code, user?.id, subtotal)
+        if (!couponCheck.valid) {
+          const msg = couponCheck.message || "O cupom selecionado atingiu o limite de usos ou não é mais válido."
+          setCouponError(msg)
+          setAppliedCoupon(null)
+          if (setCartCoupon) setCartCoupon(null)
+          try {
+            sessionStorage.removeItem("batata top-coupon")
+          } catch {}
+          appToast.error("Cupom inválido", msg)
+          setIsSubmitting(false)
+          return
+        }
+      }
+
       // Reutiliza o pedido pendente em caso de nova tentativa de pagamento online
       let orderId = pendingOrderIdRef.current
       if (!orderId) {
@@ -544,6 +610,38 @@ export default function CheckoutPage() {
         orderId = createdOrder.id
         if (isPaymentOnline) {
           pendingOrderIdRef.current = orderId
+        }
+
+        // Persiste o endereço preenchido para próximos pedidos
+        if (deliveryType === "delivery" && useNewAddress && rua && numero) {
+          if (user) {
+            addressesManager.addAddress({
+              user_id: user.id,
+              street: rua.trim(),
+              number: numero.trim(),
+              complement: complemento.trim(),
+              neighborhood: bairro.trim(),
+              city: "Iacanga",
+              state: "SP",
+              cep: cep.trim() || "17150-000",
+              is_default: addresses.length === 0,
+            }).catch(() => {})
+          } else {
+            try {
+              localStorage.setItem("batata_top_guest_address", JSON.stringify({
+                id: "guest-default",
+                user_id: "guest",
+                street: rua.trim(),
+                number: numero.trim(),
+                complement: complemento.trim(),
+                neighborhood: bairro.trim(),
+                city: "Iacanga",
+                state: "SP",
+                cep: cep.trim() || "17150-000",
+                is_default: true,
+              }))
+            } catch {}
+          }
         }
       }
 
@@ -558,7 +656,7 @@ export default function CheckoutPage() {
           const msg =
             tokenResult.error || "Não foi possível validar o código de segurança do cartão."
           setErrorMessage(msg)
-          toast.error(msg)
+          appToast.error("Atenção", msg)
           setIsSubmitting(false)
           return
         }
@@ -570,7 +668,7 @@ export default function CheckoutPage() {
         if (!token) {
           const msg = "Sessão expirada. Faça login novamente para concluir o pagamento."
           setErrorMessage(msg)
-          toast.error(msg)
+          appToast.error("Atenção", msg)
           setIsSubmitting(false)
           return
         }
@@ -620,7 +718,7 @@ export default function CheckoutPage() {
             }
           }
           setErrorMessage(rejectMsg)
-          toast.error(rejectMsg)
+          appToast.error("Pedido recusado", rejectMsg)
           setIsSubmitting(false)
           return
         }
@@ -750,7 +848,7 @@ export default function CheckoutPage() {
       <CartHeader
         step={step}
         onBack={handlePrevStep}
-        onClear={clearCart}
+        onClear={handleEmptyCart}
         canClear={items.length > 0}
       />
 
@@ -778,8 +876,8 @@ export default function CheckoutPage() {
             validandoCupom={validandoCupom}
             deliveryType={deliveryType}
             recommendedProducts={recommendedProducts}
-            onUpdateQuantity={updateQuantity}
-            onRemoveItem={removeItem}
+            onUpdateQuantity={handleUpdateQuantity}
+            onRemoveItem={handleRemoveItem}
             onSetCouponCode={setCouponCode}
             onApplyCoupon={handleApplyCoupon}
             onRemoveCoupon={handleRemoveCoupon}
@@ -808,6 +906,7 @@ export default function CheckoutPage() {
             bairro={bairro}
             setBairro={setBairro}
             cep={cep}
+            setCep={setCep}
             handleCepChange={handleCepChange}
             buscandoCep={buscandoCep}
             enderecoError={enderecoError}

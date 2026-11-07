@@ -1,15 +1,22 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
-import { X, MapPin, Plus, Check, Trash2, Loader2, LogIn } from "lucide-react"
+import { X, MapPin, Plus, Check, Trash2, Loader2, LogIn, LocateFixed } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { addressesManager, type Address } from "@/lib/addresses-manager"
 import { useAuth } from "@/lib/auth-context"
-import { useToast } from "@/hooks/use-toast"
+import { appToast } from "@/lib/app-toast"
 import { AddressModalSkeleton } from "@/components/skeletons/address-skeleton"
+import { useCurrentLocation } from "@/hooks/use-current-location"
+import {
+  ResponsiveModal,
+  ResponsiveModalContent,
+  ResponsiveModalTitle,
+  ResponsiveModalDescription,
+} from "@/components/ui/responsive-modal"
 
 interface AddressModalProps {
   isOpen: boolean
@@ -21,7 +28,6 @@ const GUEST_STORAGE_KEY = "batata_top_guest_address"
 
 export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalProps) {
   const { user, loading: authLoading } = useAuth()
-  const { toast } = useToast()
   const [addresses, setAddresses] = useState<Address[]>([])
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -34,6 +40,19 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
   const [bairro, setBairro] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [naoSeiCep, setNaoSeiCep] = useState(false)
+  const numeroInputRef = useRef<HTMLInputElement>(null)
+
+  const { isLocating, requestLocation } = useCurrentLocation({
+    numberInputRef: numeroInputRef,
+    onSuccess: (loc) => {
+      if (loc.street) setRua(loc.street)
+      if (loc.neighborhood) setBairro(loc.neighborhood)
+      if (loc.cep) {
+        setCep(loc.cep)
+        setNaoSeiCep(false)
+      }
+    },
+  })
 
   useEffect(() => {
     if (!isOpen || authLoading) return
@@ -89,21 +108,13 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
         const data = await response.json()
         
         if (data.erro) {
-          toast({
-            title: "CEP não encontrado",
-            description: "Por favor, verifique o número digitado.",
-            variant: "destructive",
-          })
+          appToast.error("CEP não encontrado", "Por favor, verifique o número digitado.")
           return
         }
 
         // Validação de cidade (Iacanga)
         if (data.localidade.toLowerCase() !== "iacanga") {
-          toast({
-            title: "Fora da área de entrega",
-            description: `Desculpe, entregamos apenas em Iacanga. O CEP informado pertence a ${data.localidade}/${data.uf}.`,
-            variant: "destructive",
-          })
+          appToast.warning("Fora da área de entrega", `Desculpe, entregamos apenas em Iacanga. O CEP informado pertence a ${data.localidade}/${data.uf}.`)
           resetForm()
           return
         }
@@ -160,10 +171,7 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
         onAddressSelect?.(guestAddress)
         setShowAddForm(false)
         resetForm()
-        toast({
-          title: "Endereço salvo",
-          description: "Seu endereço de entrega em Iacanga foi atualizado.",
-        })
+        appToast.success("Endereço salvo", "Seu endereço de entrega em Iacanga foi atualizado.")
       }
     } finally {
       setIsSubmitting(false)
@@ -209,29 +217,30 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
         setAddresses([])
       }
       window.dispatchEvent(new Event("address-changed"))
-      toast({
-        title: "Endereço excluído",
-        description: "O endereço foi removido com sucesso.",
-      })
+      appToast.success("Endereço excluído", "O endereço foi removido com sucesso.")
     }
   }
 
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-[#ECE7E0] overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
-        
+    <ResponsiveModal open={isOpen} onOpenChange={(open) => { if (!open) onClose() }}>
+      <ResponsiveModalContent
+        showCloseButton={false}
+        showHandle={true}
+        className="p-0 border-none sm:border sm:border-[#ECE7E0] bg-white flex flex-col overflow-hidden sm:max-w-lg sm:rounded-3xl rounded-t-[28px] max-h-[90vh]"
+      >
         {/* HEADER DO MODAL */}
-        <div className="p-6 border-b border-[#ECE7E0] flex items-center justify-between bg-[#F7F5F0]">
-          <h2 className="text-lg sm:text-xl font-bold text-[#1A1A1A] flex items-center gap-2">
+        <div className="p-5 sm:p-6 border-b border-[#ECE7E0] flex items-center justify-between bg-[#F7F5F0] shrink-0">
+          <ResponsiveModalTitle className="text-lg sm:text-xl font-bold text-[#1A1A1A] flex items-center gap-2">
             <MapPin className="h-5 w-5 text-[#E3A008] shrink-0" />
             Onde você quer receber seu pedido?
-          </h2>
+          </ResponsiveModalTitle>
           <button
             onClick={onClose}
             aria-label="Fechar modal"
             className="p-2 hover:bg-[#ECE7E0] rounded-full transition-all active:scale-[0.98]"
+            data-vaul-no-drag
           >
             <X className="h-5 w-5 text-[#717171]" />
           </button>
@@ -323,7 +332,7 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
           ) : (
             /* FORMULÁRIO DE ADIÇÃO */
             <form onSubmit={handleAddAddress} className="space-y-4 animate-in slide-in-from-right-4 duration-200">
-              <div className="flex items-center gap-2 mb-6">
+              <div className="flex items-center gap-2 mb-4">
                 <button 
                   type="button" 
                   onClick={() => setShowAddForm(false)}
@@ -332,6 +341,26 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
                   ← Voltar para a lista
                 </button>
               </div>
+
+              {/* Botão de Localização Atual (GPS) */}
+              <button
+                type="button"
+                onClick={() => requestLocation()}
+                disabled={isLocating}
+                className="w-full h-12 mb-4 rounded-xl border border-[#E3A008] bg-[#E3A008]/10 hover:bg-[#E3A008]/20 text-[#1A1A1A] font-bold text-sm flex items-center justify-center gap-2 transition-transform active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {isLocating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 text-[#E3A008] animate-spin" />
+                    <span>Obtendo sua localização com precisão...</span>
+                  </>
+                ) : (
+                  <>
+                    <LocateFixed className="h-4 w-4 text-[#E3A008]" />
+                    <span>Usar minha localização atual</span>
+                  </>
+                )}
+              </button>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2 col-span-2">
@@ -352,6 +381,7 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
                     </div>
                   </div>
                   <Input 
+                    data-vaul-no-drag
                     value={cep} 
                     onChange={(e) => handleCepChange(e.target.value)}
                     placeholder="00000-000" 
@@ -363,19 +393,19 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
                 </div>
                 <div className="space-y-2 col-span-2">
                   <Label className="text-[#1A1A1A] font-semibold">Rua</Label>
-                  <Input value={rua} onChange={(e) => setRua(e.target.value)} placeholder="Nome da rua" required className="border-[#ECE7E0] text-[#1A1A1A]" />
+                  <Input data-vaul-no-drag value={rua} onChange={(e) => setRua(e.target.value)} placeholder="Nome da rua" required className="border-[#ECE7E0] text-[#1A1A1A]" />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-[#1A1A1A] font-semibold">Número</Label>
-                  <Input value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="Ex: 123" required className="border-[#ECE7E0] text-[#1A1A1A]" />
+                  <Input data-vaul-no-drag ref={numeroInputRef} value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="Ex: 123" required className="border-[#ECE7E0] text-[#1A1A1A]" />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-[#1A1A1A] font-semibold">Complemento</Label>
-                  <Input value={complemento} onChange={(e) => setComplemento(e.target.value)} placeholder="Apto, bloco..." className="border-[#ECE7E0] text-[#1A1A1A]" />
+                  <Input data-vaul-no-drag value={complemento} onChange={(e) => setComplemento(e.target.value)} placeholder="Apto, bloco..." className="border-[#ECE7E0] text-[#1A1A1A]" />
                 </div>
                 <div className="space-y-2 col-span-2">
                   <Label className="text-[#1A1A1A] font-semibold">Bairro</Label>
-                  <Input value={bairro} onChange={(e) => setBairro(e.target.value)} placeholder="Nome do bairro" required className="border-[#ECE7E0] text-[#1A1A1A]" />
+                  <Input data-vaul-no-drag value={bairro} onChange={(e) => setBairro(e.target.value)} placeholder="Nome do bairro" required className="border-[#ECE7E0] text-[#1A1A1A]" />
                 </div>
               </div>
 
@@ -390,12 +420,12 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
           )}
         </div>
 
-        <div className="p-4 bg-[#F7F5F0] border-t border-[#ECE7E0] text-center">
+        <div className="p-4 bg-[#F7F5F0] border-t border-[#ECE7E0] text-center shrink-0">
           <p className="text-[11px] text-[#717171] font-medium uppercase tracking-widest">
             Entregamos apenas em Iacanga, SP
           </p>
         </div>
-      </div>
-    </div>
+      </ResponsiveModalContent>
+    </ResponsiveModal>
   )
 }

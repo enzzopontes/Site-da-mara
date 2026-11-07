@@ -1,9 +1,14 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import {
+  ResponsiveModal,
+  ResponsiveModalContent,
+  ResponsiveModalTitle,
+  ResponsiveModalDescription,
+} from "@/components/ui/responsive-modal"
 import { useCart } from "@/lib/cart-context"
-import { useToast } from "@/hooks/use-toast"
+import { appToast } from "@/lib/app-toast"
 import { ArrowLeft, Minus, Plus, ShoppingCart, Tag } from "lucide-react"
 import { storeStatusManager } from "@/lib/store-status-manager"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -203,7 +208,7 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
   const [fraseBebidaIndex, setFraseBebidaIndex] = useState(0)
 
   const { addItem } = useCart()
-  const { toast } = useToast()
+
 
   const isBebida =
     product.category === "bebida" ||
@@ -462,11 +467,10 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
     const bebidasExtraText =
       totalBebidasCount > 0 ? ` (+${totalBebidasCount} bebida${totalBebidasCount > 1 ? "s" : ""})` : ""
 
-    toast({
-      title: "Adicionado ao carrinho!",
-      description: `${quantity}x ${product.name}${pastaTypeText}${bebidasExtraText} adicionado ao seu carrinho.`,
-      duration: 2500,
-    })
+    appToast.success(
+      "Adicionado ao carrinho!",
+      `${quantity}x ${product.name}${pastaTypeText}${bebidasExtraText} adicionado ao seu carrinho.`
+    )
 
     onOpenChange(false)
   }
@@ -474,10 +478,11 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
   const imageUrl = product.image || "/placeholder.jpg"
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
+    <ResponsiveModal open={open} onOpenChange={onOpenChange}>
+      <ResponsiveModalContent
         showCloseButton={false}
-        className="fixed inset-0 top-0 left-0 right-0 bottom-0 h-full h-[100dvh] max-h-none w-full max-w-none p-0 border-none rounded-none bg-white flex flex-col overflow-hidden duration-200 translate-x-0 translate-y-0 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:right-auto sm:bottom-auto sm:-translate-x-1/2 sm:-translate-y-1/2 sm:h-auto sm:max-h-[92vh] sm:w-full sm:max-w-xl sm:rounded-3xl sm:border sm:border-gray-100 sm:shadow-2xl no-scrollbar [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        showHandle={true}
+        className="p-0 border-none sm:border sm:border-gray-100 bg-white flex flex-col overflow-hidden sm:max-w-xl sm:rounded-3xl rounded-t-[28px] max-h-[92vh]"
       >
         {/* CORPO COM SCROLL FLUIDO (SEM BARRA DE ROLAGEM VISÍVEL) */}
         <div className="flex-1 overflow-y-auto overscroll-contain bg-white no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
@@ -515,12 +520,12 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
             {/* CABEÇALHO DO PRODUTO: NOME E PREÇO */}
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
-                <DialogTitle className="text-[22px] font-black text-[#1F1B16] leading-tight tracking-tight">
+                <ResponsiveModalTitle className="text-[22px] font-black text-[#1F1B16] leading-tight tracking-tight">
                   {product.name}
-                </DialogTitle>
-                <DialogDescription className="text-[14px] text-gray-500 leading-relaxed mt-1.5 block">
+                </ResponsiveModalTitle>
+                <ResponsiveModalDescription className="text-[14px] text-gray-500 leading-relaxed mt-1.5 block">
                   {product.description}
-                </DialogDescription>
+                </ResponsiveModalDescription>
               </div>
 
               <div className="text-right shrink-0 pt-0.5">
@@ -759,6 +764,7 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
             <div className="space-y-2 pt-1">
               <h4 className="text-[16px] font-black text-[#1F1B16]">Observações</h4>
               <textarea
+                data-vaul-no-drag
                 value={observacoes}
                 onChange={(e) => setObservacoes(e.target.value)}
                 rows={3}
@@ -812,7 +818,7 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
             </button>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </ResponsiveModalContent>
+    </ResponsiveModal>
   )
 }

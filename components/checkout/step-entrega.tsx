@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import {
   MapPin,
   Bike,
@@ -15,8 +15,10 @@ import {
   AlertCircle,
   User,
   Phone,
+  LocateFixed,
 } from "lucide-react"
 import { Address } from "@/lib/addresses-manager"
+import { useCurrentLocation } from "@/hooks/use-current-location"
 
 interface StepEntregaProps {
   deliveryType: "delivery" | "pickup"
@@ -38,6 +40,7 @@ interface StepEntregaProps {
   setBairro: (v: string) => void
   cep: string
   handleCepChange: (v: string) => void
+  setCep?: (v: string) => void
   buscandoCep: boolean
   enderecoError: string
   nome: string
@@ -74,8 +77,22 @@ export function StepEntrega({
   telefone,
   handleTelefoneChange,
   onOpenAddressModal,
+  setCep,
 }: StepEntregaProps) {
   const [showAddressPicker, setShowAddressPicker] = useState(false)
+  const numeroRef = useRef<HTMLInputElement>(null)
+
+  const { isLocating, requestLocation } = useCurrentLocation({
+    numberInputRef: numeroRef,
+    onSuccess: (loc) => {
+      if (loc.street) setRua(loc.street)
+      if (loc.neighborhood) setBairro(loc.neighborhood)
+      if (loc.cep) {
+        if (setCep) setCep(loc.cep)
+        else handleCepChange(loc.cep)
+      }
+    },
+  })
 
   const activeAddress = addresses.find((a) => a.id === selectedAddressId)
 
@@ -175,6 +192,26 @@ export function StepEntrega({
               </div>
 
               <div className="space-y-3">
+                {/* Botão Usar Localização Atual GPS */}
+                <button
+                  type="button"
+                  onClick={() => requestLocation()}
+                  disabled={isLocating}
+                  className="w-full h-11 rounded-2xl border border-[#E3A008] bg-[#E3A008]/10 hover:bg-[#E3A008]/20 text-[#1F1B16] text-xs font-bold flex items-center justify-center gap-2 transition-transform active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  {isLocating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 text-[#E3A008] animate-spin" />
+                      <span>Obtendo sua localização com precisão...</span>
+                    </>
+                  ) : (
+                    <>
+                      <LocateFixed className="w-4 h-4 text-[#E3A008]" />
+                      <span>Usar minha localização atual</span>
+                    </>
+                  )}
+                </button>
+
                 {/* CEP com Busca ViaCEP */}
                 <div>
                   <label className="text-xs font-bold text-[#6B6157] mb-1 block">
@@ -222,6 +259,7 @@ export function StepEntrega({
                       Número
                     </label>
                     <input
+                      ref={numeroRef}
                       type="text"
                       placeholder="123"
                       value={numero}
