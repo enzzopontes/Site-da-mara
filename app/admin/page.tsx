@@ -1,5 +1,7 @@
 "use client"
 
+import { appToast } from "@/lib/app-toast"
+
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -58,7 +60,7 @@ export default function AdminPage() {
         setIsAdmin(true)
         loadStats()
       } else {
-        alert("Você não tem permissão para acessar esta página")
+        appToast.error("Acesso negado", "Você não tem permissão para acessar esta página.")
         router.push("/")
       }
     })

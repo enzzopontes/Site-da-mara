@@ -1,5 +1,7 @@
 "use client"
 
+import { appToast } from "@/lib/app-toast"
+
 import { useEffect, useState, useRef } from "react"
 import { HeaderWrapper } from "@/components/header-wrapper"
 import { Footer } from "@/components/footer"
@@ -133,12 +135,12 @@ export default function AdminPedidosPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok && data.success) {
-        alert("🚨 Alarme sonoro crítico de teste disparado com sucesso no iPhone!")
+        appToast.success("Alarme disparado", "Alarme sonoro crítico de teste disparado com sucesso no iPhone!")
       } else {
-        alert("⚠️ Falha ao testar alarme: " + (data.error || "Verifique a BARK_DEVICE_KEY no arquivo .env"))
+        appToast.warning("Falha ao testar alarme", data.error || "Verifique a BARK_DEVICE_KEY no arquivo .env")
       }
     } catch (err: any) {
-      alert("⚠️ Erro ao acionar teste: " + (err?.message || "Erro de rede"))
+      appToast.error("Erro ao acionar teste", err?.message || "Erro de rede")
     } finally {
       setIsTestingBark(false)
     }
@@ -160,7 +162,7 @@ export default function AdminPedidosPage() {
         }, 10000)
         return () => clearInterval(interval)
       } else {
-        alert("Você não tem permissão para acessar esta página")
+        appToast.error("Acesso negado", "Você não tem permissão para acessar esta página.")
         router.push("/")
       }
     }
@@ -195,7 +197,7 @@ export default function AdminPedidosPage() {
       await loadOrders()
     } catch (error) {
       console.error("Erro ao atualizar status do pedido:", error)
-      alert("Não foi possível atualizar o status do pedido.")
+      appToast.error("Erro ao atualizar", "Não foi possível atualizar o status do pedido.")
     } finally {
       setUpdatingId(null)
     }
@@ -205,9 +207,11 @@ export default function AdminPedidosPage() {
     if (!confirm("Tem certeza que deseja DELETAR este pedido permanentemente?")) return
     try {
       await ordersManager.deleteOrder(orderId)
+      setOrders(prev => prev.filter(o => o.id !== orderId))
       await loadOrders()
-    } catch (error) {
-      alert("Erro ao deletar pedido")
+    } catch (error: any) {
+      console.error("Erro ao deletar pedido:", error)
+      appToast.error("Erro ao deletar pedido", error?.message || "Falha inesperada")
     }
   }
 

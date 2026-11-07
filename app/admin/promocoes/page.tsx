@@ -1,5 +1,7 @@
 "use client"
 
+import { appToast } from "@/lib/app-toast"
+
 import { useEffect, useState, useMemo } from "react"
 import { HeaderWrapper } from "@/components/header-wrapper"
 import { Footer } from "@/components/footer"
@@ -102,7 +104,7 @@ export default function AdminPromocoesPage() {
         loadProducts()
         loadImages()
       } else {
-        alert("Você não tem permissão para acessar esta página")
+        appToast.error("Acesso negado", "Você não tem permissão para acessar esta página.")
         router.push("/")
       }
     }
@@ -172,7 +174,7 @@ export default function AdminPromocoesPage() {
       showNotification(newSuperPromo.isActive ? "Super Promoção ativada na loja!" : "Super Promoção desativada.")
     } catch (error) {
       console.error("Erro ao atualizar Super Promoção:", error)
-      alert("Erro ao atualizar Super Promoção")
+      appToast.error("Erro", "Erro ao atualizar Super Promoção.")
     } finally {
       setIsUpdatingPromo(false)
     }
@@ -194,7 +196,7 @@ export default function AdminPromocoesPage() {
       showNotification(newItemPromo.isActive ? "Promoção de Itens ativada!" : "Promoção de Itens pausada.")
     } catch (error) {
       console.error("Erro ao atualizar Promoção de Itens:", error)
-      alert("Erro ao atualizar Promoção de Itens")
+      appToast.error("Erro", "Erro ao atualizar Promoção de Itens.")
     } finally {
       setIsUpdatingPromo(false)
     }
@@ -339,7 +341,7 @@ export default function AdminPromocoesPage() {
       setIsItemPromoModalOpen(false)
     } catch (error) {
       console.error("Erro ao salvar produtos:", error)
-      alert("Erro ao salvar produtos da promoção")
+      appToast.error("Erro", "Erro ao salvar produtos da promoção.")
     } finally {
       setIsUpdatingPromo(false)
     }
@@ -353,7 +355,7 @@ export default function AdminPromocoesPage() {
       setIsSuperPromoModalOpen(false)
     } catch (error) {
       console.error("Erro ao salvar Super Promoção:", error)
-      alert("Erro ao salvar Super Promoção")
+      appToast.error("Erro", "Erro ao salvar Super Promoção.")
     } finally {
       setIsUpdatingPromo(false)
     }

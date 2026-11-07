@@ -1,5 +1,7 @@
 "use client"
 
+import { appToast } from "@/lib/app-toast"
+
 import { HeaderWrapper } from "@/components/header-wrapper"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
@@ -34,12 +36,12 @@ export default function SegurancaPage() {
 
   const handleUpdatePassword = async () => {
     if (!passwords.old || !passwords.new || !passwords.confirm) {
-      alert("Preencha todos os campos")
+      appToast.warning("Campos obrigatórios", "Preencha todos os campos.")
       return
     }
 
     if (passwords.new !== passwords.confirm) {
-      alert("As novas senhas não coincidem")
+      appToast.warning("Senhas divergentes", "As novas senhas não coincidem.")
       return
     }
 
@@ -56,11 +58,11 @@ export default function SegurancaPage() {
 
       if (error) throw error
       
-      alert("Senha atualizada com sucesso!")
+      appToast.success("Senha alterada!", "Sua nova senha foi salva com sucesso.")
       setPasswords({ old: "", new: "", confirm: "" })
     } catch (error) {
       console.error("Erro ao atualizar senha:", error)
-      alert("Erro ao atualizar senha. Verifique os dados.")
+      appToast.error("Erro ao atualizar senha", "Verifique os dados e tente novamente.")
     } finally {
       setUpdating(false)
     }

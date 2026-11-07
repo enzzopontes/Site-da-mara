@@ -1,5 +1,7 @@
 'use client'
 
+import { appToast } from "@/lib/app-toast"
+
 import { createBrowserClient } from "./supabase/client"
 
 export interface Adicional {
@@ -72,7 +74,7 @@ class AdicionaisManagerClient {
         console.error("Mensagem:", error.message)
         console.error("Status HTTP:", status)
         console.error("Status Text:", statusText)
-        alert("Erro ao salvar no banco: " + error.message)
+        appToast.error("Erro ao salvar", error.message)
         return null
       }
 
@@ -80,7 +82,7 @@ class AdicionaisManagerClient {
       return data
     } catch (error: any) {
       console.error("❌ ERRO INESPERADO AO ADICIONAR:", error)
-      alert("Erro inesperado: " + error.message)
+      appToast.error("Erro inesperado", error.message)
       return null
     }
   }

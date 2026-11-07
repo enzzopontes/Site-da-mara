@@ -15,7 +15,7 @@ import {
   Tag,
   Loader2,
 } from "lucide-react"
-import { toast } from "sonner"
+import { appToast } from "@/lib/app-toast"
 
 export default function PagamentosPage() {
   const router = useRouter()
@@ -57,13 +57,13 @@ export default function PagamentosPage() {
     try {
       const res = await removeCard(cardToDelete)
       if (res.success) {
-        toast.success("Cartão removido com sucesso.")
+        appToast.success("Cartão removido com sucesso.")
         setCardToDelete(null)
       } else {
-        toast.error(res.error || "Não foi possível remover o cartão.")
+        appToast.error("Erro ao remover cartão", res.error || "Não foi possível remover o cartão.")
       }
     } catch (err: any) {
-      toast.error(err?.message || "Erro ao remover cartão.")
+      appToast.error("Erro ao remover cartão", err?.message || "Não foi possível remover o cartão.")
     } finally {
       setDeletingCard(false)
     }

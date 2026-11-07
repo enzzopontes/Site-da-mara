@@ -1,5 +1,7 @@
 "use client"
 
+import { appToast } from "@/lib/app-toast"
+
 import { useEffect, useState, useRef } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
@@ -334,7 +336,7 @@ export default function AdminLayout({
       if (allowed) {
         setIsAdmin(true)
       } else {
-        alert("Você não tem permissão para acessar o painel administrativo")
+        appToast.error("Acesso negado", "Você não tem permissão para acessar o painel administrativo.")
         router.push("/")
       }
     })

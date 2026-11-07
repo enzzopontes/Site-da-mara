@@ -1,5 +1,7 @@
 "use client"
 
+import { appToast } from "@/lib/app-toast"
+
 import { HeaderWrapper } from "@/components/header-wrapper"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
@@ -44,13 +46,13 @@ export default function MeusDadosPage() {
     if (!user) return
 
     if (formData.full_name.trim().length < 3) {
-      alert("Por favor, insira seu nome completo.")
+      appToast.warning("Nome incompleto", "Por favor, insira seu nome completo.")
       return
     }
 
     const phoneDigits = formData.phone.replace(/\D/g, "")
     if (phoneDigits.length > 0 && phoneDigits.length < 10) {
-      alert("Por favor, insira um telefone válido com DDD.")
+      appToast.warning("Telefone inválido", "Por favor, insira um telefone válido com DDD.")
       return
     }
     
@@ -66,10 +68,10 @@ export default function MeusDadosPage() {
 
       if (error) throw error
       
-      alert("Dados atualizados com sucesso!")
+      appToast.success("Dados atualizados!", "Suas informações foram salvas com sucesso.")
     } catch (error) {
       console.error("Erro ao atualizar dados:", error)
-      alert("Erro ao atualizar dados. Tente novamente.")
+      appToast.error("Erro ao atualizar", "Não foi possível salvar os dados. Tente novamente.")
     } finally {
       setSaving(false)
     }

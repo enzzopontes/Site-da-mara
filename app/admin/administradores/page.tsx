@@ -1,5 +1,7 @@
 "use client"
 
+import { appToast } from "@/lib/app-toast"
+
 import { useEffect, useState, useCallback, useMemo } from "react"
 import { HeaderWrapper } from "@/components/header-wrapper"
 import { Footer } from "@/components/footer"
@@ -92,7 +94,7 @@ export default function AdminAdministradoresPage() {
         setIsAdmin(true)
         loadAdmins()
       } else {
-        alert("Você não tem permissão para acessar esta página")
+        appToast.error("Acesso negado", "Você não tem permissão para acessar esta página.")
         router.push("/")
       }
     })

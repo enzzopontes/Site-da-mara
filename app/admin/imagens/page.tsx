@@ -1,5 +1,7 @@
 "use client"
 
+import { appToast } from "@/lib/app-toast"
+
 import { useEffect, useState, useRef } from "react"
 import { HeaderWrapper } from "@/components/header-wrapper"
 import { Footer } from "@/components/footer"
@@ -63,7 +65,7 @@ export default function AdminImagensPage() {
         setIsAdmin(true)
         loadImages()
       } else {
-        alert("Você não tem permissão para acessar esta página")
+        appToast.error("Acesso negado", "Você não tem permissão para acessar esta página.")
         router.push("/")
       }
     }
@@ -185,10 +187,10 @@ export default function AdminImagensPage() {
         setImages(prev => prev.filter(img => img.id !== imageToDelete.id))
         setImageToDelete(null)
       } else {
-        alert("Erro ao excluir imagem do servidor.")
+        appToast.error("Erro ao excluir", "Erro ao excluir imagem do servidor.")
       }
     } catch {
-      alert("Erro ao tentar deletar a imagem.")
+      appToast.error("Erro ao deletar", "Erro ao tentar deletar a imagem.")
     } finally {
       setIsDeleting(false)
     }

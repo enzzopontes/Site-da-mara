@@ -1,5 +1,7 @@
 "use client"
 
+import { appToast } from "@/lib/app-toast"
+
 import { useEffect, useState, useRef, useCallback, useMemo } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { HeaderWrapper } from "@/components/header-wrapper"
@@ -309,9 +311,9 @@ export default function DetalhesPedidoPage() {
     try {
       await ordersManager.cancelOrder(order.id)
       await loadOrder(true)
-      alert("Pedido cancelado com sucesso.")
+      appToast.success("Pedido cancelado", "Seu pedido foi cancelado com sucesso.")
     } catch (err: any) {
-      alert(err.message || "Não foi possível cancelar o pedido. Contate o suporte.")
+      appToast.error("Falha ao cancelar", err.message || "Não foi possível cancelar o pedido. Contate o suporte.")
     } finally {
       setCancelling(false)
     }

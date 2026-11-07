@@ -1,5 +1,7 @@
 "use client"
 
+import { appToast } from "@/lib/app-toast"
+
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { bannersManager, isSafeImageUrl, type HomeBannerItem } from "@/lib/banners-manager"
@@ -115,7 +117,7 @@ export function AdminHomeBannersSection() {
       })
       setImageUrl(base64DataUrl)
     } catch {
-      alert("Não foi possível carregar a imagem selecionada.")
+      appToast.error("Imagem inválida", "Não foi possível carregar a imagem selecionada.")
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ""
@@ -126,12 +128,12 @@ export function AdminHomeBannersSection() {
     e.preventDefault()
     const cleanUrl = imageUrl.trim()
     if (!cleanUrl) {
-      alert("A URL ou imagem do banner é obrigatória.")
+      appToast.warning("Campo obrigatório", "A URL ou imagem do banner é obrigatória.")
       return
     }
 
     if (!isSafeImageUrl(cleanUrl)) {
-      alert("URL de imagem inválida ou insegura. Utilize URLs iniciando com https://, http://, / ou data:image/.")
+      appToast.warning("URL inválida", "Utilize URLs iniciando com https://, http://, / ou data:image/.")
       return
     }
 
@@ -154,7 +156,7 @@ export function AdminHomeBannersSection() {
       setModalOpen(false)
       await loadData()
     } catch (err: any) {
-      alert(`Erro ao salvar banner: ${err.message || err}`)
+      appToast.error("Erro ao salvar banner", err.message || "Falha ao salvar banner.")
     } finally {
       setSaving(false)
     }
@@ -166,7 +168,7 @@ export function AdminHomeBannersSection() {
       await bannersManager.deleteBanner(id)
       await loadData()
     } catch (err: any) {
-      alert(`Erro ao excluir: ${err.message || err}`)
+      appToast.error("Erro ao excluir", err.message || "Falha ao excluir banner.")
     }
   }
 
@@ -177,7 +179,7 @@ export function AdminHomeBannersSection() {
         prev.map((item) => (item.id === b.id ? { ...item, is_active: !item.is_active } : item))
       )
     } catch {
-      alert("Erro ao alterar status.")
+      appToast.error("Erro de status", "Erro ao alterar status do banner.")
     }
   }
 

@@ -238,8 +238,34 @@ class OrdersManager {
 
   async deleteOrder(orderId: string): Promise<void> {
     const sb = this.supabase
-    await sb.from("order_items").delete().eq("order_id", orderId)
-    await sb.from("orders").delete().eq("id", orderId)
+    const { error: rpcError } = await sb.rpc('delete_order_admin', { p_order_id: orderId })
+    if (!rpcError) return
+
+    if (rpcError.message?.includes("Acesso negado")) {
+      throw new Error(rpcError.message)
+    }
+
+    console.warn("RPC delete_order_admin indisponível, tentando exclusão direta:", rpcError.message)
+
+    const { error: itemsError } = await sb.from("order_items").delete().eq("order_id", orderId)
+    if (itemsError) console.warn("Aviso ao deletar order_items:", itemsError)
+
+    const { data: deletedOrders, error: orderError } = await sb
+      .from("orders")
+      .delete()
+      .eq("id", orderId)
+      .select("id")
+
+    if (orderError) {
+      throw new Error(orderError.message)
+    }
+
+    if (!deletedOrders || deletedOrders.length === 0) {
+      throw new Error(
+        rpcError.message ||
+        "Permissão insuficiente ou script 018 não executado no Supabase."
+      )
+    }
   }
 
   async cancelOrder(orderId: string): Promise<void> {

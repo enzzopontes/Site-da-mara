@@ -3,7 +3,7 @@
 import { Clock, Power, Truck, DollarSign, Calendar, Save, RotateCcw, AlertCircle, CheckCircle2, Settings2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { storeStatusManager, StoreStatus } from "@/lib/store-status-manager"
-import { useToast } from "@/hooks/use-toast"
+import { appToast } from "@/lib/app-toast"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -19,7 +19,6 @@ interface BusinessHoursProps {
 }
 
 export function BusinessHours({ showToggle = false }: BusinessHoursProps) {
-  const { toast } = useToast()
   const [currentTime, setCurrentTime] = useState<string>("")
   const [status, setStatus] = useState<StoreStatus | null>(null)
   const [openTimeInput, setOpenTimeInput] = useState<string>("10:00")
@@ -68,19 +67,13 @@ export function BusinessHours({ showToggle = false }: BusinessHoursProps) {
   const handleToggleStoreManual = async () => {
     const newOpenState = await storeStatusManager.toggleStoreStatus()
     await updateStatus()
-    toast({
-      title: newOpenState ? "Loja Aberta Manualmente" : "Loja Fechada Manualmente",
-      description: `Sobreposição manual ativa. O status retornará ao agendamento automático no próximo ciclo (${newOpenState ? status?.closeTime || "22:00" : status?.openTime || "10:00"}).`,
-    })
+    appToast.info(newOpenState ? "Loja Aberta Manualmente" : "Loja Fechada Manualmente", `Sobreposição manual ativa. O status retornará ao agendamento automático no próximo ciclo (${newOpenState ? status?.closeTime || "22:00" : status?.openTime || "10:00"}).`)
   }
 
   const handleResetToAuto = async () => {
     await storeStatusManager.resetToAutoSchedule()
     await updateStatus()
-    toast({
-      title: "Modo Automático Restaurado",
-      description: "A loja voltou a seguir estritamente o horário programado de funcionamento.",
-    })
+    appToast.success("Modo Automático Restaurado", "A loja voltou a seguir estritamente o horário programado de funcionamento.")
   }
 
   const handleSaveSchedule = async (e: React.FormEvent) => {
@@ -90,16 +83,9 @@ export function BusinessHours({ showToggle = false }: BusinessHoursProps) {
       await storeStatusManager.updateSchedule(openTimeInput, closeTimeInput, autoScheduleInput)
       await updateStatus()
       setIsScheduleModalOpen(false)
-      toast({
-        title: "Horários Salvos com Sucesso!",
-        description: `Abertura programada: ${openTimeInput} | Fechamento programado: ${closeTimeInput}`,
-      })
+      appToast.success("Horários Salvos com Sucesso!", `Abertura programada: ${openTimeInput} | Fechamento programado: ${closeTimeInput}`)
     } catch (err) {
-      toast({
-        title: "Erro ao salvar horários",
-        description: "Não foi possível persistir os novos horários no banco.",
-        variant: "destructive",
-      })
+      appToast.error("Erro ao salvar horários", "Não foi possível persistir os novos horários no banco.")
     } finally {
       setIsSaving(false)
     }

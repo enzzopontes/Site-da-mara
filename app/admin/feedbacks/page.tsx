@@ -1,5 +1,7 @@
 "use client"
 
+import { appToast } from "@/lib/app-toast"
+
 import { useEffect, useState, useMemo } from "react"
 import { HeaderWrapper } from "@/components/header-wrapper"
 import { Footer } from "@/components/footer"
@@ -62,7 +64,7 @@ export default function AdminFeedbacksPage() {
         setIsAdmin(true)
         loadFeedbacks()
       } else {
-        alert("Você não tem permissão para acessar esta página")
+        appToast.error("Acesso negado", "Você não tem permissão para acessar esta página.")
         router.push("/")
       }
     }
@@ -145,7 +147,7 @@ export default function AdminFeedbacksPage() {
   const handleWhatsAppReply = (feedback: Feedback) => {
     const cleanPhone = (feedback.customer_phone || "").replace(/\D/g, "")
     if (!cleanPhone) {
-      alert("Este cliente não cadastrou telefone de contato.")
+      appToast.info("Contato indisponível", "Este cliente não cadastrou telefone de contato.")
       return
     }
     const fullPhone = cleanPhone.startsWith("55") ? cleanPhone : `55${cleanPhone}`

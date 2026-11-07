@@ -1,5 +1,7 @@
 "use client"
 
+import { appToast } from "@/lib/app-toast"
+
 import type React from "react"
 import { useEffect, useState, useMemo, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
@@ -374,7 +376,7 @@ export default function AdminCuponsPage() {
         loadCoupons()
         loadCategories()
       } else {
-        alert("Acesso restrito a administradores.")
+        appToast.error("Acesso restrito", "Acesso restrito a administradores.")
         router.push("/")
       }
     })
@@ -579,7 +581,7 @@ export default function AdminCuponsPage() {
       showToast("Imagem vinculada ao banner com sucesso!")
     } catch (err) {
       console.warn("Erro ao enviar imagem do banner:", err)
-      alert("Não foi possível carregar a imagem selecionada.")
+      appToast.error("Imagem inválida", "Não foi possível carregar a imagem selecionada.")
     } finally {
       setUploadingBanner(false)
       if (fileInputRef.current) fileInputRef.current.value = ""
@@ -619,18 +621,18 @@ export default function AdminCuponsPage() {
     e.preventDefault()
 
     if (isBannerHighlight && !bannerImageUrl.trim()) {
-      alert("Informe a URL da imagem ou escolha do Banco de Imagens/Galeria para destacar como banner.")
+      appToast.warning("Imagem necessária", "Informe a URL da imagem ou escolha da Galeria.")
       return
     }
 
     const valNum = parseFloat(discount.replace(",", "."))
     if (isNaN(valNum) || valNum <= 0) {
-      alert("Informe um valor de desconto válido.")
+      appToast.warning("Valor inválido", "Informe um valor de desconto válido.")
       return
     }
 
     if (type === "percentage" && (valNum <= 0 || valNum > 100)) {
-      alert("O desconto percentual deve estar entre 1% e 100%.")
+      appToast.warning("Desconto inválido", "O desconto percentual deve estar entre 1% e 100%.")
       return
     }
 
@@ -638,7 +640,7 @@ export default function AdminCuponsPage() {
     if (minOrder.trim() !== "") {
       minOrderVal = parseFloat(minOrder.replace(",", "."))
       if (isNaN(minOrderVal) || minOrderVal <= 0) {
-        alert("Valor mínimo do pedido deve ser maior que zero.")
+        appToast.warning("Valor inválido", "Valor mínimo do pedido deve ser maior que zero.")
         return
       }
     }
@@ -650,7 +652,7 @@ export default function AdminCuponsPage() {
       (c) => c.code?.toUpperCase() === finalCode.toUpperCase() && c.id !== editingCoupon?.id
     )
     if (duplicate) {
-      alert("Já existe um cupom com esse código.")
+      appToast.error("Cupom duplicado", "Já existe um cupom com esse código.")
       return
     }
 
@@ -696,7 +698,7 @@ export default function AdminCuponsPage() {
       setIsModalOpen(false)
       await loadCoupons()
     } catch (err: any) {
-      alert(err.message || "Não foi possível salvar o cupom.")
+      appToast.error("Erro ao salvar", err.message || "Não foi possível salvar o cupom.")
     } finally {
       setIsSaving(false)
     }
@@ -711,14 +713,15 @@ export default function AdminCuponsPage() {
       )
       showToast(nextVal ? "Cupom destacado na vitrine da Home!" : "Cupom removido da vitrine.")
     } catch {
-      alert("Não foi possível atualizar o destaque na Home.")
+      appToast.error("Erro", "Não foi possível atualizar o destaque na Home.")
     }
   }
 
   const handleToggleBannerHighlight = async (coupon: Coupon) => {
     if (!coupon.bannerImageUrl) {
-      alert(
-        'Sem imagem de banner: Este cupom não possui imagem vinculada. Clique em "Editar" para adicionar a imagem do banner primeiro.'
+      appToast.warning(
+        "Sem imagem de banner",
+        'Este cupom não possui imagem vinculada. Clique em "Editar" para adicionar a imagem do banner primeiro.'
       )
       return
     }
@@ -734,7 +737,7 @@ export default function AdminCuponsPage() {
           : "Banner removido do carrossel da Home."
       )
     } catch {
-      alert("Não foi possível atualizar o status do banner.")
+      appToast.error("Erro", "Não foi possível atualizar o status do banner.")
     }
   }
 
@@ -746,7 +749,7 @@ export default function AdminCuponsPage() {
         prev.map((c) => (c.id === coupon.id ? { ...c, isActive: nextVal } : c))
       )
     } catch {
-      alert("Não foi possível alterar o status do cupom.")
+      appToast.error("Erro", "Não foi possível alterar o status do cupom.")
     }
   }
 
@@ -757,7 +760,7 @@ export default function AdminCuponsPage() {
       await loadCoupons()
       showToast("Cupom excluído.")
     } catch {
-      alert("Não foi possível excluir o cupom.")
+      appToast.error("Erro", "Não foi possível excluir o cupom.")
     }
   }
 

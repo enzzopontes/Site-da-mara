@@ -1,5 +1,7 @@
 "use client"
 
+import { appToast } from "@/lib/app-toast"
+
 import { useEffect, useState, useCallback, useMemo } from "react"
 import { HeaderWrapper } from "@/components/header-wrapper"
 import { Footer } from "@/components/footer"
@@ -113,7 +115,7 @@ export default function AdminCaixaPage() {
         const interval = setInterval(loadData, 30000)
         return () => clearInterval(interval)
       } else {
-        alert("Você não tem permissão para acessar esta página")
+        appToast.error("Acesso negado", "Você não tem permissão para acessar esta página.")
         router.push("/")
       }
     }
@@ -162,13 +164,20 @@ export default function AdminCaixaPage() {
     setIsDeleting(true)
     try {
       await ordersManager.deleteOrder(orderToDelete.id)
+      setDateOrders(prev => {
+        const next = { ...prev }
+        for (const dateKey of Object.keys(next)) {
+          next[dateKey] = next[dateKey].filter(o => o.id !== orderToDelete.id)
+        }
+        return next
+      })
       setIsDeleteDialogOpen(false)
       setOrderToDelete(null)
       if (isOrderDialogOpen) setIsOrderDialogOpen(false)
       await loadData()
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao deletar pedido:", error)
-      alert("Erro ao deletar pedido. Tente novamente.")
+      appToast.error("Erro ao deletar pedido", error?.message || "Tente novamente.")
     } finally {
       setIsDeleting(false)
     }
@@ -250,7 +259,7 @@ export default function AdminCaixaPage() {
   // Exportar relatório em CSV
   const handleExportCSV = () => {
     if (filteredSalesHistory.length === 0) {
-      alert("Nenhum dado para exportar.")
+      appToast.info("Exportação", "Nenhum dado para exportar.")
       return
     }
     const headers = "Data,Pedidos Entregues,Faturamento (R$)\n"
