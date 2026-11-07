@@ -13,9 +13,9 @@ export function useLoyalty() {
   const cart = useCart?.()
 
   const [state, setState] = useState<LoyaltyState>(() => ({
-    ordersCount: 8,
+    ordersCount: 0,
     targetOrders: LOYALTY_TARGET_ORDERS,
-    remainingOrders: 2,
+    remainingOrders: LOYALTY_TARGET_ORDERS,
     hasRewardAvailable: false,
     rewardsClaimedCount: 0,
     activeRewardCode: null,
@@ -41,7 +41,7 @@ export function useLoyalty() {
 
     window.addEventListener("loyalty-update", handleUpdate)
     window.addEventListener("storage", (e) => {
-      if (e.key === "batata_top_loyalty_data_v1") {
+      if (e.key === "batata_top_loyalty_data_v2") {
         loyaltyManager.getLoyaltyState(userId).then((s) => {
           if (isMounted) setState(s)
         })
@@ -92,7 +92,6 @@ export function useLoyalty() {
     }
   }, [userId, cart])
 
-  // Função para simular ou contabilizar pedido entregue
   const countDeliveredOrder = useCallback(
     async (orderId: string, createdAt: string | Date = new Date()) => {
       const updated = await loyaltyManager.incrementFromOrder({

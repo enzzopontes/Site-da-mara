@@ -81,17 +81,17 @@ export function Hero({
 
   return (
     <section className="bg-[#FAF8F5] border-b border-[#ECE7E0]">
-      {/* Capa de Restaurante Estilo iFood */}
-      <div className="relative h-28 sm:h-52 md:h-64 w-full bg-[#1F1B16] overflow-hidden">
+      {/* Capa de Restaurante Estilo iFood - altura ampliada no mobile para ver a comida totalmente */}
+      <div className="relative h-36 sm:h-52 md:h-64 w-full bg-[#1F1B16] overflow-hidden">
         <img
           src="/products/costela.jpg"
           alt="Batata Top Capa"
-          className="w-full h-full object-cover opacity-90 scale-100"
+          className="w-full h-full object-cover object-center opacity-95 scale-100"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
       </div>
 
-      <div className="container mx-auto px-3 sm:px-4 max-w-5xl">
+      <div className="container mx-auto px-2 sm:px-4 max-w-5xl">
         {/* Card de Identidade do Restaurante com Barra de Fidelidade */}
         <RestaurantHeaderCard
           isOpen={isStoreOpen}
@@ -101,15 +101,15 @@ export function Hero({
           deliveryFee={deliveryFee}
         />
 
-        {/* Banner de Oferta Especial (se houver configurada) */}
+        {/* Banner de Oferta Especial */}
         {(superPromoActive || itemPromoActive) && (superPromoImage || itemPromoImage) && (
           <div className="mb-3 sm:mb-6">
             <Link href="/cardapio">
-              <div className="relative overflow-hidden rounded-xl sm:rounded-2xl border border-[#ECE7E0] shadow-xs cursor-pointer hover:opacity-95 transition-opacity">
+              <div className="relative overflow-hidden rounded-xl sm:rounded-2xl border border-[#ECE7E0] shadow-xs cursor-pointer hover:opacity-95 transition-opacity aspect-[2.6/1] sm:aspect-[2.8/1]">
                 <img
                   src={superPromoImage || itemPromoImage}
                   alt="Promoção Batata Top"
-                  className="w-full h-24 sm:h-48 md:h-56 object-cover"
+                  className="w-full h-full object-contain sm:object-cover"
                 />
               </div>
             </Link>
@@ -119,4 +119,3 @@ export function Hero({
     </section>
   )
 }
-

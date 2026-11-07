@@ -196,7 +196,7 @@ export function CampaignBanner() {
   if (loading) {
     return (
       <div className="w-full bg-[#F7F5F0] py-2 sm:py-3 select-none">
-        <div className="w-[88%] sm:w-[82%] md:w-[76%] lg:w-[70%] max-w-[760px] mx-auto h-36 min-[400px]:h-44 sm:h-52 md:h-64 lg:h-72 bg-stone-200/80 rounded-2xl sm:rounded-3xl animate-pulse" />
+        <div className="w-[92%] sm:w-[82%] md:w-[76%] lg:w-[70%] max-w-[760px] mx-auto aspect-[2.4/1] sm:aspect-[2.7/1] md:aspect-[3/1] max-h-[320px] bg-stone-200/80 rounded-2xl sm:rounded-3xl animate-pulse" />
       </div>
     )
   }
@@ -218,17 +218,17 @@ export function CampaignBanner() {
           onClose={() => setToastState((prev) => ({ ...prev, open: false }))}
         />
         <section aria-label="Banner Promocional" className="w-full bg-[#F7F5F0] py-2 sm:py-3 select-none">
-          <div className="w-[88%] sm:w-[82%] md:w-[76%] lg:w-[70%] max-w-[760px] mx-auto">
+          <div className="w-[92%] sm:w-[82%] md:w-[76%] lg:w-[70%] max-w-[760px] mx-auto">
             <div
               onClick={() => handleBannerClick(single)}
-              className={`relative w-full h-36 min-[400px]:h-44 sm:h-52 md:h-64 lg:h-72 rounded-2xl sm:rounded-3xl overflow-hidden shadow-sm bg-stone-200/50 ${
+              className={`relative w-full aspect-[2.4/1] sm:aspect-[2.7/1] md:aspect-[3/1] max-h-[320px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-sm bg-stone-200/50 ${
                 couponCode ? "cursor-pointer active:scale-[0.99] transition-transform" : ""
               }`}
             >
               <img
                 src={single.image_url}
                 alt={single.title || "Banner promocional"}
-                className="w-full h-full object-cover object-center select-none pointer-events-none"
+                className="w-full h-full object-contain sm:object-cover object-center select-none pointer-events-none"
                 loading="eager"
                 onError={() => setImgErrorMap((prev) => ({ ...prev, [single.id]: true }))}
               />
@@ -281,18 +281,18 @@ export function CampaignBanner() {
                 return (
                   <div
                     key={banner.id}
-                    className="min-w-0 shrink-0 grow-0 pl-3 sm:pl-4 basis-[88%] sm:basis-[82%] md:basis-[76%] lg:basis-[70%] max-w-[760px]"
+                    className="min-w-0 shrink-0 grow-0 pl-3 sm:pl-4 basis-[92%] sm:basis-[82%] md:basis-[76%] lg:basis-[70%] max-w-[760px]"
                   >
                     <div
                       onClick={() => handleBannerClick(banner)}
-                      className={`relative w-full h-36 min-[400px]:h-44 sm:h-52 md:h-64 lg:h-72 rounded-2xl sm:rounded-3xl overflow-hidden shadow-sm bg-stone-200/50 transition-all duration-300 ${
+                      className={`relative w-full aspect-[2.4/1] sm:aspect-[2.7/1] md:aspect-[3/1] max-h-[320px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-sm bg-stone-200/50 transition-all duration-300 ${
                         isActive ? "opacity-100 scale-100" : "opacity-80 scale-[0.98]"
                       } ${couponCode ? "cursor-pointer active:scale-[0.97]" : ""}`}
                     >
                       <img
                         src={banner.image_url}
                         alt={banner.title || "Banner promocional"}
-                        className="w-full h-full object-cover object-center select-none pointer-events-none"
+                        className="w-full h-full object-contain sm:object-cover object-center select-none pointer-events-none"
                         loading={idx === 0 ? "eager" : "lazy"}
                         onError={() => setImgErrorMap((prev) => ({ ...prev, [banner.id]: true }))}
                       />

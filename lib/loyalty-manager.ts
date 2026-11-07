@@ -1,7 +1,7 @@
 import { getSupabaseBrowserClient } from "./supabase/client"
 
 export const LOYALTY_TARGET_ORDERS = 10
-export const LOYALTY_CUTOFF_DATE = "2026-11-07T00:00:00.000Z"
+export const LOYALTY_CUTOFF_DATE = "2026-11-07T13:40:00.000Z"
 
 export interface LoyaltyReward {
   id: string
@@ -21,7 +21,8 @@ export interface LoyaltyState {
   history: LoyaltyReward[]
 }
 
-const STORAGE_KEY = "batata_top_loyalty_data_v1"
+// v2 para reiniciar contagem a partir de agora sem resquício de teste
+const STORAGE_KEY = "batata_top_loyalty_data_v2"
 
 class LoyaltyManager {
   private get supabase() {
@@ -31,9 +32,9 @@ class LoyaltyManager {
   private getLocalState(): LoyaltyState {
     if (typeof window === "undefined") {
       return {
-        ordersCount: 8, // Exibe o estado da imagem (8/10) por padrão se vazio
+        ordersCount: 0,
         targetOrders: LOYALTY_TARGET_ORDERS,
-        remainingOrders: 2,
+        remainingOrders: LOYALTY_TARGET_ORDERS,
         hasRewardAvailable: false,
         rewardsClaimedCount: 0,
         activeRewardCode: null,
@@ -60,11 +61,11 @@ class LoyaltyManager {
       console.warn("Erro ao ler fidelidade do localStorage:", e)
     }
 
-    // Default amigável para primeira visualização (reflete a tela de mockup 8/10 se não houver dados)
+    // Inicial limpo (0 pedidos, contagem a partir de agora)
     const initial: LoyaltyState = {
-      ordersCount: 8,
+      ordersCount: 0,
       targetOrders: LOYALTY_TARGET_ORDERS,
-      remainingOrders: 2,
+      remainingOrders: LOYALTY_TARGET_ORDERS,
       hasRewardAvailable: false,
       rewardsClaimedCount: 0,
       activeRewardCode: null,
@@ -113,15 +114,14 @@ class LoyaltyManager {
         return serverState
       }
     } catch {
-      // Falha silenciosa com fallback local
+      // Fallback local
     }
 
     return local
   }
 
   /**
-   * Contabiliza um pedido recém-entregue / concluído.
-   * Regra estrita: apenas pedidos com data posterior à implementação e status válido.
+   * Contabiliza pedido recém-entregue. Apenas pós corte atual.
    */
   async incrementFromOrder(params: {
     orderId: string
@@ -131,21 +131,20 @@ class LoyaltyManager {
   }): Promise<LoyaltyState> {
     const { orderId, orderCreatedAt, orderStatus, userId } = params
 
-    // 1. Validar corte de data (apenas pós-implementação)
+    // Apenas pedidos criados a partir de agora
     const createdAtMs = new Date(orderCreatedAt).getTime()
     const cutoffMs = new Date(LOYALTY_CUTOFF_DATE).getTime()
     if (createdAtMs < cutoffMs) {
       return this.getLocalState()
     }
 
-    // 2. Validar status (somente concluído ou entregue)
+    // Apenas status entregue/concluído
     const normalizedStatus = String(orderStatus).toLowerCase()
     const isCompleted = ["delivered", "concluido", "concluído"].includes(normalizedStatus)
     if (!isCompleted) {
       return this.getLocalState()
     }
 
-    // 3. Tentar persistência no Supabase via RPC se logado
     if (userId) {
       try {
         const { data, error } = await this.supabase.rpc("process_order_loyalty", {
@@ -159,11 +158,11 @@ class LoyaltyManager {
       }
     }
 
-    // 4. Fallback idempotente em localStorage
+    // Fallback idempotente
     const current = this.getLocalState()
     const alreadyCountedKey = `counted_order_${orderId}`
     if (typeof window !== "undefined" && localStorage.getItem(alreadyCountedKey)) {
-      return current // já pontuou
+      return current
     }
 
     const nextCount = Math.min(LOYALTY_TARGET_ORDERS, current.ordersCount + 1)
@@ -186,16 +185,12 @@ class LoyaltyManager {
     return updated
   }
 
-  /**
-   * Resgata a batata grátis quando o contador atinge 10/10.
-   * Reinicia o ciclo (0/10) e incrementa `rewardsClaimedCount`.
-   */
   async redeemReward(userId?: string | null): Promise<{ couponCode: string; newState: LoyaltyState }> {
     const current = this.getLocalState()
     const couponCode = current.activeRewardCode || "BATATA-GRATIS-10"
 
     const newState: LoyaltyState = {
-      ordersCount: 0, // Reinicia ciclo
+      ordersCount: 0,
       targetOrders: LOYALTY_TARGET_ORDERS,
       remainingOrders: LOYALTY_TARGET_ORDERS,
       hasRewardAvailable: false,
@@ -232,9 +227,6 @@ class LoyaltyManager {
     return { couponCode, newState }
   }
 
-  /**
-   * Utilitário para testes manuais no frontend (permite alternar entre 8/10 e 10/10).
-   */
   setTestCount(count: number) {
     const safeCount = Math.max(0, Math.min(10, count))
     const current = this.getLocalState()
