@@ -11,6 +11,8 @@ import { useAuth } from "@/lib/auth-context"
 import { appToast } from "@/lib/app-toast"
 import { AddressModalSkeleton } from "@/components/skeletons/address-skeleton"
 import { useCurrentLocation } from "@/hooks/use-current-location"
+import { MapAddressPickerModal } from "@/components/MapAddressPicker/MapAddressPickerModal"
+import { type AddressPayload } from "@/types/address"
 import {
   ResponsiveModal,
   ResponsiveModalContent,
@@ -31,6 +33,7 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
   const [addresses, setAddresses] = useState<Address[]>([])
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [isMapPickerOpen, setIsMapPickerOpen] = useState(false)
   
   // Estados do formulário
   const [cep, setCep] = useState("")
@@ -58,6 +61,57 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
     if (!isOpen || authLoading) return
     loadAddresses()
   }, [isOpen, user, authLoading])
+
+  const handleMapConfirm = async (payload: AddressPayload) => {
+    setIsMapPickerOpen(false)
+    const street = payload.components.route || payload.formattedAddress
+    const number = payload.number
+    const complement = payload.complement || ""
+    const neighborhood = payload.components.neighborhood
+    const city = payload.components.city || "Iacanga"
+    const state = payload.components.state || "SP"
+    const cep = payload.components.postalCode || "17150-000"
+
+    if (user) {
+      const newAddress = await addressesManager.addAddress({
+        user_id: user.id,
+        street,
+        number,
+        complement,
+        neighborhood,
+        city,
+        state,
+        cep,
+        is_default: true,
+      })
+      if (newAddress) {
+        await loadAddresses()
+        window.dispatchEvent(new Event("address-changed"))
+        onAddressSelect?.(newAddress)
+        onClose()
+        appToast.success("Endereço salvo!", "Localização confirmada no mapa.")
+      }
+    } else {
+      const guestAddress: Address = {
+        id: "guest-default",
+        user_id: "guest",
+        street,
+        number,
+        complement,
+        neighborhood,
+        city,
+        state,
+        cep,
+        is_default: true,
+      }
+      localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(guestAddress))
+      setAddresses([guestAddress])
+      window.dispatchEvent(new Event("address-changed"))
+      onAddressSelect?.(guestAddress)
+      onClose()
+      appToast.success("Endereço salvo!", "Localização confirmada no mapa.")
+    }
+  }
 
   const loadAddresses = async () => {
     setLoading(true)
@@ -224,7 +278,8 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
   if (!isOpen) return null
 
   return (
-    <ResponsiveModal open={isOpen} onOpenChange={(open) => { if (!open) onClose() }}>
+    <>
+      <ResponsiveModal open={isOpen} onOpenChange={(open) => { if (!open) onClose() }}>
       <ResponsiveModalContent
         showCloseButton={false}
         showHandle={true}
@@ -301,6 +356,16 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
                   <p className="text-xs text-[#717171] mt-1">Informe onde deseja receber seu pedido em Iacanga.</p>
                 </div>
               )}
+
+              {/* BOTÃO SELECIONAR NO MAPA (GOOGLE MAPS) */}
+              <button
+                type="button"
+                onClick={() => setIsMapPickerOpen(true)}
+                className="w-full h-12 bg-red-600 hover:bg-red-700 text-white rounded-xl flex items-center justify-center gap-2 font-bold shadow-md transition-transform active:scale-[0.98] cursor-pointer"
+              >
+                <MapPin className="h-5 w-5" />
+                Selecionar localização no Mapa
+              </button>
 
               {/* BOTÃO ADICIONAR NOVO */}
               <Button 
@@ -427,5 +492,12 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
         </div>
       </ResponsiveModalContent>
     </ResponsiveModal>
+
+      <MapAddressPickerModal
+        isOpen={isMapPickerOpen}
+        onClose={() => setIsMapPickerOpen(false)}
+        onConfirm={handleMapConfirm}
+      />
+    </>
   )
 }

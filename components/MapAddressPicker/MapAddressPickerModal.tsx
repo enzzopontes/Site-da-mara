@@ -23,8 +23,8 @@ import {
 import { CenterPin } from "./CenterPin";
 
 const DEFAULT_COORDINATES: AddressCoordinates = {
-  lat: -23.55052,
-  lng: -46.633308, // São Paulo, SP
+  lat: -21.8402,
+  lng: -49.0058, // Iacanga, SP
 };
 
 // Subcomponente interno para gerenciar a integração com a instância do mapa Google
