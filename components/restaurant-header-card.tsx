@@ -145,37 +145,51 @@ export function RestaurantHeaderCard({
 
             {/* Informações Principais */}
             <div className="flex-1 min-w-0">
-              {/* Linha 1: Nome + Avaliação com Pedidos Feitos Reais + Super Restaurante */}
-              <div className="flex flex-wrap items-center justify-between sm:justify-start gap-1.5 sm:gap-2 mb-1">
-                <div className="flex items-center gap-2 min-w-0">
-                  <h1 className="text-lg sm:text-2xl font-black text-[#1F1B16] tracking-tight truncate">
-                    Batata Top
-                  </h1>
+              {/* Linha 1: Nome + Avaliação com Pedidos Feitos Reais + Super Restaurante / Status */}
+              <div className="flex items-start justify-between gap-2 mb-1">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                    <h1 className="text-lg sm:text-2xl font-black text-[#1F1B16] tracking-tight truncate">
+                      Batata Top
+                    </h1>
 
-                  {/* Estrela + Pedidos Feitos Reais (Sincronizado Supabase) */}
-                  <div className="inline-flex items-center gap-1 text-xs sm:text-sm shrink-0">
-                    <Star className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-[#FCBB00] text-[#FCBB00]" aria-hidden="true" />
-                    <span className="font-bold text-[#1F1B16]">{realRating.toFixed(1)}</span>
-                    <span className="text-[#717171] font-normal text-xs sm:text-sm">
-                      ({realOrdersCount} {realOrdersCount === 1 ? "pedido feito" : "pedidos feitos"})
-                    </span>
+                    {/* Estrela + Pedidos Feitos Reais (Sincronizado Supabase) */}
+                    <div className="inline-flex items-center gap-1 text-xs sm:text-sm shrink-0">
+                      <Star className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-[#FCBB00] text-[#FCBB00]" aria-hidden="true" />
+                      <span className="font-bold text-[#1F1B16]">{realRating.toFixed(1)}</span>
+                      <span className="text-[#717171] font-normal text-xs sm:text-sm">
+                        ({realOrdersCount} {realOrdersCount === 1 ? "pedido feito" : "pedidos feitos"})
+                      </span>
+                    </div>
                   </div>
+
+                  {/* Linha 2: Categorias */}
+                  <p className="text-xs sm:text-sm text-[#717171] font-medium mt-0.5 truncate">
+                    Batatas Recheadas • Macarrão • Bebidas
+                  </p>
                 </div>
 
-                {/* Selo Super Restaurante */}
-                <span className="inline-flex items-center gap-1 bg-[#FEF8EC] text-[#8A6100] border border-[#FCE8C3] text-[10px] sm:text-xs font-bold px-2 sm:px-2.5 py-0.5 rounded-full shrink-0 shadow-2xs">
-                  <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#E3A008]" />
-                  <span>Super Restaurante</span>
-                </span>
+                {/* Coluna Direita: Selo Super Restaurante + Status Aberto/Fechado logo abaixo */}
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className="inline-flex items-center gap-1 bg-[#FEF8EC] text-[#8A6100] border border-[#FCE8C3] text-[10px] sm:text-xs font-bold px-2 sm:px-2.5 py-0.5 rounded-full shrink-0 shadow-2xs">
+                    <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#E3A008]" />
+                    <span>Super Restaurante</span>
+                  </span>
+
+                  <div
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-bold border shrink-0 ${
+                      isOpen
+                        ? "bg-[#E8F8EE] text-[#1E824C] border-[#BDE8CE]"
+                        : "bg-red-50 text-red-700 border-red-200"
+                    }`}
+                  >
+                    <span>{isOpen ? "Aberto agora •" : "Fechado agora"}</span>
+                  </div>
+                </div>
               </div>
 
-              {/* Linha 2: Categorias */}
-              <p className="text-xs sm:text-sm text-[#717171] font-medium mb-1.5 sm:mb-2.5 truncate">
-                Batatas Recheadas • Macarrão • Bebidas
-              </p>
-
               {/* Linha 3: Chips Informativos - Horizontal sem quebrar múltiplas linhas no mobile */}
-              <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-0.5 text-xs text-[#525252] w-full">
+              <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-0.5 mt-1.5 text-xs text-[#525252] w-full">
                 {/* Tempo de Preparo */}
                 <div className="inline-flex items-center gap-1 bg-[#F9F7F2] px-2.5 py-0.5 sm:py-1 rounded-full text-[11px] sm:text-xs font-semibold text-[#1F1B16] border border-[#EFECE6] shrink-0">
                   <Clock className="w-3.5 h-3.5 text-[#E3A008]" />
@@ -202,17 +216,6 @@ export function RestaurantHeaderCard({
                 <div className="inline-flex items-center gap-1 bg-[#F9F7F2] px-2.5 py-0.5 sm:py-1 rounded-full text-[11px] sm:text-xs font-medium text-[#717171] border border-[#EFECE6] shrink-0">
                   <MapPin className="w-3.5 h-3.5 text-[#C1440E]" />
                   <span>Iacanga - SP</span>
-                </div>
-
-                {/* Status de Funcionamento */}
-                <div
-                  className={`inline-flex items-center px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm font-bold border shrink-0 ${
-                    isOpen
-                      ? "bg-[#E8F8EE] text-[#1E824C] border-[#BDE8CE]"
-                      : "bg-red-50 text-red-700 border-red-200"
-                  }`}
-                >
-                  <span>{isOpen ? "Aberto agora •" : "Fechado agora"}</span>
                 </div>
               </div>
             </div>

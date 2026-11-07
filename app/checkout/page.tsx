@@ -24,6 +24,7 @@ import { StepItens } from "@/components/checkout/step-itens"
 import { StepEntrega } from "@/components/checkout/step-entrega"
 import { StepPagamento } from "@/components/checkout/step-pagamento"
 import { CheckoutSkeleton } from "@/components/skeletons/checkout-skeleton"
+import { AddressModal } from "@/components/address-modal"
 
 const MIN_ORDER_VALUE = 20.0
 
@@ -46,6 +47,7 @@ export default function CheckoutPage() {
   const [selectedAddressId, setSelectedAddressId] = useState<string>("")
   const [useNewAddress, setUseNewAddress] = useState(false)
   const [deliveryType, setDeliveryType] = useState<"delivery" | "pickup">("delivery")
+  const [isAddressModalOpen, setIsAddressModalOpen] = useState(false)
 
   // Dados de contato
   const [nome, setNome] = useState("")
@@ -199,7 +201,7 @@ export default function CheckoutPage() {
         }
       } else if (savedCards.length > 0) {
         const targetType =
-          formaPagamento === "cartao_debito" ? "cartão de débito" : "cartão de crédito"
+          formaPagamento === "cartao_debito" ? "cartão de débito" : "cartao_credito"
         const matchingCards = savedCards.filter((c) => c.card_type === targetType)
         const pool = matchingCards.length > 0 ? matchingCards : savedCards
         const def = pool.find((c) => c.is_default) || pool[0]
@@ -915,6 +917,7 @@ export default function CheckoutPage() {
             setNome={setNome}
             telefone={telefone}
             handleTelefoneChange={handleTelefoneChange}
+            onOpenAddressModal={() => setIsAddressModalOpen(true)}
           />
         )}
 
@@ -979,6 +982,23 @@ export default function CheckoutPage() {
         onClose={() => setShowMinOrderSheet(false)}
         currentSubtotal={subtotal}
         minOrderValue={MIN_ORDER_VALUE}
+      />
+
+      {/* 5. Modal de Seleção de Endereço no Mapa */}
+      <AddressModal
+        isOpen={isAddressModalOpen}
+        onClose={() => setIsAddressModalOpen(false)}
+        onAddressSelect={(addr) => {
+          setUseNewAddress(true)
+          setRua(addr.street)
+          setNumero(addr.number === "S/N" ? "" : addr.number)
+          setComplemento(addr.complement || "")
+          setBairro(addr.neighborhood)
+          if (addr.cep) {
+            setCep(addr.cep)
+          }
+          setIsAddressModalOpen(false)
+        }}
       />
     </div>
   )

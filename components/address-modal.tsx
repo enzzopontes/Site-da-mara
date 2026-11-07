@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import { Address } from "@/lib/addresses-manager";
 import { AddressFlow } from "@/components/MapAddressPicker/AddressFlow";
 
@@ -11,6 +11,21 @@ interface AddressModalProps {
 }
 
 export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalProps) {
+  useEffect(() => {
+    if (isOpen) {
+      document.body.dataset.addressModalOpen = "true";
+      window.dispatchEvent(new CustomEvent("address-modal-state", { detail: { active: true } }));
+    } else {
+      delete document.body.dataset.addressModalOpen;
+      window.dispatchEvent(new CustomEvent("address-modal-state", { detail: { active: false } }));
+    }
+
+    return () => {
+      delete document.body.dataset.addressModalOpen;
+      window.dispatchEvent(new CustomEvent("address-modal-state", { detail: { active: false } }));
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (

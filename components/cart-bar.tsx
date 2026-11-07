@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
@@ -8,6 +9,36 @@ import { useCart } from "@/lib/cart-context"
 export function CartBar() {
   const pathname = usePathname()
   const { items, getTotalPrice } = useCart()
+  const [isMapActive, setIsMapActive] = useState(false)
+
+  useEffect(() => {
+    const handleMapState = (e: any) => {
+      setIsMapActive(Boolean(e.detail?.active))
+    }
+
+    const checkDataset = () => {
+      const active =
+        document.body.dataset.mapActive === "true" ||
+        document.documentElement.dataset.mapActive === "true" ||
+        document.body.dataset.addressModalOpen === "true"
+      setIsMapActive(active)
+    }
+
+    window.addEventListener("map-view-active", handleMapState)
+    window.addEventListener("address-modal-state", handleMapState)
+
+    const observer = new MutationObserver(checkDataset)
+    observer.observe(document.body, { attributes: true, attributeFilter: ["data-map-active", "data-address-modal-open"] })
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-map-active", "data-address-modal-open"] })
+
+    checkDataset()
+
+    return () => {
+      window.removeEventListener("map-view-active", handleMapState)
+      window.removeEventListener("address-modal-state", handleMapState)
+      observer.disconnect()
+    }
+  }, [])
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0)
   const totalPrice = getTotalPrice()
@@ -27,8 +58,8 @@ export function CartBar() {
     pathname.startsWith("/payments") ||
     pathname.startsWith("/reset-password")
 
-  // Exibir somente quando totalItems > 0 e não estiver em rota restrita
-  if (totalItems <= 0 || isHiddenRoute) {
+  // Exibir somente quando totalItems > 0 e não estiver em rota restrita nem com mapa ativo
+  if (totalItems <= 0 || isHiddenRoute || isMapActive) {
     return null
   }
 

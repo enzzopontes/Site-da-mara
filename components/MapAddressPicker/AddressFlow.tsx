@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { addressesManager, Address } from "@/lib/addresses-manager";
+import { mapsService, cleanStreetName } from "@/lib/maps-service";
 import { appToast } from "@/lib/app-toast";
 import { useRouter } from "next/navigation";
 
@@ -96,6 +97,8 @@ interface MapSelectorViewProps {
   onConfirm: () => void;
   isResolving: boolean;
   onBack: () => void;
+  onLocateMe: () => void;
+  isLocatingGps: boolean;
 }
 
 const MapSelectorView: React.FC<MapSelectorViewProps> = ({
@@ -106,6 +109,8 @@ const MapSelectorView: React.FC<MapSelectorViewProps> = ({
   onConfirm,
   isResolving,
   onBack,
+  onLocateMe,
+  isLocatingGps,
 }) => {
   const map = useMap();
   const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -169,6 +174,22 @@ const MapSelectorView: React.FC<MapSelectorViewProps> = ({
             </span>
           </div>
         )}
+
+        {/* Botão Flutuante de Localização Atual no Mapa (GPS) */}
+        <button
+          type="button"
+          onClick={onLocateMe}
+          disabled={isLocatingGps}
+          className="absolute bottom-24 right-4 z-30 w-12 h-12 bg-white text-slate-800 hover:text-[#E59500] active:scale-95 rounded-full shadow-xl border border-slate-200/80 transition-all flex items-center justify-center cursor-pointer group disabled:opacity-75"
+          title="Minha localização atual"
+          aria-label="Minha localização atual"
+        >
+          {isLocatingGps ? (
+            <Loader2 className="w-6 h-6 text-[#E59500] animate-spin" />
+          ) : (
+            <Crosshair className="w-6 h-6 text-slate-700 group-hover:text-[#E59500] transition-colors stroke-[2.2]" />
+          )}
+        </button>
       </div>
 
       {/* Botão Inferior Flutuante Confirmar Endereço */}
@@ -242,6 +263,25 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
 
   const geocoderRef = useRef<google.maps.Geocoder | null>(null);
 
+  // Desativa Mobile Navbar enquanto o mapa estiver selecionado
+  useEffect(() => {
+    if (step === "map") {
+      document.body.dataset.mapActive = "true";
+      document.documentElement.dataset.mapActive = "true";
+      window.dispatchEvent(new CustomEvent("map-view-active", { detail: { active: true } }));
+    } else {
+      delete document.body.dataset.mapActive;
+      delete document.documentElement.dataset.mapActive;
+      window.dispatchEvent(new CustomEvent("map-view-active", { detail: { active: false } }));
+    }
+
+    return () => {
+      delete document.body.dataset.mapActive;
+      delete document.documentElement.dataset.mapActive;
+      window.dispatchEvent(new CustomEvent("map-view-active", { detail: { active: false } }));
+    };
+  }, [step]);
+
   // 1. Carrega endereços salvos
   const loadSavedAddresses = useCallback(async () => {
     if (user) {
@@ -266,7 +306,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
     loadSavedAddresses();
   }, [loadSavedAddresses]);
 
-  // 2. Geocodificador
+  // 2. Geocodificador em Português do Brasil com fallbacks
   const reverseGeocode = useCallback(
     (coords: Coords): Promise<{ street: string; neighborhood: string; city: string; state: string; cep: string; formatted: string }> => {
       return new Promise((resolve) => {
@@ -274,45 +314,84 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
           geocoderRef.current = new google.maps.Geocoder();
         }
 
-        if (!geocoderRef.current) {
-          resolve({
-            street: "",
-            neighborhood: "",
-            city: "Iacanga",
-            state: "SP",
-            cep: "",
-            formatted: "",
-          });
+        if (geocoderRef.current) {
+          geocoderRef.current.geocode(
+            {
+              location: coords,
+              language: "pt-BR",
+              region: "BR",
+            },
+            async (results, status) => {
+              if (status === google.maps.GeocoderStatus.OK && results && results[0]) {
+                const res = results[0];
+                let street = "";
+                let neighborhood = "";
+                let city = "Iacanga";
+                let state = "SP";
+                let cep = "";
+
+                for (const c of res.address_components) {
+                  const types = c.types;
+                  if (types.includes("route")) street = c.long_name;
+                  else if (types.includes("sublocality_level_1") || types.includes("sublocality")) neighborhood = c.long_name;
+                  else if (types.includes("administrative_area_level_2")) city = c.long_name;
+                  else if (types.includes("administrative_area_level_1")) state = c.short_name;
+                  else if (types.includes("postal_code")) cep = c.long_name;
+                }
+
+                street = cleanStreetName(street || res.formatted_address.split(",")[0]);
+
+                resolve({
+                  street,
+                  neighborhood,
+                  city,
+                  state,
+                  cep,
+                  formatted: res.formatted_address,
+                });
+                return;
+              }
+
+              // Fallback para mapsService se Google Maps Geocoder falhar
+              try {
+                const fallbackData = await mapsService.reverseGeocode(coords.lat, coords.lng);
+                resolve({
+                  street: cleanStreetName(fallbackData.street),
+                  neighborhood: fallbackData.neighborhood,
+                  city: fallbackData.city,
+                  state: fallbackData.state,
+                  cep: fallbackData.cep,
+                  formatted: fallbackData.displayName || `${fallbackData.street}, ${fallbackData.neighborhood}`,
+                });
+              } catch {
+                resolve({
+                  street: "",
+                  neighborhood: "",
+                  city: "Iacanga",
+                  state: "SP",
+                  cep: "",
+                  formatted: "",
+                });
+              }
+            }
+          );
           return;
         }
 
-        geocoderRef.current.geocode({ location: coords }, (results, status) => {
-          if (status === google.maps.GeocoderStatus.OK && results && results[0]) {
-            const res = results[0];
-            let street = "";
-            let neighborhood = "";
-            let city = "Iacanga";
-            let state = "SP";
-            let cep = "";
-
-            for (const c of res.address_components) {
-              const types = c.types;
-              if (types.includes("route")) street = c.long_name;
-              else if (types.includes("sublocality_level_1") || types.includes("sublocality")) neighborhood = c.long_name;
-              else if (types.includes("administrative_area_level_2")) city = c.long_name;
-              else if (types.includes("administrative_area_level_1")) state = c.short_name;
-              else if (types.includes("postal_code")) cep = c.long_name;
-            }
-
+        // Sem SDK do Google Maps carregado: usa mapsService imediatamente
+        mapsService
+          .reverseGeocode(coords.lat, coords.lng)
+          .then((fallbackData) => {
             resolve({
-              street: street || res.formatted_address.split(",")[0],
-              neighborhood,
-              city,
-              state,
-              cep,
-              formatted: res.formatted_address,
+              street: cleanStreetName(fallbackData.street),
+              neighborhood: fallbackData.neighborhood,
+              city: fallbackData.city,
+              state: fallbackData.state,
+              cep: fallbackData.cep,
+              formatted: fallbackData.displayName || `${fallbackData.street}, ${fallbackData.neighborhood}`,
             });
-          } else {
+          })
+          .catch(() => {
             resolve({
               street: "",
               neighborhood: "",
@@ -321,67 +400,120 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
               cep: "",
               formatted: "",
             });
-          }
-        });
+          });
       });
     },
     []
   );
 
-  // 3. Obtenção ultrarrápida de geolocalização com cache e sem bloquear
-  useEffect(() => {
-    if (!navigator.geolocation) {
-      setIsDetectingGps(false);
-      setGpsAddressText("Iacanga - SP");
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setCurrentCoords(coords);
-        setMapCoords(coords);
+  // 3. Obtenção de localização precisa via GPS com solicitação explícita se necessário
+  const locateUser = useCallback(
+    (forcePan = false): Promise<Coords | null> => {
+      if (typeof window === "undefined" || !navigator.geolocation) {
+        appToast.warning("GPS não suportado", "Seu dispositivo ou navegador não suporta geolocalização.");
         setIsDetectingGps(false);
-
-        // Decodifica em background sem travar nada
-        reverseGeocode(coords).then((decoded) => {
-          if (decoded.formatted) {
-            setGpsAddressText(decoded.formatted);
-          } else {
-            setGpsAddressText(`${decoded.city} - ${decoded.state}`);
-          }
-        });
-      },
-      () => {
-        setIsDetectingGps(false);
-        setGpsAddressText("Iacanga - SP");
-      },
-      {
-        enableHighAccuracy: false, // Rápido em desktops e celulares
-        timeout: 3000,
-        maximumAge: 300000, // 5 min cache
+        return Promise.resolve(null);
       }
-    );
-  }, [reverseGeocode]);
 
-  // 4. Clicar em "Usar localização atual": ABRE O MAPA INSTANTANEAMENTE
-  const handleUseCurrentLocation = () => {
-    setMapCoords(currentCoords);
-    setStep("map"); // Abre na hora!
+      setIsDetectingGps(true);
 
-    // Inicia a resolução em background
+      return new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            const coords: Coords = {
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+            };
+            setCurrentCoords(coords);
+            setMapCoords(coords);
+            setIsDetectingGps(false);
+
+            if (forcePan) {
+              setIsResolvingAddress(true);
+            }
+
+            try {
+              const decoded = await reverseGeocode(coords);
+              setSelectedStreet(decoded.street);
+              setSelectedNeighborhood(decoded.neighborhood);
+              setSelectedCity(decoded.city);
+              setSelectedState(decoded.state);
+              setSelectedCep(decoded.cep);
+              if (decoded.formatted) {
+                setGpsAddressText(decoded.formatted);
+              } else {
+                setGpsAddressText(`${decoded.city} - ${decoded.state}`);
+              }
+            } catch {
+              setGpsAddressText("Localização encontrada");
+            } finally {
+              setIsResolvingAddress(false);
+            }
+
+            resolve(coords);
+          },
+          (error) => {
+            setIsDetectingGps(false);
+            setIsResolvingAddress(false);
+
+            switch (error.code) {
+              case error.PERMISSION_DENIED:
+                appToast.warning(
+                  "Permissão de GPS necessária",
+                  "Libere o acesso à sua localização no navegador para encontrarmos seu endereço automaticamente."
+                );
+                break;
+              case error.TIMEOUT:
+                appToast.error(
+                  "Tempo de GPS esgotado",
+                  "O GPS demorou a responder. Você pode navegar e posicionar o pino no mapa."
+                );
+                break;
+              default:
+                appToast.error(
+                  "Sinal de GPS indisponível",
+                  "Não foi possível obter sua posição exata no momento. Mova o pino no mapa."
+                );
+                break;
+            }
+            resolve(null);
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 12000,
+            maximumAge: 0,
+          }
+        );
+      });
+    },
+    [reverseGeocode]
+  );
+
+  // Inicialização: tenta obter localização
+  useEffect(() => {
+    locateUser(false);
+  }, [locateUser]);
+
+  // 4. Clicar em "Usar localização atual": ABRE O MAPA E LOCALIZA COM PRECISÃO
+  const handleUseCurrentLocation = async () => {
+    setStep("map"); // Abre o mapa imediatamente
     setIsResolvingAddress(true);
-    reverseGeocode(currentCoords).then((data) => {
-      setSelectedStreet(data.street);
-      setSelectedNeighborhood(data.neighborhood);
-      setSelectedCity(data.city);
-      setSelectedState(data.state);
-      setSelectedCep(data.cep);
-      setIsResolvingAddress(false);
-    });
+
+    const coords = await locateUser(true);
+    if (!coords) {
+      setMapCoords(currentCoords);
+      reverseGeocode(currentCoords).then((data) => {
+        setSelectedStreet(data.street);
+        setSelectedNeighborhood(data.neighborhood);
+        setSelectedCity(data.city);
+        setSelectedState(data.state);
+        setSelectedCep(data.cep);
+        setIsResolvingAddress(false);
+      });
+    }
   };
 
-  // 5. Câmera do mapa estabilizou
+  // 5. Câmera do mapa estabilizou (usuário arrastou o mapa)
   const handleCameraIdle = useCallback(
     async (coords: Coords) => {
       setIsMapMoving(false);
@@ -533,7 +665,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
       <div className={`relative w-full h-full flex flex-col bg-[#FAF8F5] text-slate-800 ${isModal ? "max-h-[92vh] rounded-3xl overflow-hidden shadow-2xl" : "min-h-screen"}`}>
 
         {/* ======================================================== */}
-        {/* ESTADO 1: LISTA DE ENDEREÇOS E GPS (IDÊNTICO À FOTO)     */}
+        {/* ESTADO 1: LISTA DE ENDEREÇOS E GPS                       */}
         {/* ======================================================== */}
         {step === "initial" && (
           <div className="flex flex-col h-full flex-1">
@@ -584,7 +716,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
                         Obtendo sua localização atual...
                       </span>
                     ) : (
-                      gpsAddressText || "Novo Horizonte - SP"
+                      gpsAddressText || "Iacanga - SP"
                     )}
                   </p>
                 </div>
@@ -705,6 +837,8 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
             onConfirm={handleConfirmMap}
             isResolving={isResolvingAddress}
             onBack={() => setStep("initial")}
+            onLocateMe={() => locateUser(true)}
+            isLocatingGps={isDetectingGps}
           />
         )}
 

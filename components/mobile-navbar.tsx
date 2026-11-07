@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
@@ -14,6 +15,40 @@ export function MobileNavbar() {
   const pathname = usePathname()
   const router = useRouter()
   const { user } = useAuth()
+  const [isMapActive, setIsMapActive] = useState(false)
+
+  // Desativa completamente a Mobile Navbar quando o usuário entra na seleção do mapa
+  useEffect(() => {
+    const handleMapState = (e: any) => {
+      setIsMapActive(Boolean(e.detail?.active))
+    }
+
+    const checkDataset = () => {
+      const active =
+        document.body.dataset.mapActive === "true" ||
+        document.documentElement.dataset.mapActive === "true" ||
+        document.body.dataset.addressModalOpen === "true"
+      setIsMapActive(active)
+    }
+
+    window.addEventListener("map-view-active", handleMapState)
+    window.addEventListener("address-modal-state", handleMapState)
+
+    const observer = new MutationObserver(checkDataset)
+    observer.observe(document.body, { attributes: true, attributeFilter: ["data-map-active", "data-address-modal-open"] })
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-map-active", "data-address-modal-open"] })
+
+    checkDataset()
+
+    return () => {
+      window.removeEventListener("map-view-active", handleMapState)
+      window.removeEventListener("address-modal-state", handleMapState)
+      observer.disconnect()
+    }
+  }, [])
+
+  // Se o usuário entrou no mapa ou modal de endereço, desativa a mobile navbar
+  if (isMapActive) return null
 
   // REGRAS ESTRITAS DE VISIBILIDADE:
   // EXIBIR APENAS: Nas abas principais ("/", "/cardapio", "/pedidos", "/profile" ou "/perfil").

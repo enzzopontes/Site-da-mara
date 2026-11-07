@@ -192,25 +192,38 @@ export function StepEntrega({
               </div>
 
               <div className="space-y-3">
-                {/* Botão Usar Localização Atual GPS */}
-                <button
-                  type="button"
-                  onClick={() => requestLocation()}
-                  disabled={isLocating}
-                  className="w-full h-11 rounded-2xl border border-[#E3A008] bg-[#E3A008]/10 hover:bg-[#E3A008]/20 text-[#1F1B16] text-xs font-bold flex items-center justify-center gap-2 transition-transform active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
-                >
-                  {isLocating ? (
-                    <>
-                      <Loader2 className="w-4 h-4 text-[#E3A008] animate-spin" />
-                      <span>Obtendo sua localização com precisão...</span>
-                    </>
-                  ) : (
-                    <>
-                      <LocateFixed className="w-4 h-4 text-[#E3A008]" />
-                      <span>Usar minha localização atual</span>
-                    </>
+                {/* Botões de Localização Atual e Seleção no Mapa */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => requestLocation()}
+                    disabled={isLocating}
+                    className="w-full h-11 rounded-2xl border border-[#E3A008] bg-[#E3A008]/10 hover:bg-[#E3A008]/20 text-[#1F1B16] text-xs font-bold flex items-center justify-center gap-2 transition-transform active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {isLocating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 text-[#E3A008] animate-spin" />
+                        <span>Obtendo localização...</span>
+                      </>
+                    ) : (
+                      <>
+                        <LocateFixed className="w-4 h-4 text-[#E3A008]" />
+                        <span>Usar minha localização</span>
+                      </>
+                    )}
+                  </button>
+
+                  {onOpenAddressModal && (
+                    <button
+                      type="button"
+                      onClick={onOpenAddressModal}
+                      className="w-full h-11 rounded-2xl border border-[#ECE7E0] bg-white hover:bg-[#F7F5F0] text-[#1F1B16] text-xs font-bold flex items-center justify-center gap-2 transition-transform active:scale-[0.98] cursor-pointer shadow-xs"
+                    >
+                      <MapPin className="w-4 h-4 text-[#E3A008]" />
+                      <span>Selecionar no mapa</span>
+                    </button>
                   )}
-                </button>
+                </div>
 
                 {/* CEP com Busca ViaCEP */}
                 <div>
@@ -418,16 +431,32 @@ export function StepEntrega({
               ))}
             </div>
 
-            <button
-              onClick={() => {
-                setUseNewAddress(true)
-                setShowAddressPicker(false)
-              }}
-              className="w-full h-12 rounded-2xl border-2 border-dashed border-[#E3A008] text-[#E3A008] font-bold text-sm flex items-center justify-center gap-2 hover:bg-amber-50/50 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Novo Endereço
-            </button>
+            <div className="space-y-2 pt-2">
+              <button
+                onClick={() => {
+                  setUseNewAddress(true)
+                  setShowAddressPicker(false)
+                }}
+                className="w-full h-12 rounded-2xl border-2 border-dashed border-[#E3A008] text-[#E3A008] font-bold text-sm flex items-center justify-center gap-2 hover:bg-amber-50/50 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Digitar Novo Endereço
+              </button>
+
+              {onOpenAddressModal && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddressPicker(false)
+                    onOpenAddressModal()
+                  }}
+                  className="w-full h-12 rounded-2xl bg-[#E3A008] hover:bg-[#C1440E] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer"
+                >
+                  <MapPin className="w-4 h-4 text-white" />
+                  Buscar ou Selecionar no Mapa
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
