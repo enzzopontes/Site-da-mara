@@ -6,6 +6,13 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { supabase } from "@/lib/supabase-fix"
 import { useAuth } from "@/lib/auth-context"
+import { appToast } from "@/lib/app-toast"
+import {
+  ResponsiveModal,
+  ResponsiveModalContent,
+  ResponsiveModalTitle,
+  ResponsiveModalDescription,
+} from "@/components/ui/responsive-modal"
 
 interface FeedbackModalProps {
   orderId: string
@@ -24,7 +31,7 @@ export function FeedbackModal({ orderId, orderNumber, initialRating = 0, onClose
 
   const handleSubmit = async () => {
     if (rating === 0) {
-      alert("Por favor, selecione uma avaliação de 1 a 5 estrelas")
+      appToast.warning("Atenção", "Por favor, selecione uma avaliação de 1 a 5 estrelas")
       return
     }
 
@@ -52,35 +59,44 @@ export function FeedbackModal({ orderId, orderNumber, initialRating = 0, onClose
         localStorage.setItem("evaluated-orders", JSON.stringify(evaluatedOrders))
       }
 
-      alert("Obrigado pela sua avaliação! 🎉")
-      onSuccess?.()
+      appToast.success("Obrigado pela avaliação!", "Seu feedback nos ajuda a melhorar a cada pedido.")
+      if (onSuccess) onSuccess()
       onClose()
     } catch (error: any) {
       console.error("Erro ao enviar feedback:", error)
-      alert(`Erro ao enviar avaliação: ${error.message}`)
+      appToast.error("Erro ao enviar avaliação", error.message || "Tente novamente mais tarde.")
     } finally {
       setIsSubmitting(false)
     }
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300">
-      <div className="bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl max-w-md w-full overflow-hidden animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-300 border-t sm:border border-yellow-100 max-h-[90vh] flex flex-col">
+    <ResponsiveModal open={true} onOpenChange={(open) => { if (!open) onClose() }}>
+      <ResponsiveModalContent
+        showCloseButton={false}
+        showHandle={true}
+        className="p-0 border-none sm:border sm:border-yellow-100 bg-white flex flex-col sm:max-w-md sm:rounded-[2.5rem] rounded-t-[2.5rem] overflow-hidden max-h-[90vh]"
+      >
         {/* Header */}
-        <div className="bg-gradient-to-r from-yellow-400 to-yellow-500 p-6 pb-8 relative flex-shrink-0">
-          <div className="w-12 h-1.5 bg-white/30 rounded-full mx-auto mb-4 sm:hidden" />
+        <div className="bg-gradient-to-r from-yellow-400 to-yellow-500 p-6 pb-6 relative shrink-0">
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 hover:bg-white/20 rounded-full transition-colors"
+            aria-label="Fechar"
+            data-vaul-no-drag
+            className="absolute top-4 right-4 p-2 hover:bg-white/20 rounded-full transition-colors text-white"
           >
-            <X className="h-6 w-6 text-white" />
+            <X className="h-6 w-6" />
           </button>
-          <h2 className="text-2xl sm:text-3xl font-black text-white mb-1 text-center sm:text-left">Avalie seu pedido</h2>
-          <p className="text-yellow-50 text-sm font-bold text-center sm:text-left opacity-90">Pedido #{orderNumber}</p>
+          <ResponsiveModalTitle className="text-2xl sm:text-3xl font-black text-white mb-1 text-center sm:text-left">
+            Avalie seu pedido
+          </ResponsiveModalTitle>
+          <ResponsiveModalDescription className="text-yellow-50 text-sm font-bold text-center sm:text-left opacity-90">
+            Pedido #{orderNumber}
+          </ResponsiveModalDescription>
         </div>
 
         {/* Content */}
-        <div className="p-6 sm:p-8 space-y-6 sm:space-y-8 bg-white overflow-y-auto">
+        <div className="p-6 sm:p-8 space-y-6 sm:space-y-8 bg-white overflow-y-auto flex-1">
           {/* Rating Stars */}
           <div className="space-y-4">
             <label className="block text-base font-black text-gray-800 text-center">
@@ -94,6 +110,7 @@ export function FeedbackModal({ orderId, orderNumber, initialRating = 0, onClose
                   onClick={() => setRating(star)}
                   onMouseEnter={() => setHoveredRating(star)}
                   onMouseLeave={() => setHoveredRating(0)}
+                  data-vaul-no-drag
                   className="transition-all hover:scale-125 active:scale-90 p-1 sm:p-2"
                 >
                   <Star
@@ -128,6 +145,7 @@ export function FeedbackModal({ orderId, orderNumber, initialRating = 0, onClose
               placeholder="O que podemos melhorar?"
               value={comment}
               onChange={(e) => setComment(e.target.value)}
+              data-vaul-no-drag
               className="min-h-[100px] sm:min-h-[120px] resize-none border-2 border-gray-100 focus:border-yellow-400 rounded-2xl transition-all text-base p-4 focus:ring-0"
               maxLength={500}
             />
@@ -138,11 +156,12 @@ export function FeedbackModal({ orderId, orderNumber, initialRating = 0, onClose
             </div>
           </div>
 
-          {/* Actions - Agora sempre em coluna para garantir a ordem Enviar -> Agora não */}
+          {/* Actions */}
           <div className="flex flex-col gap-3 pt-2 pb-6 sm:pb-0">
             <Button
               onClick={handleSubmit}
               disabled={isSubmitting || rating === 0}
+              data-vaul-no-drag
               className="w-full h-14 bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-black text-lg rounded-2xl shadow-xl shadow-yellow-100 transition-all active:scale-95 disabled:opacity-50"
             >
               {isSubmitting ? (
@@ -157,6 +176,7 @@ export function FeedbackModal({ orderId, orderNumber, initialRating = 0, onClose
             <Button
               variant="ghost"
               onClick={onClose}
+              data-vaul-no-drag
               className="w-full h-12 font-bold text-gray-400 hover:bg-gray-50 rounded-2xl"
               disabled={isSubmitting}
             >
@@ -164,7 +184,7 @@ export function FeedbackModal({ orderId, orderNumber, initialRating = 0, onClose
             </Button>
           </div>
         </div>
-      </div>
-    </div>
+      </ResponsiveModalContent>
+    </ResponsiveModal>
   )
 }

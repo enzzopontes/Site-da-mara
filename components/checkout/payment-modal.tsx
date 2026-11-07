@@ -3,6 +3,11 @@
 import React, { useState, useEffect } from "react"
 import { ChevronLeft, QrCode, Banknote, CreditCard } from "lucide-react"
 import { CardBrandBadge } from "@/components/payment/card-brand-badge"
+import {
+  ResponsiveModal,
+  ResponsiveModalContent,
+  ResponsiveModalTitle,
+} from "@/components/ui/responsive-modal"
 
 export type PaymentMethod =
   | "pix"
@@ -86,14 +91,12 @@ export function PaymentModal({
   )
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/45 p-0 sm:p-4 animate-in fade-in duration-200">
-      {/* Backdrop click */}
-      <div className="absolute inset-0" onClick={onClose} />
-
-      <div className="relative bg-white w-full max-w-lg rounded-t-[24px] sm:rounded-3xl px-4 pt-3 pb-6 shadow-2xl max-h-[90vh] flex flex-col z-10 animate-in slide-in-from-bottom duration-300">
-        {/* Handle bar on mobile */}
-        <div className="w-[38px] h-1 bg-[#D4D4D8] rounded-full mx-auto mb-3 sm:hidden" />
-
+    <ResponsiveModal open={isOpen} onOpenChange={(open) => { if (!open) onClose() }}>
+      <ResponsiveModalContent
+        showCloseButton={false}
+        showHandle={true}
+        className="p-0 border-none sm:border sm:border-[#E4E4E7] bg-white flex flex-col sm:max-w-lg sm:rounded-3xl rounded-t-[28px] max-h-[90vh] px-4 pt-3 pb-6"
+      >
         {/* Header: back button + logo centered */}
         <div className="flex items-center justify-between mb-3">
           <button
@@ -312,8 +315,8 @@ export function PaymentModal({
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </ResponsiveModalContent>
+    </ResponsiveModal>
   )
 }
 
