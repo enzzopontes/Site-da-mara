@@ -228,12 +228,31 @@ class OrdersManager {
 
   async updateOrderStatus(orderId: string, status: Order["status"]): Promise<void> {
     const sb = this.supabase
-    const { data: existingOrder } = await sb.from("orders").select("metadata").eq("id", orderId).maybeSingle()
+        const { data: existingOrder } = await sb
+      .from("orders")
+      .select("metadata, user_id, created_at")
+      .eq("id", orderId)
+      .maybeSingle()
+
     const existingMetadata = existingOrder?.metadata || {}
     await sb.from("orders").update({ 
       status,
       metadata: { ...existingMetadata, statusUpdatedAt: new Date().toISOString() }
     }).eq("id", orderId)
+
+    if (status === "delivered") {
+      try {
+        const { loyaltyManager } = await import("./loyalty-manager")
+        await loyaltyManager.incrementFromOrder({
+          orderId,
+          orderCreatedAt: existingOrder?.created_at || new Date().toISOString(),
+          orderStatus: status,
+          userId: existingOrder?.user_id,
+        })
+      } catch (err) {
+        console.warn("Fidelidade:", err)
+      }
+    }
   }
 
   async deleteOrder(orderId: string): Promise<void> {
