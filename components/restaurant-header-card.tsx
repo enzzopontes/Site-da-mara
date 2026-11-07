@@ -88,10 +88,10 @@ export function RestaurantHeaderCard({
                 </h1>
 
                 {/* Avaliação Estrela Dourada */}
-                <div className="inline-flex items-center gap-1 text-xs sm:text-sm font-bold text-[#1F1B16] shrink-0">
+                <div className="inline-flex items-center gap-1.5 text-xs sm:text-sm shrink-0">
                   <Star className="w-4 h-4 fill-[#FCBB00] text-[#FCBB00]" aria-hidden="true" />
-                  <span className="text-[#1F1B16]">4.9</span>
-                  <span className="text-[#717171] font-normal text-xs">(500+ avaliações)</span>
+                  <span className="font-bold text-[#1F1B16]">4.9</span>
+                  <span className="text-[#717171] font-normal text-xs sm:text-sm">(500+ avaliações)</span>
                 </div>
 
                 {/* Selo Super Restaurante */}
@@ -138,22 +138,12 @@ export function RestaurantHeaderCard({
 
                 {/* Status de Funcionamento */}
                 <div
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-bold border shrink-0 ${
+                  className={`inline-flex items-center px-3 py-1 rounded-full text-xs sm:text-sm font-bold border shrink-0 ${
                     isOpen
                       ? "bg-[#E8F8EE] text-[#1E824C] border-[#BDE8CE]"
                       : "bg-red-50 text-red-700 border-red-200"
                   }`}
                 >
-                  <span className="relative flex h-2 w-2">
-                    {isOpen && (
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#27AE60] opacity-75" />
-                    )}
-                    <span
-                      className={`relative inline-flex rounded-full h-2 w-2 ${
-                        isOpen ? "bg-[#27AE60]" : "bg-red-500"
-                      }`}
-                    />
-                  </span>
                   <span>{isOpen ? "Aberto agora •" : "Fechado agora"}</span>
                 </div>
               </div>
@@ -214,20 +204,20 @@ export function RestaurantHeaderCard({
             </div>
           ) : (
             /* ESTADO NORMAL: PROGRESSO DE PEDIDOS (IMAGEM 1) */
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full text-xs">
               {/* Texto de Motivação */}
-              <div className="text-neutral-700 text-xs sm:text-[13px] font-medium leading-tight">
+              <div className="text-neutral-700 text-xs sm:text-[13px] font-medium leading-tight shrink-0">
                 Faltam{" "}
-                <span className="font-extrabold text-[#1F1B16]">
+                <span className="font-bold text-[#1F1B16]">
                   {remainingOrders} {remainingOrders === 1 ? "pedido" : "pedidos"}
                 </span>{" "}
                 para você ganhar{" "}
-                <span className="font-extrabold text-[#C1440E]">1 Batata Grátis!</span>
+                <span className="font-bold text-[#C1440E]">1 Batata Grátis!</span>
               </div>
 
-              {/* Track da Barra de Progresso + Contador Numérico */}
-              <div className="flex items-center gap-3 w-full sm:w-auto">
-                <div className="flex-1 sm:w-44 md:w-56 h-2 bg-[#EAE7E1] rounded-full overflow-hidden p-0.5">
+              {/* Barra que vai desde '1 Batata Grátis' até o outro lado ocupando todo o espaço */}
+              <div className="flex-1 flex items-center gap-3 min-w-0 w-full">
+                <div className="flex-1 h-2 bg-[#EAE7E1] rounded-full overflow-hidden p-0.5">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-[#C1440E] via-[#E3A008] to-[#27AE60] transition-all duration-700 ease-out"
                     style={{ width: `${progressPercent}%` }}
@@ -238,8 +228,8 @@ export function RestaurantHeaderCard({
                   />
                 </div>
 
-                {/* Indicador Numérico à Direita */}
-                <span className="text-xs font-bold text-[#525252] shrink-0 font-mono">
+                {/* Indicador Numérico à Direita em tom dourado */}
+                <span className="text-xs sm:text-sm font-black text-[#D97706] shrink-0 font-mono tracking-tight">
                   {ordersCount}/{targetOrders}
                 </span>
               </div>
