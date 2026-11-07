@@ -1,31 +1,23 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
+import useEmblaCarousel from "embla-carousel-react"
 import { ChevronLeft, ChevronRight, Tag } from "lucide-react"
 import { bannersManager, isSafeImageUrl, type HomeBannerItem } from "@/lib/banners-manager"
 import { useCart } from "@/lib/cart-context"
 import { TopToast } from "@/components/top-toast"
 
-type TrackBanner = HomeBannerItem & { _key?: string }
-
 export function CampaignBanner() {
   const { setCoupon } = useCart()
   const [banners, setBanners] = useState<HomeBannerItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [realIndex, setRealIndex] = useState(0) // 0 a N-1
-  const [displayIndex, setDisplayIndex] = useState(1) // 1 a N no track com clones
-  const [isTransitioning, setIsTransitioning] = useState(true)
-  const [isHovered, setIsHovered] = useState(false)
+  const [selectedIndex, setSelectedIndex] = useState(0)
+  const [isPaused, setIsPaused] = useState(false)
   const [imgErrorMap, setImgErrorMap] = useState<Record<string, boolean>>({})
   const [toastState, setToastState] = useState<{ open: boolean; message: string; subMessage?: string }>({
     open: false,
     message: "",
   })
-  const [aspectRatio, setAspectRatio] = useState<number>(16 / 9)
-
-  const touchStartX = useRef<number>(0)
-  const touchEndX = useRef<number>(0)
-  const resetTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Carrega banners e escuta Realtime
   useEffect(() => {
@@ -46,87 +38,72 @@ export function CampaignBanner() {
     }
   }, [])
 
-  // Filtra banners válidos
+  // Filtra banners válidos com URLs seguras e sem falhas de imagem
   const validBanners = useMemo(() => {
     return banners.filter((b) => !imgErrorMap[b.id] && isSafeImageUrl(b.image_url))
   }, [banners, imgErrorMap])
 
-  // Auto-adapta a proporção do container ao tamanho real do banner (igual ao app mobile)
-  useEffect(() => {
-    const firstUrl = validBanners[0]?.image_url
-    if (!firstUrl) return
-    const img = new Image()
-    img.src = firstUrl
-    img.onload = () => {
-      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-        const ratio = img.naturalWidth / img.naturalHeight
-        const clamped = Math.max(1.3, Math.min(2.6, ratio))
-        setAspectRatio(clamped)
-      }
-    }
-  }, [validBanners])
-
   const total = validBanners.length
 
-  // Lista com clones nas pontas para looping circular contínuo com espiada bilateral perfeita
-  const trackItems = useMemo<TrackBanner[]>(() => {
-    if (total <= 1) return validBanners
-    const first = validBanners[0]
-    const last = validBanners[total - 1]
-    return [
-      { ...last, _key: `clone-last-${last.id}` },
-      ...validBanners.map((b) => ({ ...b, _key: `real-${b.id}` })),
-      { ...first, _key: `clone-first-${first.id}` },
-    ]
-  }, [validBanners, total])
+  // Embla Carousel com loop infinito e alinhamento centralizado
+  const [emblaRef, emblaApi] = useEmblaCarousel({
+    loop: total > 1,
+    align: "center",
+    skipSnaps: false,
+    duration: 25,
+  })
 
-  // Navegação para próximo
-  const handleNext = useCallback(() => {
-    if (total <= 1) return
-    setIsTransitioning(true)
-    setDisplayIndex((prev) => prev + 1)
-  }, [total])
+  // Sincroniza índice ativo com Embla
+  const onSelect = useCallback(() => {
+    if (!emblaApi) return
+    setSelectedIndex(emblaApi.selectedScrollSnap())
+  }, [emblaApi])
 
-  // Navegação para anterior
-  const handlePrev = useCallback(() => {
-    if (total <= 1) return
-    setIsTransitioning(true)
-    setDisplayIndex((prev) => prev - 1)
-  }, [total])
-
-  // Trata salto silencioso ao alcançar clones (loop infinito invisível)
   useEffect(() => {
-    if (total <= 1) return
-
-    if (displayIndex === total + 1) {
-      setRealIndex(0)
-      resetTimerRef.current = setTimeout(() => {
-        setIsTransitioning(false)
-        setDisplayIndex(1)
-      }, 500)
-    } else if (displayIndex === 0) {
-      setRealIndex(total - 1)
-      resetTimerRef.current = setTimeout(() => {
-        setIsTransitioning(false)
-        setDisplayIndex(total)
-      }, 500)
-    } else {
-      setRealIndex(displayIndex - 1)
+    if (!emblaApi) return
+    onSelect()
+    emblaApi.on("select", onSelect)
+    emblaApi.on("reInit", onSelect)
+    return () => {
+      emblaApi.off("select", onSelect)
+      emblaApi.off("reInit", onSelect)
     }
+  }, [emblaApi, onSelect])
+
+  // Pausa autoplay quando o usuário está arrastando (touch / pointer)
+  useEffect(() => {
+    if (!emblaApi) return
+    const onPointerDown = () => setIsPaused(true)
+    const onPointerUp = () => setIsPaused(false)
+
+    emblaApi.on("pointerDown", onPointerDown)
+    emblaApi.on("pointerUp", onPointerUp)
 
     return () => {
-      if (resetTimerRef.current) clearTimeout(resetTimerRef.current)
+      emblaApi.off("pointerDown", onPointerDown)
+      emblaApi.off("pointerUp", onPointerUp)
     }
-  }, [displayIndex, total])
+  }, [emblaApi])
 
-  // Auto-play a cada 7 segundos (pausa quando o mouse está em cima)
+  // Pausa quando a aba do navegador fica oculta
   useEffect(() => {
-    if (isHovered || total <= 1) return
-    const timer = setInterval(() => {
-      handleNext()
-    }, 7000)
-    return () => clearInterval(timer)
-  }, [isHovered, total, handleNext])
+    const handleVisibility = () => {
+      setIsPaused(document.hidden)
+    }
+    document.addEventListener("visibilitychange", handleVisibility)
+    return () => document.removeEventListener("visibilitychange", handleVisibility)
+  }, [])
+
+  // Autoplay suave com intervalo de 6 segundos
+  useEffect(() => {
+    if (!emblaApi || isPaused || total <= 1) return
+
+    const interval = setInterval(() => {
+      emblaApi.scrollNext()
+    }, 6000)
+
+    return () => clearInterval(interval)
+  }, [emblaApi, isPaused, total])
 
   // Cópia para Clipboard com Fallback multi-plataforma e suporte iOS
   const copyToClipboard = useCallback(async (code: string) => {
@@ -200,33 +177,26 @@ export function CampaignBanner() {
     [setCoupon, copyToClipboard]
   )
 
-  // Gestos de Touch Swipe
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.targetTouches[0].clientX
-  }
-  const handleTouchMove = (e: React.TouchEvent) => {
-    touchEndX.current = e.targetTouches[0].clientX
-  }
-  const handleTouchEnd = () => {
-    if (!touchStartX.current || !touchEndX.current) return
-    const diff = touchStartX.current - touchEndX.current
-    if (diff > 45) {
-      handleNext()
-    } else if (diff < -45) {
-      handlePrev()
-    }
-    touchStartX.current = 0
-    touchEndX.current = 0
-  }
+  const handlePrev = useCallback(() => {
+    emblaApi?.scrollPrev()
+  }, [emblaApi])
 
-  // Skeleton loading
+  const handleNext = useCallback(() => {
+    emblaApi?.scrollNext()
+  }, [emblaApi])
+
+  const scrollTo = useCallback(
+    (index: number) => {
+      emblaApi?.scrollTo(index)
+    },
+    [emblaApi]
+  )
+
+  // Skeleton loading responsivo sem layout shift
   if (loading) {
     return (
-      <div className="w-full bg-[#F7F5F0] py-3 select-none">
-        <div
-          className="w-[84%] sm:w-[80%] md:w-[74%] max-w-[760px] mx-auto bg-stone-200/80 rounded-2xl sm:rounded-3xl animate-pulse"
-          style={{ aspectRatio: `${aspectRatio}` }}
-        />
+      <div className="w-full bg-[#F7F5F0] py-2 sm:py-3 select-none">
+        <div className="w-[88%] sm:w-[82%] md:w-[76%] lg:w-[70%] max-w-[760px] mx-auto h-36 min-[400px]:h-44 sm:h-52 md:h-64 lg:h-72 bg-stone-200/80 rounded-2xl sm:rounded-3xl animate-pulse" />
       </div>
     )
   }
@@ -236,6 +206,9 @@ export function CampaignBanner() {
   // Quando só tem 1 banner, renderiza estático centralizado
   if (total === 1) {
     const single = validBanners[0]
+    const couponCode = single.coupon?.code
+    const badgeText = single.coupon?.badge_label
+
     return (
       <>
         <TopToast
@@ -245,38 +218,30 @@ export function CampaignBanner() {
           onClose={() => setToastState((prev) => ({ ...prev, open: false }))}
         />
         <section aria-label="Banner Promocional" className="w-full bg-[#F7F5F0] py-2 sm:py-3 select-none">
-          <div className="w-[84%] sm:w-[80%] md:w-[74%] max-w-[760px] mx-auto">
+          <div className="w-[88%] sm:w-[82%] md:w-[76%] lg:w-[70%] max-w-[760px] mx-auto">
             <div
               onClick={() => handleBannerClick(single)}
-              className={`relative w-full rounded-2xl sm:rounded-3xl overflow-hidden shadow-sm ${
-                single.coupon?.code ? "cursor-pointer active:scale-[0.99] transition-transform" : ""
+              className={`relative w-full h-36 min-[400px]:h-44 sm:h-52 md:h-64 lg:h-72 rounded-2xl sm:rounded-3xl overflow-hidden shadow-sm bg-stone-200/50 ${
+                couponCode ? "cursor-pointer active:scale-[0.99] transition-transform" : ""
               }`}
-              style={{ aspectRatio: `${aspectRatio}` }}
             >
               <img
                 src={single.image_url}
                 alt={single.title || "Banner promocional"}
-                className="w-full h-full object-cover select-none pointer-events-none"
-                loading="lazy"
-                onLoad={(e) => {
-                  const { naturalWidth, naturalHeight } = e.currentTarget
-                  if (naturalWidth > 0 && naturalHeight > 0) {
-                    const ratio = naturalWidth / naturalHeight
-                    setAspectRatio(Math.max(1.3, Math.min(2.6, ratio)))
-                  }
-                }}
+                className="w-full h-full object-cover object-center select-none pointer-events-none"
+                loading="eager"
                 onError={() => setImgErrorMap((prev) => ({ ...prev, [single.id]: true }))}
               />
-              {single.coupon?.badge_label && (
+              {badgeText && (
                 <div className="absolute top-2.5 left-2.5 sm:top-3.5 sm:left-3.5 z-20 bg-[#C1440E] text-white text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-1 rounded-lg shadow-md">
-                  {single.coupon.badge_label}
+                  {badgeText}
                 </div>
               )}
-              {single.coupon?.code && (
+              {couponCode && (
                 <div className="absolute bottom-2.5 right-2.5 sm:bottom-3.5 sm:right-3.5 z-20 bg-black/80 backdrop-blur-md text-white text-[10px] sm:text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-lg border border-white/15">
                   <Tag className="w-3.5 h-3.5 text-[#E3A008]" />
                   <span>
-                    Cupom: <strong className="text-[#E3A008] font-black">{single.coupon.code}</strong> (Toque para aplicar)
+                    Cupom: <strong className="text-[#E3A008] font-black">{couponCode}</strong> (Toque para aplicar)
                   </span>
                 </div>
               )}
@@ -299,74 +264,47 @@ export function CampaignBanner() {
       <section
         aria-label="Campanhas e Banners Promocionais"
         className="w-full bg-[#F7F5F0] py-2 sm:py-3 select-none overflow-hidden"
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
+        onMouseEnter={() => setIsPaused(true)}
+        onMouseLeave={() => setIsPaused(false)}
+        onTouchStart={() => setIsPaused(true)}
+        onTouchEnd={() => setIsPaused(false)}
       >
         <div className="relative w-full max-w-5xl mx-auto group">
-          {/* Trilho Deslizante com Espiada Lateral Idêntica ao App Mobile */}
-          <div className="w-full overflow-hidden">
-            <div
-              className={`flex items-center gap-3 sm:gap-4 will-change-transform ${
-                isTransitioning
-                  ? "transition-transform duration-500 ease-[cubic-bezier(0.25,1,0.5,1)]"
-                  : ""
-              }`}
-              style={{
-                // Fórmula de centralização: deixa a borda do banner anterior na esquerda e do próximo na direita
-                transform: `translateX(calc((100% - var(--banner-w, 84%)) / 2 - ${displayIndex} * (var(--banner-w, 84%) + var(--banner-gap, 12px))))`,
-              }}
-            >
-              {trackItems.map((banner, idx) => {
-                const isActive = idx === displayIndex
+          {/* Viewport do Embla Carousel com Espiada Lateral Bilateral */}
+          <div className="w-full overflow-hidden" ref={emblaRef}>
+            <div className="flex -ml-3 sm:-ml-4">
+              {validBanners.map((banner, idx) => {
+                const isActive = idx === selectedIndex
                 const couponCode = banner.coupon?.code
                 const badgeText = banner.coupon?.badge_label
 
                 return (
                   <div
-                    key={banner._key || `${banner.id}-${idx}`}
-                    onClick={() => handleBannerClick(banner)}
-                    className={`shrink-0 w-[84%] sm:w-[80%] md:w-[74%] max-w-[760px] transition-opacity duration-300 ${
-                      isActive ? "opacity-100" : "opacity-85"
-                    } ${couponCode ? "cursor-pointer" : ""}`}
-                    style={
-                      {
-                        "--banner-w": "84%",
-                        "--banner-gap": "12px",
-                      } as React.CSSProperties
-                    }
+                    key={banner.id}
+                    className="min-w-0 shrink-0 grow-0 pl-3 sm:pl-4 basis-[88%] sm:basis-[82%] md:basis-[76%] lg:basis-[70%] max-w-[760px]"
                   >
                     <div
-                      className="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden shadow-sm"
-                      style={{ aspectRatio: `${aspectRatio}` }}
+                      onClick={() => handleBannerClick(banner)}
+                      className={`relative w-full h-36 min-[400px]:h-44 sm:h-52 md:h-64 lg:h-72 rounded-2xl sm:rounded-3xl overflow-hidden shadow-sm bg-stone-200/50 transition-all duration-300 ${
+                        isActive ? "opacity-100 scale-100" : "opacity-80 scale-[0.98]"
+                      } ${couponCode ? "cursor-pointer active:scale-[0.97]" : ""}`}
                     >
                       <img
                         src={banner.image_url}
                         alt={banner.title || "Banner promocional"}
-                        className="w-full h-full object-cover select-none pointer-events-none"
-                        loading="lazy"
-                        onLoad={(e) => {
-                          if (idx === displayIndex) {
-                            const { naturalWidth, naturalHeight } = e.currentTarget
-                            if (naturalWidth > 0 && naturalHeight > 0) {
-                              const ratio = naturalWidth / naturalHeight
-                              setAspectRatio(Math.max(1.3, Math.min(2.6, ratio)))
-                            }
-                          }
-                        }}
+                        className="w-full h-full object-cover object-center select-none pointer-events-none"
+                        loading={idx === 0 ? "eager" : "lazy"}
                         onError={() => setImgErrorMap((prev) => ({ ...prev, [banner.id]: true }))}
                       />
 
-                      {/* Badge / Selo Promocional (se cadastrado) */}
+                      {/* Badge / Selo Promocional */}
                       {badgeText && (
                         <div className="absolute top-2.5 left-2.5 sm:top-3.5 sm:left-3.5 z-20 bg-[#C1440E] text-white text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-1 rounded-lg shadow-md">
                           {badgeText}
                         </div>
                       )}
 
-                      {/* Chip de Cupom Vinculado com Chamada Clara */}
+                      {/* Chip de Cupom Vinculado */}
                       {couponCode && (
                         <div className="absolute bottom-2.5 right-2.5 sm:bottom-3.5 sm:right-3.5 z-20 bg-black/80 backdrop-blur-md text-white text-[10px] sm:text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-lg border border-white/15 hover:bg-black transition-colors">
                           <Tag className="w-3.5 h-3.5 text-[#E3A008]" />
@@ -405,19 +343,17 @@ export function CampaignBanner() {
             <ChevronRight className="w-5 h-5" />
           </button>
 
-          {/* Paginação por Pontos (Idêntica ao dotsRow do App) */}
+          {/* Paginação por Pontos Sincronizada */}
           <div className="flex justify-center items-center gap-1.5 mt-2.5">
             {validBanners.map((_, idx) => (
               <button
                 key={idx}
-                onClick={() => {
-                  setIsTransitioning(true)
-                  setDisplayIndex(idx + 1)
-                }}
+                onClick={() => scrollTo(idx)}
                 className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
-                  idx === realIndex ? "w-5 bg-[#E3A008]" : "w-1.5 bg-stone-300 hover:bg-stone-400"
+                  idx === selectedIndex ? "w-5 bg-[#E3A008]" : "w-1.5 bg-stone-300 hover:bg-stone-400"
                 }`}
                 aria-label={`Ir para banner ${idx + 1}`}
+                aria-current={idx === selectedIndex ? "true" : undefined}
               />
             ))}
           </div>
