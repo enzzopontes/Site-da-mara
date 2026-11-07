@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronLeft, Trash2 } from "lucide-react"
+import { ChevronLeft } from "lucide-react"
+import { ClearCartDialog } from "@/components/checkout/clear-cart-dialog"
 
 export type CheckoutStep = "itens" | "entrega" | "pagamento"
 
@@ -71,36 +72,12 @@ export function CartHeader({ step, onBack, onClear, canClear = true }: CartHeade
         </div>
       </header>
 
-      {/* Modal de Confirmação para Limpar Sacola */}
-      {showClearConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
-            <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto">
-              <Trash2 className="w-6 h-6" />
-            </div>
-            <div className="text-center space-y-1">
-              <h2 className="text-lg font-black text-[#1F1B16]">Limpar sacola?</h2>
-              <p className="text-xs text-[#6B6157] leading-relaxed">
-                Todos os itens e adicionais escolhidos serão removidos da sua sacola.
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <button
-                onClick={() => setShowClearConfirm(false)}
-                className="h-11 rounded-xl bg-[#F7F5F0] text-[#6B6157] font-bold text-sm hover:bg-[#ECE7E0] transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleConfirmClear}
-                className="h-11 rounded-xl bg-red-600 text-white font-bold text-sm hover:bg-red-700 shadow-sm transition-colors"
-              >
-                Sim, limpar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Modal de Confirmação para Limpar Sacola (Radix Alert Dialog estilo iFood) */}
+      <ClearCartDialog
+        open={showClearConfirm}
+        onOpenChange={setShowClearConfirm}
+        onConfirm={handleConfirmClear}
+      />
     </>
   )
 }

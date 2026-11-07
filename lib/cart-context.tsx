@@ -10,6 +10,7 @@ export interface CartItem {
   quantity: number
   category: "batata" | "bebida"
   pastaType?: "penne" | "parafuso" | "espaguete" // Tipo de macarrão (apenas para categoria macarrao)
+  observacoes?: string
   adicionais: Array<{
     id: string
     name: string
@@ -24,8 +25,10 @@ interface CartContextType {
   setCoupon: (coupon: any | null) => void
   addItem: (item: CartItem) => void
   removeItem: (id: string) => void
+  removeFromCart: (id: string) => void
   updateQuantity: (id: string, quantity: number) => void
   clearCart: () => void
+  checkoutSuccess: () => void
   getTotalPrice: () => number
 }
 
@@ -36,17 +39,24 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [coupon, setCouponState] = useState<any | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
 
-  // Carregar carrinho e cupom do localStorage
+  // Carregar carrinho do localStorage e cupom do sessionStorage (sessão única)
   useEffect(() => {
     try {
       const savedCart = localStorage.getItem("batata top-cart")
       if (savedCart) {
         setItems(JSON.parse(savedCart))
       }
-      const savedCoupon = localStorage.getItem("batata top-coupon")
+      
+      // Cupom salvo em sessionStorage para validade restrita ao pedido atual
+      const savedCoupon = sessionStorage.getItem("batata top-coupon")
       if (savedCoupon) {
         setCouponState(JSON.parse(savedCoupon))
       }
+
+      // Limpeza de cupom permanente legado do localStorage
+      localStorage.removeItem("batata top-coupon")
+      localStorage.removeItem("batata_applied_coupon")
+      localStorage.removeItem("batata_pending_coupon")
     } catch {
       // Ignora erro de JSON
     }
@@ -60,13 +70,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [items, isInitialized])
 
-  // Salvar cupom no localStorage
+  // Salvar cupom estritamente em sessionStorage (sessão única)
   useEffect(() => {
     if (isInitialized) {
       if (coupon) {
-        localStorage.setItem("batata top-coupon", JSON.stringify(coupon))
+        sessionStorage.setItem("batata top-coupon", JSON.stringify(coupon))
       } else {
-        localStorage.removeItem("batata top-coupon")
+        sessionStorage.removeItem("batata top-coupon")
       }
     }
   }, [coupon, isInitialized])
@@ -118,6 +128,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const clearCart = () => {
     setItems([])
+    setCouponState(null)
+    try {
+      sessionStorage.removeItem("batata top-coupon")
+      localStorage.removeItem("batata top-coupon")
+      localStorage.removeItem("batata_applied_coupon")
+      localStorage.removeItem("batata_pending_coupon")
+    } catch {}
+  }
+
+  const checkoutSuccess = () => {
+    clearCart()
   }
 
   const getTotalPrice = () => {
@@ -128,7 +149,20 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <CartContext.Provider value={{ items, coupon, setCoupon, addItem, removeItem, updateQuantity, clearCart, getTotalPrice }}>
+    <CartContext.Provider
+      value={{
+        items,
+        coupon,
+        setCoupon,
+        addItem,
+        removeItem,
+        removeFromCart: removeItem,
+        updateQuantity,
+        clearCart,
+        checkoutSuccess,
+        getTotalPrice,
+      }}
+    >
       {children}
     </CartContext.Provider>
   )

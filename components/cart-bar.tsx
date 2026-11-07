@@ -1,13 +1,16 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { useCart } from "@/lib/cart-context"
+import { CartDrawer } from "@/components/cart-drawer"
 
 export function CartBar() {
   const pathname = usePathname()
   const { items, getTotalPrice } = useCart()
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0)
   const totalPrice = getTotalPrice()
@@ -78,15 +81,18 @@ export function CartBar() {
             </div>
           </div>
 
-          {/* Botão Pill Amarelo "Ver sacola" direcionando direto para /checkout */}
-          <Link
-            href="/checkout"
-            className="flex-shrink-0 h-11 sm:h-12 px-5 sm:px-6 bg-[#E3A008] hover:bg-[#C1440E] active:scale-[0.98] text-white font-black text-sm sm:text-base rounded-full shadow-md flex items-center justify-center transition-all duration-200"
+          {/* Botão Pill Amarelo "Ver sacola" abrindo Bottom Sheet no Mobile e Dialog no Desktop */}
+          <button
+            type="button"
+            onClick={() => setIsDrawerOpen(true)}
+            className="flex-shrink-0 h-11 sm:h-12 px-5 sm:px-6 bg-[#E3A008] hover:bg-[#C1440E] active:scale-[0.98] text-white font-black text-sm sm:text-base rounded-full shadow-md flex items-center justify-center transition-all duration-200 cursor-pointer"
           >
             Ver sacola
-          </Link>
+          </button>
         </div>
       </div>
+
+      <CartDrawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen} />
     </aside>
   )
 }
