@@ -59,12 +59,12 @@ export function RestaurantHeaderCard({
           <div className="flex items-start sm:items-center gap-3 sm:gap-5 min-w-0 w-full">
             
             {/* Logo Circular Oficial */}
-            <div className="relative shrink-0 pt-0.5 sm:pt-0">
-              <div className="w-13 h-13 sm:w-20 sm:h-20 md:w-22 md:h-22 rounded-full bg-white p-0.5 sm:p-1 shadow-md border-2 border-white ring-2 ring-[#E3A008]/20 flex items-center justify-center overflow-hidden">
+            <div className="relative shrink-0">
+              <div className="w-18 h-18 sm:w-24 sm:h-24 md:w-26 md:h-26 rounded-full overflow-hidden shadow-md flex items-center justify-center">
                 <img
                   src="/logo.png"
                   alt="Batata Top Logo"
-                  className="w-full h-full object-contain rounded-full"
+                  className="w-full h-full object-cover rounded-full"
                 />
               </div>
             </div>
