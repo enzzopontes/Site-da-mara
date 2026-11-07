@@ -3,12 +3,13 @@
 import React, { useState, useEffect } from "react"
 import Image from "next/image"
 import { Lock } from "lucide-react"
+import { appToast } from "@/lib/app-toast"
 import { SelectorCircle } from "./selector-circle"
 import { TicketDivider } from "./ticket-divider"
 
 interface CouponCardProps {
   coupon: any
-  currentTotal: number
+  currentTotal?: number
   missingAmount: number
   isSelected?: boolean
   onSelect?: (coupon: any) => void
@@ -30,7 +31,7 @@ function getTimeLeft(expiresAt?: string | Date | null) {
 
 export function CouponCard({
   coupon,
-  currentTotal,
+  currentTotal = 0,
   missingAmount,
   isSelected = false,
   onSelect,
@@ -45,12 +46,17 @@ export function CouponCard({
     return () => clearInterval(id)
   }, [coupon?.expires_at])
 
+  const isExhausted =
+    Boolean(coupon?.isExhausted) ||
+    (coupon?.max_uses != null && (coupon.current_uses ?? 0) >= coupon.max_uses) ||
+    (coupon?.max_uses_per_user != null && (coupon.user_uses ?? 0) >= coupon.max_uses_per_user)
+
   const available =
     coupon?.max_uses != null
       ? Math.max(0, coupon.max_uses - (coupon.current_uses ?? 0))
       : 1
 
-  const unavailable = missingAmount > 0
+  const unavailable = missingAmount > 0 || isExhausted
 
   const isPercentage =
     coupon?.discount_type === "percentage" || coupon?.discount_type === "percent"
@@ -65,17 +71,30 @@ export function CouponCard({
   const progress = minOrder > 0 ? Math.min(currentTotal / minOrder, 1) : 1
 
   const handleSelect = () => {
-    if (unavailable) return
+    if (isExhausted) {
+      appToast.error("Cupom indisponível", coupon?.exhaustedReason || "Limite de usos atingido")
+      return
+    }
+    if (missingAmount > 0) {
+      appToast.warning("Valor mínimo não atingido", `Faltam ${formatMoney(missingAmount)} para usar este cupom.`)
+      return
+    }
     onSelect?.(coupon)
   }
 
-  const borderColor = isSelected ? "#1F1B16" : "#ECE7E0"
+  const borderColor = !isExhausted && isSelected ? "#1F1B16" : "#ECE7E0"
 
   return (
     <div className="mb-3 w-full select-none">
       <div
         onClick={handleSelect}
-        className={`relative z-10 transition-all ${unavailable ? "cursor-not-allowed opacity-90" : "cursor-pointer active:scale-[0.99]"}`}
+        className={`relative z-10 transition-all ${
+          isExhausted
+            ? "cursor-not-allowed opacity-60"
+            : missingAmount > 0
+            ? "cursor-not-allowed opacity-90"
+            : "cursor-pointer active:scale-[0.99]"
+        }`}
       >
         {/* Parte Superior do Ticket */}
         <div
@@ -89,12 +108,12 @@ export function CouponCard({
         >
           {/* Seletor Circle na direita superior */}
           <div className="absolute top-3.5 right-4 z-20">
-            <SelectorCircle selected={isSelected} disabled={unavailable} size={28} />
+            <SelectorCircle selected={!isExhausted && isSelected} disabled={unavailable} size={28} />
           </div>
 
           {/* Cabeçalho do Ticket */}
           <div className="flex items-center gap-2.5 pr-10">
-            <div className="relative w-11 h-11 flex-shrink-0">
+            <div className={`relative w-11 h-11 flex-shrink-0 ${isExhausted ? "grayscale opacity-70" : ""}`}>
               <Image
                 src="/assets/cuponverde.png"
                 alt="Cupom"
@@ -105,12 +124,23 @@ export function CouponCard({
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-xl font-bold text-[#1F1B16] leading-none">
+                <h3 className={`text-xl font-bold leading-none ${isExhausted ? "text-[#9C9188]" : "text-[#1F1B16]"}`}>
                   {discountLabel}
                 </h3>
                 {coupon?.code && (
-                  <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-[#FEF8EC] text-[#A16207] border border-[#E3A008]/40">
+                  <span
+                    className={`text-xs font-bold px-2 py-0.5 rounded-md ${
+                      isExhausted
+                        ? "bg-[#F3F4F6] text-[#9C9188] border border-[#E5E7EB]"
+                        : "bg-[#FEF8EC] text-[#A16207] border border-[#E3A008]/40"
+                    }`}
+                  >
                     {coupon.code}
+                  </span>
+                )}
+                {isExhausted && (
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-[#F3F4F6] text-[#6B7280] border border-[#D1D5DB]">
+                    Limite de usos atingido
                   </span>
                 )}
               </div>
@@ -159,8 +189,8 @@ export function CouponCard({
             >
               Regras {rulesOpen ? "˄" : "˅"}
             </button>
-            <span className="flex-shrink-0">
-              {available} disponível{available === 1 ? "" : "is"}
+            <span className="flex-shrink-0 font-medium">
+              {isExhausted ? "Esgotado" : `${available} disponível${available === 1 ? "" : "is"}`}
             </span>
           </div>
 
@@ -191,8 +221,8 @@ export function CouponCard({
         </div>
       </div>
 
-      {/* Seção Trancada colada abaixo */}
-      {unavailable && (
+      {/* Seção Trancada colada abaixo (apenas se não estiver esgotado) */}
+      {!isExhausted && missingAmount > 0 && (
         <div
           className="bg-[#F3F3F4] rounded-b-2xl px-4 pb-2.5 pt-6 -mt-4 relative z-0"
           style={{

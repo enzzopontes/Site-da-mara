@@ -29,6 +29,30 @@ export function useCoupons(currentOrderTotal = 0) {
         return
       }
 
+      // Mapeamento de contagem de usos do usuário atual por cupom
+      const userUsageMap: Record<string, number> = {}
+      if (user?.id) {
+        try {
+          const { data: userOrders } = await supabase
+            .from("orders")
+            .select("coupon_code")
+            .eq("user_id", user.id)
+            .neq("status", "cancelled")
+            .not("coupon_code", "is", null)
+
+          if (userOrders) {
+            for (const o of userOrders) {
+              if (o.coupon_code) {
+                const cCode = String(o.coupon_code).toUpperCase().trim()
+                userUsageMap[cCode] = (userUsageMap[cCode] || 0) + 1
+              }
+            }
+          }
+        } catch {
+          // Silencioso em caso de erro na contagem
+        }
+      }
+
       let free: any[] = []
       if (user?.id) {
         try {
@@ -46,8 +70,28 @@ export function useCoupons(currentOrderTotal = 0) {
         }
       }
 
-      // Sincronização direta com todos os cupons ativos do banco (igual ao aplicativo)
-      setCoupons(activeCoupons ?? [])
+      // Validação antecipada de limite de usos (global e por cliente)
+      const mappedCoupons = (activeCoupons ?? []).map((c: any) => {
+        const code = String(c.code || "").toUpperCase().trim()
+        const userUses = userUsageMap[code] || 0
+        const isGlobalExhausted = c.max_uses != null && (c.current_uses ?? 0) >= c.max_uses
+        const isUserExhausted = c.max_uses_per_user != null && userUses >= c.max_uses_per_user
+        const isExhausted = isGlobalExhausted || isUserExhausted
+        const exhaustedReason = isGlobalExhausted
+          ? "Limite de usos atingido"
+          : isUserExhausted
+          ? `Você já atingiu o limite de ${c.max_uses_per_user} uso(s) deste cupom`
+          : undefined
+
+        return {
+          ...c,
+          user_uses: userUses,
+          isExhausted,
+          exhaustedReason,
+        }
+      })
+
+      setCoupons(mappedCoupons)
       setFreeCoupons(free)
     } catch (err: any) {
       setError(err?.message || "Erro ao carregar cupons")
@@ -72,7 +116,7 @@ export function useCoupons(currentOrderTotal = 0) {
   const validateCoupon = useCallback(
     async (code: string) => {
       const trimmed = code?.trim().toUpperCase()
-      if (!trimmed) return { valid: false, reason: "Digite um código" }
+      if (!trimmed) return { valid: false, reason: "Digite um código de cupom" }
 
       const { data: coupon, error: fetchErr } = await supabase
         .from("coupons")
@@ -89,32 +133,37 @@ export function useCoupons(currentOrderTotal = 0) {
       if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
         return { valid: false, reason: "Cupom expirado" }
       }
-      if (coupon.max_uses != null && coupon.current_uses >= coupon.max_uses) {
-        return { valid: false, reason: "Cupom esgotado" }
-      }
-      if (coupon.min_order_value && currentOrderTotal > 0 && currentOrderTotal < coupon.min_order_value) {
-        const falta = (coupon.min_order_value - currentOrderTotal).toFixed(2)
-        return { valid: false, reason: `Faltam R$ ${falta.replace(".", ",")} pra usar` }
+      if (coupon.max_uses != null && (coupon.current_uses ?? 0) >= coupon.max_uses) {
+        return { valid: false, reason: "Limite de usos atingido" }
       }
 
       const userId = user?.id ?? null
       if (userId && coupon.max_uses_per_user != null) {
         try {
           const { count } = await supabase
-            .from("user_coupon_uses")
+            .from("orders")
             .select("id", { count: "exact", head: true })
             .eq("user_id", userId)
-            .eq("coupon_id", coupon.id)
+            .eq("coupon_code", coupon.code)
+            .neq("status", "cancelled")
 
           if ((count ?? 0) >= coupon.max_uses_per_user) {
-            return { valid: false, reason: "Você já usou esse cupom" }
+            return {
+              valid: false,
+              reason: `Você já atingiu o limite de ${coupon.max_uses_per_user} uso(s) deste cupom`,
+            }
           }
         } catch {
-          // Ignora caso tabela não exista
+          // Ignora caso erro
         }
       }
 
-      return { valid: true, coupon }
+      if (coupon.min_order_value && currentOrderTotal > 0 && currentOrderTotal < coupon.min_order_value) {
+        const falta = (coupon.min_order_value - currentOrderTotal).toFixed(2).replace(".", ",")
+        return { valid: false, reason: `Faltam R$ ${falta} pra usar este cupom` }
+      }
+
+      return { valid: true, coupon: { ...coupon, isExhausted: false } }
     },
     [currentOrderTotal, user?.id, supabase]
   )

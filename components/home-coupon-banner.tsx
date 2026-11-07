@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react"
 import { Clock, Copy, Check, Lock, ChevronLeft, ChevronRight } from "lucide-react"
+import { appToast } from "@/lib/app-toast"
 import { useCart } from "@/lib/cart-context"
 import type { Coupon } from "@/lib/cupons-manager"
 
@@ -23,7 +24,7 @@ export function HomeCouponBanner({
   discountType = "percentage",
   minOrderValue = null,
 }: HomeCouponBannerProps) {
-  const { getTotalPrice } = useCart()
+  const { getTotalPrice, setCoupon } = useCart()
 
   // Constrói lista de cupons com dados normalizados
   const rawCoupons =
@@ -40,6 +41,8 @@ export function HomeCouponBanner({
             showOnHome: true,
             isActive: true,
             expiresAt: null,
+            usageCount: 0,
+            maxUsage: undefined,
           },
           {
             id: "2",
@@ -51,6 +54,8 @@ export function HomeCouponBanner({
             showOnHome: false,
             isActive: true,
             expiresAt: null,
+            usageCount: 0,
+            maxUsage: undefined,
           },
         ]
 
@@ -77,13 +82,20 @@ export function HomeCouponBanner({
       }
     }
 
+    const maxUses = (c as any).maxUsage ?? (c as any).max_uses
+    const currentUses = (c as any).usageCount ?? (c as any).current_uses ?? 0
+    const isExhausted = maxUses != null && currentUses >= maxUses
+
     return {
       id: c.id,
       code: c.code,
+      discount: c.discount,
+      type: c.type,
       discountLabel,
       description: desc,
       minOrderVal: Number(c.minOrderValue || 0),
       expiryLabel,
+      isExhausted,
     }
   })
 
@@ -148,7 +160,13 @@ export function HomeCouponBanner({
     touchEndX.current = 0
   }
 
-  const handleCopyCode = async (code: string) => {
+  const handleCopyCode = async (c: any) => {
+    if (c.isExhausted) {
+      appToast.error("Cupom indisponível", "Este cupom já atingiu o limite de usos.")
+      return
+    }
+
+    const code = c.code
     try {
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(code)
@@ -163,6 +181,21 @@ export function HomeCouponBanner({
         document.body.removeChild(ta)
       }
       setCopiedCode(code)
+      
+      // Ativa no carrinho para a sessão única
+      if (setCoupon) {
+        setCoupon({
+          id: c.id,
+          code: c.code,
+          discount: c.discount,
+          type: c.type,
+          minOrderValue: c.minOrderVal,
+          title: c.discountLabel,
+          description: c.description,
+        })
+      }
+
+      appToast.success("Cupom ativado!", `Cupom ${code} copiado e aplicado ao seu pedido.`)
       setTimeout(() => setCopiedCode(null), 2500)
     } catch {}
   }
@@ -217,7 +250,7 @@ export function HomeCouponBanner({
           )}
         </div>
 
-        {/* Trilha do Carrossel com Animação Direcional (Sai para esquerda, entra pela direita) */}
+        {/* Trilha do Carrossel com Animação Direcional */}
         <div
           className={`grid grid-cols-1 md:grid-cols-2 gap-3.5 transform ${
             animPhase === "exit"
@@ -235,19 +268,21 @@ export function HomeCouponBanner({
             if (!c) return null
             const isCopied = copiedCode === c.code
             const missingAmount = c.minOrderVal > 0 ? c.minOrderVal - currentTotal : 0
-            const unavailable = c.minOrderVal > 0 && missingAmount > 0
+            const unavailable = (c.minOrderVal > 0 && missingAmount > 0) || c.isExhausted
             const progress = c.minOrderVal > 0 ? Math.min(currentTotal / c.minOrderVal, 1) : 1
 
             return (
               <div
                 key={`${c.id}-${i}`}
-                className={`w-full ${i === 1 ? "hidden md:flex" : "flex"} flex-col justify-between h-full shadow-xs transition-transform hover:-translate-y-0.5`}
+                className={`w-full ${i === 1 ? "hidden md:flex" : "flex"} flex-col justify-between h-full shadow-xs transition-transform ${
+                  c.isExhausted ? "opacity-60" : "hover:-translate-y-0.5"
+                }`}
               >
-                {/* Parte Superior do Ticket (Idêntico ao HomeCouponCard.jsx do App) */}
+                {/* Parte Superior do Ticket */}
                 <div className="bg-white rounded-t-2xl border-x-[1.5px] border-t-[1.5px] border-[#E5E7EB] px-3.5 pt-3 pb-2 flex-1">
                   <div className="flex items-center gap-2.5">
-                    {/* Ícone Oficial do Cupom Verde do App */}
-                    <div className="w-11 h-11 flex items-center justify-center shrink-0">
+                    {/* Ícone Oficial do Cupom Verde */}
+                    <div className={`w-11 h-11 flex items-center justify-center shrink-0 ${c.isExhausted ? "grayscale opacity-70" : ""}`}>
                       <img
                         src="/assets/cuponverde.png"
                         alt="Cupom"
@@ -256,9 +291,16 @@ export function HomeCouponBanner({
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-[19px] font-black text-[#1F1B16] tracking-tight leading-tight truncate">
-                        {c.discountLabel}
-                      </h3>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className={`text-[19px] font-black tracking-tight leading-tight truncate ${c.isExhausted ? "text-[#9C9188]" : "text-[#1F1B16]"}`}>
+                          {c.discountLabel}
+                        </h3>
+                        {c.isExhausted && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#F3F4F6] text-[#6B7280] border border-[#D1D5DB]">
+                            Limite atingido
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[11px] text-[#6B7280] font-medium truncate mt-0.5">
                         {c.minOrderVal > 0
                           ? `Pedido mínimo de R$ ${c.minOrderVal.toFixed(2).replace(".", ",")}`
@@ -279,17 +321,14 @@ export function HomeCouponBanner({
                   )}
                 </div>
 
-                {/* Divisória do Ticket com mordidas laterais perfeitamente redondas (TicketDivider do App) */}
+                {/* Divisória do Ticket com mordidas laterais */}
                 <div className="relative h-3.5 bg-white flex items-center justify-between">
-                  {/* Mordida Esquerda recortada sem quinas visíveis */}
                   <div className="w-2 h-3.5 overflow-hidden relative shrink-0">
                     <div className="w-3.5 h-3.5 rounded-full bg-[#F7F4EF] border-[1.5px] border-[#E5E7EB] absolute -left-[7px] top-0" />
                   </div>
 
-                  {/* Linha Tracejada Central */}
                   <div className="flex-1 border-t border-dashed border-[#D1D5DB] mx-2" />
 
-                  {/* Mordida Direita recortada sem quinas visíveis */}
                   <div className="w-2 h-3.5 overflow-hidden relative shrink-0">
                     <div className="w-3.5 h-3.5 rounded-full bg-[#F7F4EF] border-[1.5px] border-[#E5E7EB] absolute -right-[7px] top-0" />
                   </div>
@@ -298,44 +337,55 @@ export function HomeCouponBanner({
                 {/* Parte Inferior do Ticket com Caixa Tracejada de Cópia */}
                 <div
                   className={`bg-white border-x-[1.5px] border-[#E5E7EB] px-3 pt-1.5 pb-2.5 ${
-                    unavailable ? "border-b-0 rounded-b-none" : "border-b-[1.5px] rounded-b-2xl"
+                    !c.isExhausted && unavailable ? "border-b-0 rounded-b-none" : "border-b-[1.5px] rounded-b-2xl"
                   }`}
                 >
                   <button
-                    onClick={() => handleCopyCode(c.code)}
-                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg border-[1.2px] transition-all cursor-pointer ${
-                      isCopied
-                        ? "bg-[#F0FDF4] border-solid border-[#86EFAC]"
-                        : "bg-[#F9FAFB] border-dashed border-[#D1D5DB] hover:border-[#FFB800]"
+                    disabled={c.isExhausted}
+                    onClick={() => handleCopyCode(c)}
+                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg border-[1.2px] transition-all ${
+                      c.isExhausted
+                        ? "bg-[#F3F4F6] border-[#E5E7EB] cursor-not-allowed opacity-80"
+                        : isCopied
+                        ? "bg-[#F0FDF4] border-solid border-[#86EFAC] cursor-pointer"
+                        : "bg-[#F9FAFB] border-dashed border-[#D1D5DB] hover:border-[#FFB800] cursor-pointer"
                     }`}
                   >
                     <div className="flex items-center gap-1.5 truncate">
                       {isCopied ? (
                         <Check className="w-3.5 h-3.5 text-[#16A34A] shrink-0" />
                       ) : (
-                        <Copy className="w-3.5 h-3.5 text-[#FFB800] shrink-0" />
+                        <Copy className={`w-3.5 h-3.5 shrink-0 ${c.isExhausted ? "text-[#9CA3AF]" : "text-[#FFB800]"}`} />
                       )}
                       <span
                         className={`text-xs font-black tracking-wide truncate ${
-                          isCopied ? "text-[#16A34A]" : "text-[#1F1B16]"
+                          c.isExhausted
+                            ? "text-[#9CA3AF]"
+                            : isCopied
+                            ? "text-[#16A34A]"
+                            : "text-[#1F1B16]"
                         }`}
                       >
-                        {isCopied ? "CUPOM COPIADO!" : c.code}
+                        {c.isExhausted ? "CUPOM ESGOTADO" : isCopied ? "CUPOM COPIADO!" : c.code}
                       </span>
                     </div>
 
                     <span
                       className={`text-[11px] font-extrabold shrink-0 ml-1.5 ${
-                        isCopied ? "text-[#16A34A]" : "text-[#FFB800]"
+                        c.isExhausted
+                          ? "text-[#9CA3AF]"
+                          : isCopied
+                          ? "text-[#16A34A]"
+                          : "text-[#FFB800]"
                       }`}
                     >
-                      {isCopied ? "Pronto" : "Copiar"}
+                      {c.isExhausted ? "Esgotado" : isCopied ? "Pronto" : "Copiar"}
                     </span>
                   </button>
                 </div>
 
-                {/* Seção de Pedido Mínimo com Cadeado e Barra de Progresso (Idêntico ao App) */}
-                {unavailable && (
+                {/* Seção de Pedido Mínimo com Cadeado e Barra de Progresso (Apenas se não esgotado) */}
+                {!c.isExhausted && unavailable && (
                   <div className="bg-[#F3F4F6] border-x-[1.5px] border-b-[1.5px] border-t border-[#E5E7EB] rounded-b-2xl px-3.5 py-2.5">
                     <div className="flex items-center gap-1.5 mb-1.5">
                       <Lock className="w-3 h-3 text-[#71717A] shrink-0" />

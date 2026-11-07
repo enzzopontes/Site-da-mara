@@ -257,7 +257,11 @@ class CouponsManager {
     return !error
   }
 
-  async validateCoupon(code: string, userId?: string): Promise<{ valid: boolean; coupon?: Coupon; message?: string }> {
+  async validateCoupon(
+    code: string,
+    userId?: string,
+    currentOrderTotal?: number
+  ): Promise<{ valid: boolean; coupon?: Coupon; message?: string }> {
     const storeStatus = await storeStatusManager.getStatus()
     const hasActivePromo = storeStatus.superPromo?.isActive || storeStatus.itemPromo?.isActive
 
@@ -275,10 +279,10 @@ class CouponsManager {
       .select("*")
       .eq("code", normalizedCode)
       .eq("active", true)
-      .single()
+      .maybeSingle()
 
     if (error || !data) {
-      return { valid: false, message: "Cupom não encontrado" }
+      return { valid: false, message: "Cupom não encontrado ou inativo" }
     }
 
     const coupon = mapRowToCoupon(data)
@@ -287,24 +291,54 @@ class CouponsManager {
       return { valid: false, message: "Cupom expirado" }
     }
 
-    if (coupon.maxUsage && coupon.usageCount >= coupon.maxUsage) {
-      return { valid: false, message: "Cupom atingiu o limite global de uso" }
+    if (coupon.maxUsage != null && coupon.usageCount >= coupon.maxUsage) {
+      return { valid: false, message: "Limite de usos atingido" }
     }
 
-    if (coupon.maxUsagePerUser && userId) {
-      const { count, error: countError } = await this.supabase
-        .from("orders")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", userId)
-        .eq("coupon_code", coupon.code)
-        .neq("status", "cancelled")
+    if (coupon.maxUsagePerUser != null && userId) {
+      let count = 0
+      try {
+        const { count: orderCount, error: countError } = await this.supabase
+          .from("orders")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .eq("coupon_code", coupon.code)
+          .neq("status", "cancelled")
 
-      if (!countError && count !== null && count >= coupon.maxUsagePerUser) {
-        return { valid: false, message: `Você já usou este cupom o limite de ${coupon.maxUsagePerUser} vez(es)` }
+        if (!countError && orderCount !== null) {
+          count = orderCount
+        }
+      } catch {}
+
+      if (count >= coupon.maxUsagePerUser) {
+        return {
+          valid: false,
+          message: `Você já atingiu o limite de ${coupon.maxUsagePerUser} uso(s) deste cupom`,
+        }
       }
     }
 
+    if (coupon.minOrderValue != null && currentOrderTotal != null && currentOrderTotal > 0 && currentOrderTotal < coupon.minOrderValue) {
+      const falta = (coupon.minOrderValue - currentOrderTotal).toFixed(2).replace(".", ",")
+      return { valid: false, message: `Faltam R$ ${falta} para usar este cupom` }
+    }
+
     return { valid: true, coupon }
+  }
+
+  checkCouponAvailability(coupon: any, userUsesCount = 0): { isExhausted: boolean; reason?: string } {
+    const maxGlobal = coupon?.maxUsage ?? coupon?.max_uses
+    const currentGlobal = coupon?.usageCount ?? coupon?.current_uses ?? 0
+    if (maxGlobal != null && currentGlobal >= maxGlobal) {
+      return { isExhausted: true, reason: "Limite de usos atingido" }
+    }
+
+    const maxPerUser = coupon?.maxUsagePerUser ?? coupon?.max_uses_per_user
+    if (maxPerUser != null && userUsesCount >= maxPerUser) {
+      return { isExhausted: true, reason: `Você já atingiu o limite de ${maxPerUser} uso(s) deste cupom` }
+    }
+
+    return { isExhausted: false }
   }
 
   async useCoupon(_id: string): Promise<boolean> {

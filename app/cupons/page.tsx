@@ -1,10 +1,10 @@
 "use client"
 
-import React, { useState } from "react"
-import { useRouter } from "next/navigation"
+import React, { useState, Suspense } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Image from "next/image"
 import { ChevronLeft, XCircle } from "lucide-react"
-import { toast } from "sonner"
+import { appToast } from "@/lib/app-toast"
 import { useCart } from "@/lib/cart-context"
 import { useCoupons } from "@/hooks/use-coupons"
 import { CouponCard } from "@/components/coupons/coupon-card"
@@ -12,8 +12,10 @@ import { FreeCouponCard } from "@/components/coupons/free-coupon-card"
 import { SelectorCircle } from "@/components/coupons/selector-circle"
 import { CuponsSkeleton } from "@/components/coupons/cupons-skeleton"
 
-export default function CuponsPage() {
+function CuponsContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const from = searchParams.get("from")
   const { getTotalPrice, coupon: selectedCoupon, setCoupon } = useCart()
 
   const currentTotal = getTotalPrice()
@@ -30,6 +32,14 @@ export default function CuponsPage() {
   const [applying, setApplying] = useState(false)
   const [rejectCoupon, setRejectCoupon] = useState(false)
 
+  const handleReturn = () => {
+    if (from === "cart" || from === "carrinho" || from === "checkout") {
+      router.push("/checkout")
+    } else {
+      router.back()
+    }
+  }
+
   const handleApply = async () => {
     if (!code.trim() || applying) return
     setApplying(true)
@@ -37,26 +47,33 @@ export default function CuponsPage() {
     setApplying(false)
 
     if (!result.valid) {
-      toast.error(result.reason || "Cupom inválido")
+      appToast.error("Cupom indisponível", result.reason || "Limite de usos atingido ou inválido.")
       return
     }
 
     setCoupon(result.coupon)
     setRejectCoupon(false)
-    toast.success("Cupom aplicado com sucesso!")
-    router.back()
+    appToast.success("Cupom aplicado com sucesso!", `Cupom ${result.coupon.code} ativado para este pedido.`)
+    setTimeout(() => {
+      handleReturn()
+    }, 300)
   }
 
   const handleSelect = (coupon: any) => {
+    if (coupon.isExhausted) {
+      appToast.error("Cupom indisponível", coupon.exhaustedReason || "Este cupom atingiu o limite de usos.")
+      return
+    }
+
     setRejectCoupon(false)
     const isSame = selectedCoupon?.id === coupon.id
     const nextCoupon = isSame ? null : coupon
     setCoupon(nextCoupon)
     if (nextCoupon) {
-      toast.success(`Cupom ${coupon.code} selecionado!`)
-      // Retorna automaticamente para o checkout após seleção
+      appToast.success("Cupom selecionado!", `Cupom ${coupon.code} ativado para este pedido.`)
+      // Retorna automaticamente para o carrinho/checkout após seleção
       setTimeout(() => {
-        router.back()
+        handleReturn()
       }, 300)
     }
   }
@@ -66,7 +83,7 @@ export default function CuponsPage() {
     setRejectCoupon(next)
     if (next) {
       setCoupon(null)
-      toast.info("Nenhum cupom selecionado")
+      appToast.info("Nenhum cupom selecionado")
     }
   }
 
@@ -76,8 +93,8 @@ export default function CuponsPage() {
       <header className="relative flex items-center justify-between px-4 py-3.5 border-b border-[#ECE7E0] max-w-xl w-full mx-auto bg-white">
         <button
           type="button"
-          onClick={() => router.back()}
-          className="p-1 -ml-1 text-[#E3A008] hover:opacity-80 active:scale-95 transition-all z-10"
+          onClick={handleReturn}
+          className="p-1 -ml-1 text-[#E3A008] hover:opacity-80 active:scale-95 transition-all z-10 cursor-pointer"
           aria-label="Voltar"
         >
           <ChevronLeft className="w-6 h-6 stroke-[2.5]" />
@@ -146,7 +163,7 @@ export default function CuponsPage() {
         <FreeCouponCard
           count={freeCoupons.length}
           onPress={() =>
-            toast.info(`Você tem ${freeCoupons.length} cupom(ns) grátis disponível(is).`)
+            appToast.info(`Você tem ${freeCoupons.length} cupom(ns) grátis disponível(is).`)
           }
         />
 
@@ -201,5 +218,13 @@ export default function CuponsPage() {
         )}
       </main>
     </div>
+  )
+}
+
+export default function CuponsPage() {
+  return (
+    <Suspense fallback={<CuponsSkeleton count={4} />}>
+      <CuponsContent />
+    </Suspense>
   )
 }
