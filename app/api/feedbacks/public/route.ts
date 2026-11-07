@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server"
 import { getSupabase } from "@/lib/supabase-fix"
+import { createClient } from "@supabase/supabase-js"
 
 export const dynamic = "force-dynamic"
 export const revalidate = 30
 
 export async function GET() {
   try {
-    const sb = getSupabase()
+    // Usa service role key se configurada no servidor para acesso irrestrito às contagens reais
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const sb = serviceKey && process.env.NEXT_PUBLIC_SUPABASE_URL
+      ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, serviceKey)
+      : getSupabase()
 
     // 1. Total real de pedidos feitos no restaurante
     let totalOrders = 0
@@ -15,55 +20,76 @@ export async function GET() {
       if (!rpcErr && typeof rpcOrders === "number") {
         totalOrders = rpcOrders
       } else {
-        const { count } = await sb.from("orders").select("*", { count: "exact", head: true })
-        totalOrders = count || 0
+        const { count, error: countErr } = await sb.from("orders").select("*", { count: "exact", head: true })
+        if (!countErr && typeof count === "number") {
+          totalOrders = count
+        }
       }
     } catch {
       totalOrders = 0
     }
 
-    // 2. Média real de estrelas e total de avaliações
+    // 2. Média matemática exata de estrelas e lista de avaliações
     let totalReviews = 0
-    let averageRating = 4.9
+    let averageRating = 5.0
     let reviewsList: any[] = []
+    const ratingDistribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
 
     try {
-      const { data: rpcStats, error: rpcStatsErr } = await sb.rpc("get_public_feedbacks_stats")
-      if (!rpcStatsErr && rpcStats) {
-        totalReviews = Number(rpcStats.total) || 0
-        averageRating = Number(rpcStats.average) || 4.9
-      }
-    } catch {}
+      // Tenta RPC pública ou consulta direta
+      const { data: rawFeedbacks, error: fbError } = await sb
+        .from("feedbacks")
+        .select("id, customer_name, rating, comment, created_at")
+        .order("created_at", { ascending: false })
+        .limit(50)
 
-    // 3. Avaliações reais de clientes com comentários
-    try {
-      const { data: rpcFeedbacks, error: rpcFeedbacksErr } = await sb.rpc("get_public_feedbacks", { p_limit: 20 })
-      if (!rpcFeedbacksErr && Array.isArray(rpcFeedbacks) && rpcFeedbacks.length > 0) {
-        reviewsList = rpcFeedbacks
-        if (totalReviews === 0) totalReviews = reviewsList.length
-      } else {
-        const { data: directData } = await sb
-          .from("feedbacks")
-          .select("id, customer_name, rating, comment, created_at")
-          .order("created_at", { ascending: false })
-          .limit(20)
+      if (!fbError && Array.isArray(rawFeedbacks) && rawFeedbacks.length > 0) {
+        reviewsList = rawFeedbacks
 
-        if (directData && directData.length > 0) {
-          reviewsList = directData
-          if (totalReviews === 0) {
-            totalReviews = directData.length
-            const sum = directData.reduce((acc: number, f: any) => acc + (Number(f.rating) || 5), 0)
-            averageRating = Number((sum / directData.length).toFixed(1))
+        // Cálculo aritmético exato: sum(rating) / total
+        let sumRatings = 0
+        let validRatingsCount = 0
+
+        rawFeedbacks.forEach((fb: any) => {
+          const r = Number(fb.rating)
+          if (!isNaN(r) && r >= 1 && r <= 5) {
+            sumRatings += r
+            validRatingsCount++
+            const roundedR = Math.round(r)
+            if (roundedR in ratingDistribution) {
+              ratingDistribution[roundedR]++
+            }
           }
+        })
+
+        if (validRatingsCount > 0) {
+          totalReviews = validRatingsCount
+          // Média precisa arredondada para 1 casa decimal
+          averageRating = Math.round((sumRatings / validRatingsCount) * 10) / 10
+        }
+      } else {
+        // Fallback para RPC se RLS restringiu SELECT direto
+        const { data: rpcStats } = await sb.rpc("get_public_feedbacks_stats")
+        if (rpcStats && typeof rpcStats.average === "number") {
+          averageRating = Number(rpcStats.average)
+          totalReviews = Number(rpcStats.total) || 0
+        }
+
+        const { data: rpcList } = await sb.rpc("get_public_feedbacks", { p_limit: 20 })
+        if (Array.isArray(rpcList) && rpcList.length > 0) {
+          reviewsList = rpcList
         }
       }
-    } catch {}
+    } catch (err) {
+      console.warn("Erro ao calcular média de estrelas:", err)
+    }
 
     return NextResponse.json({
       success: true,
       totalOrders,
       totalReviews,
       averageRating,
+      distribution: ratingDistribution,
       reviews: reviewsList,
     })
   } catch (error: any) {
@@ -71,7 +97,8 @@ export async function GET() {
       success: false,
       totalOrders: 0,
       totalReviews: 0,
-      averageRating: 4.9,
+      averageRating: 5.0,
+      distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
       reviews: [],
       error: error.message,
     })

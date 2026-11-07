@@ -13,10 +13,9 @@ AS $$
   SELECT COUNT(*)::INTEGER FROM public.orders;
 $$;
 
--- Permissão pública para executar a função de contagem
 GRANT EXECUTE ON FUNCTION get_total_orders_count() TO anon, authenticated, service_role;
 
--- 2. Estatísticas públicas de avaliações (média de estrelas e total real)
+-- 2. Estatísticas públicas de avaliações (média exata de estrelas e total real)
 CREATE OR REPLACE FUNCTION get_public_feedbacks_stats()
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -29,7 +28,7 @@ DECLARE
 BEGIN
   SELECT 
     COUNT(*)::INTEGER, 
-    COALESCE(ROUND(AVG(rating)::NUMERIC, 1), 4.9)
+    COALESCE(ROUND(AVG(rating)::NUMERIC, 1), 5.0)
   INTO v_total, v_avg
   FROM public.feedbacks;
 
@@ -67,3 +66,14 @@ AS $$
 $$;
 
 GRANT EXECUTE ON FUNCTION get_public_feedbacks(INTEGER) TO anon, authenticated, service_role;
+
+-- 4. Corrige política de SELECT em feedbacks para leitura pública e previne erro 'permission denied for function is_admin'
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'feedbacks') THEN
+    ALTER TABLE public.feedbacks ENABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS "Public can view feedbacks" ON public.feedbacks;
+    CREATE POLICY "Public can view feedbacks" ON public.feedbacks FOR SELECT TO public USING (true);
+    GRANT SELECT ON public.feedbacks TO anon, authenticated;
+  END IF;
+END $$;
