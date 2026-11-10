@@ -412,13 +412,11 @@ export default function AdminLayout({
         {/* Brand Header */}
         <div className="h-20 px-5 flex items-center justify-between border-b border-[#2D2721] bg-[#14100C]">
           <Link href="/admin" className="flex items-center gap-3 group">
-            <div className="h-11 w-11 rounded-xl bg-white p-1 flex items-center justify-center shadow-md shadow-black/40 border border-amber-400/40 shrink-0">
-              <img
-                src="/logo.png"
-                alt="Batata Top Logo"
-                className="h-full w-full object-contain"
-              />
-            </div>
+            <img
+              src="/logo.png"
+              alt="Batata Top Logo"
+              className="h-14 w-14 object-contain shrink-0 group-hover:scale-105 transition-transform"
+            />
             <div>
               <div className="text-sm font-black tracking-wider text-white flex items-center gap-1.5 uppercase">
                 BATATA TOP

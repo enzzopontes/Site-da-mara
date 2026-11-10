@@ -266,6 +266,14 @@ class OrdersManager {
 
     console.warn("RPC delete_order_admin indisponível, tentando exclusão direta:", rpcError.message)
 
+    // Deleta vínculos de cupons antes de deletar o pedido para evitar violação de chave estrangeira
+    try {
+      const { error: couponUsesError } = await sb.from("user_coupon_uses").delete().eq("order_id", orderId)
+      if (couponUsesError) console.warn("Aviso ao deletar user_coupon_uses:", couponUsesError)
+    } catch (e) {
+      console.warn("Exceção ao deletar user_coupon_uses:", e)
+    }
+
     const { error: itemsError } = await sb.from("order_items").delete().eq("order_id", orderId)
     if (itemsError) console.warn("Aviso ao deletar order_items:", itemsError)
 

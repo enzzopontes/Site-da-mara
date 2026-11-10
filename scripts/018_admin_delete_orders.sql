@@ -41,6 +41,13 @@ BEGIN
     RAISE EXCEPTION 'Acesso negado: apenas administradores podem excluir pedidos permanentemente.';
   END IF;
 
+  -- Deletar registros vinculados em user_coupon_uses se a tabela existir
+  BEGIN
+    DELETE FROM public.user_coupon_uses WHERE order_id = p_order_id;
+  EXCEPTION WHEN undefined_table THEN
+    NULL;
+  END;
+
   -- Deletar itens do pedido primeiro (garantia caso cascade falhe)
   DELETE FROM public.order_items WHERE order_id = p_order_id;
   
