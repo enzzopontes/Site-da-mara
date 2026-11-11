@@ -7,6 +7,7 @@ import { AuthProvider } from "@/lib/auth-context"
 import { OfflineDetector } from "@/components/offline-detector"
 import { MobileNavbar } from "@/components/mobile-navbar"
 import { CartBar } from "@/components/cart-bar"
+import { GuestTopbar } from "@/components/guest-topbar"
 import { CookieConsent } from "@/components/cookie-consent"
 import "./globals.css"
 
@@ -48,6 +49,7 @@ export default function RootLayout({
             <OfflineDetector>
               {children}
               <CartBar />
+              <GuestTopbar />
               <MobileNavbar />
               <Toaster position="top-center" />
               <CookieConsent />

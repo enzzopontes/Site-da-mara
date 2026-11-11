@@ -156,7 +156,7 @@ export const ResponsiveModalContent = React.forwardRef<
             {...props}
           >
             {showHandle && (
-              <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto my-3 shrink-0" />
+              <div className="w-10 h-1.5 bg-[#D6CEC4] rounded-full mx-auto my-3 shrink-0" />
             )}
             {children}
           </VaulDrawer.Content>

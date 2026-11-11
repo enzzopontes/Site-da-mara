@@ -245,7 +245,7 @@ export function Header({ variant = "default" }: HeaderProps) {
             : "translate-y-0 opacity-100 pointer-events-auto"
         }`}
       >
-        <GuestTopbar onOpenAuth={openAuthModal} />
+        <GuestTopbar onOpenAuth={openAuthModal} desktopOnly={true} />
         <header className="w-full h-16 bg-[#FFFFFF] border-b border-[#ECE7E0]">
           <div className="max-w-7xl mx-auto h-16 px-4 sm:px-8 flex items-center justify-between gap-3">
           {/* Left: Dynamic Greeting + Address Selector */}

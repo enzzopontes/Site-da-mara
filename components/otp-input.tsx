@@ -133,12 +133,12 @@ export function OtpInput({
             onKeyDown={(e) => handleKeyDown(idx, e)}
             onPaste={handlePaste}
             onFocus={(e) => e.target.select()}
-            className={`w-11 h-14 sm:w-12 sm:h-16 text-center text-2xl font-black rounded-2xl border-2 transition-all duration-200 outline-none select-none ${
+            className={`w-11 h-13 sm:w-12 sm:h-14 text-center text-xl sm:text-2xl font-black rounded-2xl border transition-all duration-200 outline-none select-none ${
               error
-                ? "border-red-400 bg-red-50/50 text-red-600 focus:border-red-500 focus:ring-4 focus:ring-red-100"
+                ? "border-red-400 bg-red-50/50 text-red-600 focus:border-red-500 focus:ring-2 focus:ring-red-100"
                 : isCurrentActive
-                  ? "border-[#E3A008] bg-white text-[#1A1A1A] shadow-sm ring-4 ring-[#E3A008]/15"
-                  : "border-[#ECE7E0] bg-[#F7F5F0] text-[#1A1A1A] hover:border-[#D6CEC4]"
+                  ? "border-[#E3A008] bg-white text-[#1F1B16] shadow-xs ring-2 ring-[#E3A008]/20"
+                  : "border-[#ECE7E0] bg-[#F7F4EF] text-[#1F1B16] hover:border-[#D6CEC4]"
             } ${disabled ? "opacity-50 cursor-not-allowed bg-gray-100" : ""}`}
           />
         )
