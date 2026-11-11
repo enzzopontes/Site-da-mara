@@ -1,7 +1,6 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import { Sparkles, ArrowRight } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useCart } from "@/lib/cart-context"
 import { usePathname } from "next/navigation"
@@ -73,35 +72,32 @@ export function GuestTopbar({ onOpenAuth, desktopOnly = false }: GuestTopbarProp
         className="hidden md:block w-full bg-[#1F1B16] text-[#F7F5F0] border-b border-[#2E2820] py-2 px-4 text-xs font-semibold relative z-30 transition-all duration-300"
       >
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-[#E3A008]/20 text-[#E3A008] flex items-center justify-center">
-              <Sparkles className="h-3 w-3 animate-pulse" />
-            </span>
-            <p className="truncate text-xs text-[#E8E2D9]">
-              <strong className="text-white font-bold">Entre ou cadastre-se</strong> para ver seus cupons e acompanhar seu pedido em tempo real.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <p className="truncate text-xs text-[#E8E2D9]">
+            Explore mais com sua conta Batata Top.{" "}
             <button
               type="button"
               onClick={handleAction}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-[#E3A008] hover:bg-[#C1440E] active:scale-95 text-white text-xs font-black rounded-full shadow-sm transition-all duration-150 cursor-pointer"
+              className="text-[#E3A008] hover:text-[#C1440E] font-bold underline transition-colors cursor-pointer ml-1"
             >
-              <span>Entrar / Cadastrar</span>
-              <ArrowRight className="h-3 w-3" />
+              Entrar ou cadastrar-se
             </button>
-          </div>
+          </p>
+
+          <button
+            type="button"
+            onClick={handleAction}
+            className="flex items-center gap-1.5 px-4 py-1.5 bg-[#E3A008] hover:bg-[#C1440E] active:scale-95 text-white text-xs font-black rounded-full shadow-sm transition-all duration-150 cursor-pointer"
+          >
+            <span>Entrar ou cadastrar-se</span>
+          </button>
         </div>
       </aside>
     )
   }
 
-  // 2. MODO MOBILE BOTTOM BANNER (Ancorado acima da Bottom Navigation)
-  // Ocultar se o mapa/endereço estiver ativo
+  // 2. MODO MOBILE BOTTOM BANNER (Idêntico ao app na captura enviada)
   if (isMapActive) return null
 
-  // Rotas restritas onde não deve aparecer no mobile
   const isHiddenRoute =
     !pathname ||
     pathname === "/checkout" ||
@@ -118,44 +114,30 @@ export function GuestTopbar({ onOpenAuth, desktopOnly = false }: GuestTopbarProp
 
   if (isHiddenRoute) return null
 
-  // A sacola (CartBar) tem totalItems > 0
   const hasCartItems = items.reduce((sum, item) => sum + item.quantity, 0) > 0
 
-  // Se tiver sacola, a sacola já ocupa bottom-16. Para não colidir, o banner fica acima da sacola (bottom-36)
-  // Se não houver sacola, o banner fica exatamente ancorado na bottom-16 (acima da Bottom Navigation)
   const mobileBottomOffset = hasCartItems
     ? "bottom-34 sm:bottom-36"
     : "bottom-16"
 
   return (
     <aside
-      aria-label="Aviso promocional para visitante"
-      className={`fixed ${mobileBottomOffset} left-0 right-0 z-40 md:hidden px-3 transition-all duration-300 ease-out animate-in slide-in-from-bottom-2 pointer-events-auto`}
+      aria-label="Aviso para clientes convidados"
+      className={`fixed ${mobileBottomOffset} left-0 right-0 z-40 md:hidden px-3 transition-all duration-300 ease-out pointer-events-auto`}
     >
       <div className="max-w-md mx-auto">
-        <div className="bg-[#1F1B16] text-[#F7F5F0] border border-[#2E2820] shadow-[0_8px_24px_rgba(0,0,0,0.25)] rounded-2xl p-2.5 sm:p-3 flex items-center justify-between gap-2.5">
-          {/* Lado Esquerdo: Mensagem e Ícone */}
-          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-            <span className="flex-shrink-0 w-7 h-7 rounded-full bg-[#E3A008]/20 text-[#E3A008] flex items-center justify-center">
-              <Sparkles className="h-3.5 w-3.5 text-[#E3A008]" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-[11px] leading-tight text-[#E8E2D9] font-medium line-clamp-2">
-                <strong className="text-white font-bold">Entre ou cadastre-se</strong> para ver seus cupons.
-              </p>
-            </div>
-          </div>
-
-          {/* Lado Direito: Botão Pill Amarelo */}
-          <button
-            type="button"
-            onClick={handleAction}
-            className="flex-shrink-0 h-8 px-3.5 bg-[#E3A008] hover:bg-[#C1440E] active:scale-95 text-white text-[11px] font-black rounded-full shadow-sm flex items-center gap-1 transition-all cursor-pointer"
-          >
-            <span>Entrar</span>
-            <ArrowRight className="h-3 w-3" />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={handleAction}
+          className="w-full bg-white text-[#554D44] border border-[#ECE7E0] shadow-[0_4px_20px_rgba(0,0,0,0.06)] rounded-2xl py-2.5 px-4 flex flex-col items-center justify-center text-center active:scale-[0.99] transition-all cursor-pointer"
+        >
+          <span className="text-[11px] sm:text-xs text-[#6B6157] font-medium leading-none mb-1">
+            Explore mais com sua conta Batata Top
+          </span>
+          <span className="text-xs sm:text-[13px] font-bold text-[#E3A008] leading-tight">
+            Entrar ou cadastrar-se
+          </span>
+        </button>
       </div>
     </aside>
   )
