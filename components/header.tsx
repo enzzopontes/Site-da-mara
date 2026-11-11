@@ -18,6 +18,8 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import Image from "next/image"
 import { AddressModal } from "@/components/address-modal"
+import { GuestTopbar } from "@/components/guest-topbar"
+import { AuthModal } from "@/components/auth-modal"
 import { addressesManager } from "@/lib/addresses-manager"
 import { storeStatusManager } from "@/lib/store-status-manager"
 import { isAdminUser, isAdmin as checkIsAdmin } from "@/lib/supabase/admin"
@@ -46,7 +48,7 @@ export function Header({ variant = "default" }: HeaderProps) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const { items } = useCart()
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, authModalOpen, openAuthModal, closeAuthModal } = useAuth()
 
   const [mounted, setMounted] = useState(false)
   const [timeGreeting, setTimeGreeting] = useState("Olá")
@@ -236,14 +238,16 @@ export function Header({ variant = "default" }: HeaderProps) {
 
   return (
     <>
-      <header
-        className={`${isPerfil ? "hidden md:block" : "block"} sticky top-0 z-40 w-full h-16 bg-[#FFFFFF] border-b border-[#ECE7E0] transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+      <div
+        className={`${isPerfil ? "hidden md:block" : "block"} sticky top-0 z-40 transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
           hideHeader
             ? "-translate-y-full pointer-events-none"
             : "translate-y-0 opacity-100 pointer-events-auto"
         }`}
       >
-        <div className="max-w-7xl mx-auto h-16 px-4 sm:px-8 flex items-center justify-between gap-3">
+        <GuestTopbar onOpenAuth={openAuthModal} />
+        <header className="w-full h-16 bg-[#FFFFFF] border-b border-[#ECE7E0]">
+          <div className="max-w-7xl mx-auto h-16 px-4 sm:px-8 flex items-center justify-between gap-3">
           {/* Left: Dynamic Greeting + Address Selector */}
           <div className="flex items-center gap-3 min-w-0 flex-1 lg:flex-initial">
             <button
@@ -362,16 +366,14 @@ export function Header({ variant = "default" }: HeaderProps) {
                   <span>Perfil</span>
                 </Link>
               ) : (
-                <Link
-                  href="/login"
-                  aria-current={isActive("/login") ? "page" : undefined}
-                  className={`flex items-center gap-1.5 transition-colors hover:text-[#E3A008] ${
-                    isActive("/login") ? "text-[#E3A008]" : "text-[#1A1A1A]"
-                  }`}
+                <button
+                  type="button"
+                  onClick={openAuthModal}
+                  className="flex items-center gap-1.5 transition-colors hover:text-[#E3A008] text-[#1A1A1A] cursor-pointer"
                 >
                   <User className="h-4 w-4" />
                   <span>Entrar</span>
-                </Link>
+                </button>
               )}
               {isAdmin && (
                 <Link
@@ -399,10 +401,16 @@ export function Header({ variant = "default" }: HeaderProps) {
           </div>
         </div>
       </header>
+    </div>
 
       <AddressModal
         isOpen={isAddressModalOpen}
         onClose={() => setIsAddressModalOpen(false)}
+      />
+
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={closeAuthModal}
       />
     </>
   )

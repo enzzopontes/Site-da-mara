@@ -14,7 +14,7 @@ import { useAuth } from "@/lib/auth-context"
 export function MobileNavbar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, openAuthModal } = useAuth()
   const [isMapActive, setIsMapActive] = useState(false)
 
   // Desativa completamente a Mobile Navbar quando o usuário entra na seleção do mapa
@@ -79,11 +79,19 @@ export function MobileNavbar() {
     }
   }
 
+  const handleUserClick = () => {
+    if (user) {
+      router.push("/perfil")
+    } else {
+      openAuthModal()
+    }
+  }
+
   const navItems = [
     { href: "/", icon: Home, label: "Início", action: null },
     { href: "/cardapio", icon: UtensilsCrossed, label: "Cardápio", action: handleCardapioClick },
     { href: "/pedidos", icon: Package, label: "Pedidos", action: null },
-    { href: user ? "/perfil" : "/login", icon: User, label: user ? "Perfil" : "Entrar", action: null },
+    { href: user ? "/perfil" : "#login", icon: User, label: user ? "Perfil" : "Entrar", action: handleUserClick },
   ]
 
   return (
