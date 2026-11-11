@@ -164,7 +164,7 @@ export function AuthModal({ isOpen, onClose, initialEmail = "" }: AuthModalProps
         showHandle={true}
         className="p-0 border-none sm:border sm:border-[#ECE7E0] bg-white flex flex-col sm:max-w-md sm:rounded-[32px] rounded-t-[32px] overflow-hidden"
       >
-        <div className="p-6 sm:p-8 pt-2 sm:pt-6">
+        <div className="p-6 sm:p-8 pt-2 sm:pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:pb-8">
           {/* Header do Modal com Logo e Badges */}
           <div className="flex flex-col items-center text-center mb-6">
             <div className="relative w-14 h-14 sm:w-16 sm:h-16 mb-3 rounded-2xl bg-[#F7F5F0] border border-[#ECE7E0] flex items-center justify-center shadow-xs">
