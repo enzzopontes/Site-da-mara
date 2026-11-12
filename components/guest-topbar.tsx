@@ -16,7 +16,6 @@ export function GuestTopbar({ onOpenAuth, desktopOnly = false }: GuestTopbarProp
   const pathname = usePathname()
   const [isMapActive, setIsMapActive] = useState(false)
   const [isExiting, setIsExiting] = useState(false)
-  const [isVisible, setIsVisible] = useState(!user && !loading)
   const prevUserRef = useRef(user)
 
   // Monitora alterações do estado do mapa e modal de endereço
@@ -60,20 +59,16 @@ export function GuestTopbar({ onOpenAuth, desktopOnly = false }: GuestTopbarProp
     if (!prevUserRef.current && user) {
       setIsExiting(true)
       const timer = setTimeout(() => {
-        setIsVisible(false)
         setIsExiting(false)
       }, 450)
       prevUserRef.current = user
       return () => clearTimeout(timer)
-    } else if (prevUserRef.current && !user) {
-      setIsVisible(true)
-      setIsExiting(false)
     }
     prevUserRef.current = user
   }, [user])
 
-  // Se carregando inicial ou se o banner já completou a saída
-  if (loading || (!isVisible && !isExiting)) {
+  // Se carregando inicial ou se já logado (e não estiver no meio da saída elástica)
+  if (loading || (user && !isExiting)) {
     return null
   }
 
