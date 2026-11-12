@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef } from "react"
+import { createPortal } from "react-dom"
 import Image from "next/image"
 import {
   Mail,
@@ -10,12 +11,6 @@ import {
   RotateCcw,
 } from "lucide-react"
 import { toast } from "sonner"
-import {
-  ResponsiveModal,
-  ResponsiveModalContent,
-  ResponsiveModalTitle,
-  ResponsiveModalDescription,
-} from "@/components/ui/responsive-modal"
 import { OtpInput } from "@/components/otp-input"
 import { useAuth } from "@/lib/auth-context"
 import { useCart } from "@/lib/cart-context"
@@ -33,6 +28,7 @@ export function AuthModal({ isOpen, onClose, initialEmail = "" }: AuthModalProps
   const { signInWithOtp, verifyOtp, signInWithGoogle, user } = useAuth()
   const { addItem } = useCart()
 
+  const [mounted, setMounted] = useState(false)
   const [view, setView] = useState<AuthView>("welcome")
   const [isRegisterMode, setIsRegisterMode] = useState(false)
   const [email, setEmail] = useState(initialEmail)
@@ -44,6 +40,32 @@ export function AuthModal({ isOpen, onClose, initialEmail = "" }: AuthModalProps
   const [cooldown, setCooldown] = useState(0)
 
   const timerRef = useRef<NodeJS.Timeout | null>(null)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // Trava o scroll da página enquanto o modal estiver aberto
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden"
+    } else {
+      document.body.style.overflow = ""
+    }
+    return () => {
+      document.body.style.overflow = ""
+    }
+  }, [isOpen])
+
+  // Fecha com a tecla Escape
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [isOpen, onClose])
 
   // Despacha item pendente na sacola após login bem-sucedido
   const processPendingCartItem = () => {
@@ -205,59 +227,74 @@ export function AuthModal({ isOpen, onClose, initialEmail = "" }: AuthModalProps
     }
   }
 
-  return (
-    <ResponsiveModal open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <ResponsiveModalContent
-        showCloseButton={false}
-        showHandle={false}
-        className="p-0 border border-[#ECE7E0] bg-white flex flex-col sm:max-w-[420px] rounded-[28px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.16)] focus:outline-none"
-      >
-        {/* CONTAINER UNIFICADO DESKTOP & MOBILE (100% IDÊNTICO AO APP) */}
-        <div className="relative w-full flex flex-col bg-white">
-          {/* CABEÇALHO COM A IMAGEM OFICIAL DO APP (SACOLA BATATA TOP DELIVERY) */}
-          <div className="relative w-full h-48 sm:h-56 bg-[#1F1B16] overflow-hidden select-none">
-            <Image
-              src="/images/auth-bg.jpg"
-              alt="Batata Top Delivery"
-              fill
-              priority
-              className="object-cover object-top"
-            />
-            {/* Gradiente suave para contraste e ergonomia dos controles de topo */}
-            <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/20 pointer-events-none" />
+  if (!mounted || !isOpen) return null
 
-            {/* Botão Voltar (topo esquerdo) */}
-            {view !== "welcome" && (
-              <button
-                type="button"
-                onClick={() => {
-                  setErrorMessage(null)
-                  if (view === "otp") setView("form")
-                  else setView("welcome")
-                }}
-                aria-label="Voltar para a etapa anterior"
-                className="absolute top-3.5 left-3.5 z-10 w-9 h-9 rounded-full bg-white/95 hover:bg-white backdrop-blur-md flex items-center justify-center text-[#1F1B16] shadow-md transition-all active:scale-95 cursor-pointer"
-              >
-                <ChevronLeft className="h-5 w-5 stroke-[2.5]" />
-              </button>
-            )}
+  const modalContent = (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Autenticação Batata Top"
+      className="fixed inset-0 z-[100] w-screen h-dvh bg-[#0E0C0A] overflow-hidden flex flex-col justify-between animate-in fade-in duration-200 select-none"
+    >
+      {/* CAMADA DE FUNDO AMBIENTE: Cobre 100% da tela sem deixar nada visível da parte de trás */}
+      <div className="absolute inset-0 bg-[#0E0C0A] overflow-hidden pointer-events-none">
+        <Image
+          src="/images/auth-bg.jpg"
+          alt="Batata Top Ambient Background"
+          fill
+          priority
+          className="object-cover blur-3xl opacity-35 scale-110"
+        />
+        <div className="absolute inset-0 bg-black/50" />
+      </div>
 
-            {/* Botão Fechar (topo direito) */}
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Fechar modal de autenticação"
-              className="absolute top-3.5 right-3.5 z-10 w-9 h-9 rounded-full bg-white/95 hover:bg-white backdrop-blur-md flex items-center justify-center text-[#1F1B16] shadow-md transition-all active:scale-95 cursor-pointer"
-            >
-              <X className="h-4 w-4 stroke-[2.5]" />
-            </button>
-          </div>
+      {/* CONTAINER CENTRAL PROPORCIONAL AO APP (FOTO COMPLETA SEM ZOOM) */}
+      <div className="relative w-full max-w-md h-full mx-auto flex flex-col justify-between z-10 overflow-hidden shadow-[0_0_80px_rgba(0,0,0,0.6)]">
+        {/* A foto preenche a tela inteira em sua proporção nativa */}
+        <div className="absolute inset-0 w-full h-full">
+          <Image
+            src="/images/auth-bg.jpg"
+            alt="Batata Top Delivery"
+            fill
+            priority
+            className="object-cover object-top"
+          />
+          {/* Gradiente sutil no topo para contraste dos botões */}
+          <div className="absolute top-0 inset-x-0 h-28 bg-gradient-to-b from-black/60 via-black/25 to-transparent pointer-events-none" />
+        </div>
 
-          {/* HANDLE SUPERIOR CINZA ERGONÔMICO IDÊNTICO AO APP */}
-          <div className="w-11 h-1 bg-[#D6CEC4] rounded-full mx-auto mt-3 mb-1 shrink-0" />
+        {/* TOPO: BOTÕES DE NAVEGAÇÃO E FECHAR SOBRE A FOTO */}
+        <div className="relative z-20 flex items-center justify-between px-4 pt-4 sm:pt-6">
+          <button
+            type="button"
+            onClick={() => {
+              setErrorMessage(null)
+              if (view === "otp") setView("form")
+              else if (view === "form" || view === "saved_account") setView("welcome")
+              else onClose()
+            }}
+            aria-label="Voltar"
+            className="w-10 h-10 rounded-full bg-black/40 hover:bg-black/60 text-white backdrop-blur-md flex items-center justify-center shadow-md transition-all active:scale-95 cursor-pointer"
+          >
+            <ChevronLeft className="h-6 w-6 stroke-[2.5]" />
+          </button>
 
-          {/* CONTEÚDO PRINCIPAL DO MODAL */}
-          <div className="px-6 pt-2 pb-6 flex flex-col">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fechar"
+            className="w-10 h-10 rounded-full bg-black/40 hover:bg-black/60 text-white backdrop-blur-md flex items-center justify-center shadow-md transition-all active:scale-95 cursor-pointer"
+          >
+            <X className="h-5 w-5 stroke-[2.5]" />
+          </button>
+        </div>
+
+        {/* A PARTE DE BAIXO ALI COMO JÁ ESTÁ */}
+        <div className="relative z-20 w-full mt-auto">
+          <div className="bg-white rounded-t-[28px] sm:rounded-t-[32px] shadow-[0_-12px_40px_rgba(0,0,0,0.35)] border-t border-[#ECE7E0] px-6 pt-3 pb-[max(1.75rem,env(safe-area-inset-bottom))] flex flex-col max-h-[85vh] overflow-y-auto">
+            {/* Handle superior cinza idêntico ao app */}
+            <div className="w-11 h-1 bg-[#D6CEC4] rounded-full mx-auto mb-3 shrink-0" />
+
             {/* MENSAGEM DE ERRO SANITIZADA */}
             {errorMessage && (
               <div
@@ -274,9 +311,9 @@ export function AuthModal({ isOpen, onClose, initialEmail = "" }: AuthModalProps
             {/* ═══════════════════════════════════════════════════════════════ */}
             {view === "saved_account" && (
               <div className="flex flex-col animate-in fade-in">
-                <ResponsiveModalTitle className="text-base font-bold text-[#1F1B16] text-center mb-4">
+                <h2 className="text-base font-bold text-[#1F1B16] text-center mb-4">
                   Que bom te ver novamente
-                </ResponsiveModalTitle>
+                </h2>
 
                 {/* Card com a conta salva */}
                 <div className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-white border border-[#ECE7E0] shadow-2xs mb-5">
@@ -304,7 +341,6 @@ export function AuthModal({ isOpen, onClose, initialEmail = "" }: AuthModalProps
                   type="button"
                   onClick={() => handleSendCode(savedEmail || email)}
                   disabled={loading}
-                  data-vaul-no-drag="true"
                   className="w-full h-13 bg-[#E3A008] hover:bg-[#C1440E] active:scale-[0.99] disabled:opacity-50 text-white font-bold text-sm sm:text-base rounded-full shadow-xs flex items-center justify-center transition-all cursor-pointer"
                 >
                   {loading ? "Enviando código..." : "Continuar"}
@@ -339,10 +375,6 @@ export function AuthModal({ isOpen, onClose, initialEmail = "" }: AuthModalProps
             {/* ═══════════════════════════════════════════════════════════════ */}
             {view === "welcome" && (
               <div className="flex flex-col space-y-3 pt-1 animate-in fade-in">
-                <ResponsiveModalTitle className="sr-only">
-                  Autenticação Batata Top
-                </ResponsiveModalTitle>
-
                 {/* Botão Amarelo Pílula: "Já tenho uma conta" (h-13) */}
                 <button
                   type="button"
@@ -351,7 +383,6 @@ export function AuthModal({ isOpen, onClose, initialEmail = "" }: AuthModalProps
                     setView("form")
                     setErrorMessage(null)
                   }}
-                  data-vaul-no-drag="true"
                   className="w-full h-13 bg-[#E3A008] hover:bg-[#C1440E] active:scale-[0.99] text-white font-bold text-sm sm:text-base rounded-full shadow-xs flex items-center justify-center transition-all cursor-pointer"
                 >
                   Já tenho uma conta
@@ -365,7 +396,6 @@ export function AuthModal({ isOpen, onClose, initialEmail = "" }: AuthModalProps
                     setView("form")
                     setErrorMessage(null)
                   }}
-                  data-vaul-no-drag="true"
                   className="w-full h-13 bg-white hover:bg-[#FFFDF7] border-2 border-[#E3A008] active:scale-[0.99] text-[#E3A008] hover:text-[#C1440E] font-bold text-sm sm:text-base rounded-full flex items-center justify-center transition-all cursor-pointer"
                 >
                   Criar nova conta
@@ -383,7 +413,6 @@ export function AuthModal({ isOpen, onClose, initialEmail = "" }: AuthModalProps
                     onClick={handleGoogleSignIn}
                     disabled={googleLoading}
                     aria-label="Acessar com Google"
-                    data-vaul-no-drag="true"
                     className="w-12 h-12 rounded-full border border-[#ECE7E0] hover:bg-[#F7F4EF] flex items-center justify-center active:scale-95 shadow-2xs transition-all cursor-pointer"
                   >
                     <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -414,13 +443,13 @@ export function AuthModal({ isOpen, onClose, initialEmail = "" }: AuthModalProps
             {/* ═══════════════════════════════════════════════════════════════ */}
             {view === "form" && (
               <div className="flex flex-col animate-in fade-in">
-                <ResponsiveModalTitle className="text-base font-bold text-[#1F1B16] text-center mb-1">
+                <h2 className="text-base font-bold text-[#1F1B16] text-center mb-1">
                   {isRegisterMode ? "Criar conta" : "Acessar conta"}
-                </ResponsiveModalTitle>
+                </h2>
 
-                <ResponsiveModalDescription className="text-xs text-[#6B6157] mb-4 text-center">
+                <p className="text-xs text-[#6B6157] mb-4 text-center">
                   Informe seu e-mail para enviarmos o código de acesso sem senha.
-                </ResponsiveModalDescription>
+                </p>
 
                 <form
                   onSubmit={(e) => {
@@ -437,7 +466,6 @@ export function AuthModal({ isOpen, onClose, initialEmail = "" }: AuthModalProps
                       autoComplete="email"
                       value={email}
                       disabled={loading || googleLoading}
-                      data-vaul-no-drag="true"
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="seu@email.com"
                       autoFocus
@@ -448,7 +476,6 @@ export function AuthModal({ isOpen, onClose, initialEmail = "" }: AuthModalProps
                   <button
                     type="submit"
                     disabled={loading || googleLoading || !email.trim()}
-                    data-vaul-no-drag="true"
                     className="w-full h-13 bg-[#E3A008] hover:bg-[#C1440E] active:scale-[0.99] disabled:opacity-50 text-white font-bold text-sm sm:text-base rounded-full shadow-xs flex items-center justify-center transition-all cursor-pointer"
                   >
                     {loading ? "Enviando código..." : "Continuar"}
@@ -462,14 +489,14 @@ export function AuthModal({ isOpen, onClose, initialEmail = "" }: AuthModalProps
             {/* ═══════════════════════════════════════════════════════════════ */}
             {view === "otp" && (
               <div className="flex flex-col animate-in fade-in">
-                <ResponsiveModalTitle className="text-base font-bold text-[#1F1B16] text-center mb-1">
+                <h2 className="text-base font-bold text-[#1F1B16] text-center mb-1">
                   Código de verificação
-                </ResponsiveModalTitle>
+                </h2>
 
-                <ResponsiveModalDescription className="text-xs text-[#6B6157] text-center mb-4">
+                <p className="text-xs text-[#6B6157] text-center mb-4">
                   Digite os 6 dígitos enviados para{" "}
                   <strong className="text-[#1F1B16] font-semibold">{email.trim()}</strong>
-                </ResponsiveModalDescription>
+                </p>
 
                 <div className="space-y-4">
                   <OtpInput
@@ -484,7 +511,6 @@ export function AuthModal({ isOpen, onClose, initialEmail = "" }: AuthModalProps
                     type="button"
                     onClick={() => handleVerifyOtp()}
                     disabled={loading || otpCode.length !== 6}
-                    data-vaul-no-drag="true"
                     className="w-full h-13 bg-[#E3A008] hover:bg-[#C1440E] active:scale-[0.99] disabled:opacity-50 text-white font-bold text-sm sm:text-base rounded-full shadow-xs flex items-center justify-center transition-all cursor-pointer"
                   >
                     {loading ? "Verificando..." : "Confirmar código"}
@@ -512,7 +538,9 @@ export function AuthModal({ isOpen, onClose, initialEmail = "" }: AuthModalProps
             )}
           </div>
         </div>
-      </ResponsiveModalContent>
-    </ResponsiveModal>
+      </div>
+    </div>
   )
+
+  return createPortal(modalContent, document.body)
 }
