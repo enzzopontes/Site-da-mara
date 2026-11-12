@@ -8,6 +8,7 @@ import {
   ResponsiveModalDescription,
 } from "@/components/ui/responsive-modal"
 import { useCart } from "@/lib/cart-context"
+import { useAuth } from "@/lib/auth-context"
 import { appToast } from "@/lib/app-toast"
 import { ArrowLeft, Minus, Plus, ShoppingCart, Tag } from "lucide-react"
 import { storeStatusManager } from "@/lib/store-status-manager"
@@ -208,6 +209,7 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
   const [fraseBebidaIndex, setFraseBebidaIndex] = useState(0)
 
   const { addItem } = useCart()
+  const { user, openAuthModal } = useAuth()
 
 
   const isBebida =
@@ -417,6 +419,66 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
   }, [selectedAdicionais, adicionaisDisponiveis, selectedBebidas, bebidasDisponiveis, basePrice, quantity])
 
   const handleAddToCart = () => {
+    // Intercepta ação de adicionar: exige login obrigatório antes de prosseguir
+    if (!user) {
+      const adicionaisPayload = isBebida
+        ? []
+        : Object.entries(selectedAdicionais)
+            .map(([id, qty]) => {
+              const adicional = adicionaisDisponiveis.find((a) => a.id === id)
+              if (!adicional || qty <= 0) return null
+              return {
+                id: adicional.id,
+                name: adicional.name,
+                price: adicional.price,
+                quantity: qty,
+              }
+            })
+            .filter(Boolean) as Array<{ id: string; name: string; price: number; quantity: number }>
+
+      const bebidasPayload = !isBebida
+        ? Object.entries(selectedBebidas)
+            .map(([bebidaId, qty]) => {
+              if (qty <= 0) return null
+              const bebida = bebidasDisponiveis.find((b) => b.id === bebidaId)
+              if (!bebida) return null
+              return {
+                id: bebida.id,
+                name: bebida.name,
+                price: bebida.price,
+                image: bebida.image,
+                quantity: qty,
+                category: "bebida",
+                adicionais: [],
+              }
+            })
+            .filter(Boolean)
+        : []
+
+      try {
+        sessionStorage.setItem(
+          "batata_pending_cart_item",
+          JSON.stringify({
+            product: {
+              id: product.id,
+              name: product.name,
+              price: basePrice,
+              image: product.image,
+              quantity: quantity,
+              category: product.category === "macarrao" ? "batata" : (product.category || "batata"),
+              pastaType: isMacarrao ? pastaType : undefined,
+              adicionais: adicionaisPayload,
+            },
+            bebidas: bebidasPayload,
+          })
+        )
+      } catch {}
+
+      onOpenChange(false)
+      openAuthModal()
+      return
+    }
+
     const adicionais = isBebida
       ? []
       : Object.entries(selectedAdicionais)

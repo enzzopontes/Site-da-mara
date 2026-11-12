@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Plus, Tag, Flame, Sparkles } from "lucide-react"
 import { AddToCartDialog } from "@/components/add-to-cart-dialog"
 import { useCart } from "@/lib/cart-context"
+import { useAuth } from "@/lib/auth-context"
 import { appToast } from "@/lib/app-toast"
 import { storeStatusManager } from "@/lib/store-status-manager"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -48,6 +49,7 @@ export function ProductCard({
   const [, setIsPromoActive] = useState(false)
   const [promoPrice, setPromoPrice] = useState<number | null>(null)
   const { addItem } = useCart()
+  const { user, openAuthModal } = useAuth()
 
   useEffect(() => {
     const checkPromo = async () => {
@@ -111,6 +113,28 @@ export function ProductCard({
     (isMostRequested ? "Mais pedido" : rank === 1 ? "Nº 1 da casa" : hasDiscount ? "Promoção" : null)
 
   const handleAddClick = () => {
+    // Intercepta ação de adicionar: exige login obrigatório antes de prosseguir
+    if (!user) {
+      try {
+        sessionStorage.setItem(
+          "batata_pending_cart_item",
+          JSON.stringify({
+            product: {
+              id: product.id,
+              name: product.name,
+              price: currentPrice,
+              image: product.image,
+              quantity: 1,
+              category: product.category === "macarrao" ? "batata" : (product.category || "batata"),
+              adicionais: [],
+            },
+          })
+        )
+      } catch {}
+      openAuthModal()
+      return
+    }
+
     // Checkout e carrinho utilizam EXCLUSIVAMENTE o preço final de venda (currentPrice)
     if (product.category === "bebida") {
       addItem({
@@ -232,6 +256,10 @@ export function ProductCard({
 
             <button
               type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleAddClick()
+              }}
               aria-label={`Adicionar ${product.name}`}
               className="absolute bottom-1.5 right-1.5 h-7 w-7 rounded-full bg-[#E3A008] text-white flex items-center justify-center shadow-md hover:bg-[#C1440E] transition-transform active:scale-90"
             >
@@ -358,6 +386,10 @@ export function ProductCard({
 
           <button
             type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleAddClick()
+            }}
             aria-label={`Adicionar ${product.name} ao pedido`}
             className="shrink-0 h-7 w-7 sm:h-8 sm:w-auto sm:px-3 rounded-full sm:rounded-lg bg-[#E3A008] text-white sm:bg-[#FEF8EC] sm:border sm:border-[#E3A008] sm:text-[#A16207] hover:bg-[#E3A008] hover:text-white font-bold text-xs flex items-center justify-center gap-1 transition-all active:scale-95 shadow-xs"
           >

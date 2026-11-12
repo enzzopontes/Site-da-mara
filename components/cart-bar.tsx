@@ -5,10 +5,12 @@ import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { useCart } from "@/lib/cart-context"
+import { useAuth } from "@/lib/auth-context"
 
 export function CartBar() {
   const pathname = usePathname()
   const { items, getTotalPrice } = useCart()
+  const { user, openAuthModal } = useAuth()
   const [isMapActive, setIsMapActive] = useState(false)
 
   useEffect(() => {
@@ -76,6 +78,13 @@ export function CartBar() {
     ? "bottom-16 lg:bottom-4"
     : "bottom-0 lg:bottom-4"
 
+  const handleCheckoutClick = (e: React.MouseEvent) => {
+    if (!user) {
+      e.preventDefault()
+      openAuthModal()
+    }
+  }
+
   return (
     <aside
       aria-label="Resumo da sacola flutuante"
@@ -84,7 +93,11 @@ export function CartBar() {
       <div className="max-w-xl mx-auto px-3 sm:px-4">
         <div className="bg-white border border-[#ECE7E0] shadow-[0_8px_30px_rgba(0,0,0,0.12)] rounded-2xl sm:rounded-3xl p-3 flex items-center justify-between gap-3">
           {/* Logo + Preço */}
-          <Link href="/checkout" className="flex items-center gap-3 min-w-0 flex-1 group cursor-pointer">
+          <Link
+            href="/checkout"
+            onClick={handleCheckoutClick}
+            className="flex items-center gap-3 min-w-0 flex-1 group cursor-pointer"
+          >
             <div className="relative w-11 h-11 sm:w-12 sm:h-12 flex-shrink-0 rounded-full overflow-hidden bg-[#F7F5F0] border border-[#ECE7E0] flex items-center justify-center group-hover:border-[#E3A008] transition-colors">
               <Image
                 src="/logo.png"
@@ -112,6 +125,7 @@ export function CartBar() {
           {/* Botão Pill Amarelo "Ver sacola" levando direto para a primeira etapa do carrinho (/checkout) */}
           <Link
             href="/checkout"
+            onClick={handleCheckoutClick}
             className="flex-shrink-0 h-11 sm:h-12 px-5 sm:px-6 bg-[#E3A008] hover:bg-[#C1440E] active:scale-[0.98] text-white font-black text-sm sm:text-base rounded-full shadow-md flex items-center justify-center transition-all duration-200 cursor-pointer"
           >
             Ver sacola

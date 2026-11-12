@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { useCart } from "@/lib/cart-context"
 import { usePathname } from "next/navigation"
@@ -15,7 +15,11 @@ export function GuestTopbar({ onOpenAuth, desktopOnly = false }: GuestTopbarProp
   const { items } = useCart()
   const pathname = usePathname()
   const [isMapActive, setIsMapActive] = useState(false)
+  const [isExiting, setIsExiting] = useState(false)
+  const [isVisible, setIsVisible] = useState(!user && !loading)
+  const prevUserRef = useRef(user)
 
+  // Monitora alterações do estado do mapa e modal de endereço
   useEffect(() => {
     const handleMapState = (e: any) => {
       setIsMapActive(Boolean(e.detail?.active))
@@ -51,8 +55,25 @@ export function GuestTopbar({ onOpenAuth, desktopOnly = false }: GuestTopbarProp
     }
   }, [])
 
-  // Se já estiver logado ou carregando o estado inicial, não renderiza
-  if (loading || user) {
+  // Gerencia a animação elástica de saída ao autenticar (spring exit com antecipação)
+  useEffect(() => {
+    if (!prevUserRef.current && user) {
+      setIsExiting(true)
+      const timer = setTimeout(() => {
+        setIsVisible(false)
+        setIsExiting(false)
+      }, 450)
+      prevUserRef.current = user
+      return () => clearTimeout(timer)
+    } else if (prevUserRef.current && !user) {
+      setIsVisible(true)
+      setIsExiting(false)
+    }
+    prevUserRef.current = user
+  }, [user])
+
+  // Se carregando inicial ou se o banner já completou a saída
+  if (loading || (!isVisible && !isExiting)) {
     return null
   }
 
@@ -64,8 +85,10 @@ export function GuestTopbar({ onOpenAuth, desktopOnly = false }: GuestTopbarProp
     }
   }
 
-  // 1. MODO DESKTOP (Renderizado pelo Header apenas em telas md/lg para cima)
+  // 1. MODO DESKTOP TOPBAR (Renderizado no topo do Header caso desktopOnly=true)
   if (desktopOnly) {
+    if (user) return null
+
     return (
       <aside
         aria-label="Aviso para clientes convidados"
@@ -95,7 +118,7 @@ export function GuestTopbar({ onOpenAuth, desktopOnly = false }: GuestTopbarProp
     )
   }
 
-  // 2. MODO MOBILE BOTTOM BANNER (Idêntico ao app na captura enviada)
+  // 2. MODO BANNER FLUTUANTE INFERIOR (Idêntico ao App Móvel com Física Elástica)
   if (isMapActive) return null
 
   const isHiddenRoute =
@@ -114,27 +137,33 @@ export function GuestTopbar({ onOpenAuth, desktopOnly = false }: GuestTopbarProp
 
   if (isHiddenRoute) return null
 
-  const hasCartItems = items.reduce((sum, item) => sum + item.quantity, 0) > 0
+  const totalCartItems = items.reduce((sum, item) => sum + item.quantity, 0)
+  const hasCartItems = totalCartItems > 0
 
-  const mobileBottomOffset = hasCartItems
-    ? "bottom-34 sm:bottom-36"
-    : "bottom-16"
+  // Posicionamento dinâmico:
+  // - Sem sacola: bottom-20 no mobile (respiro de ~24px acima da navbar) e bottom-6 no desktop
+  // - Com sacola: bottom-36 no mobile (~144px, flutuando acima da CartBar) e md:bottom-28 no desktop
+  const bottomOffsetClass = hasCartItems
+    ? "bottom-36 md:bottom-28"
+    : "bottom-20 md:bottom-6"
+
+  const animationClass = isExiting ? "banner-elastic-exit" : "banner-elastic-enter"
 
   return (
     <aside
       aria-label="Aviso para clientes convidados"
-      className={`fixed ${mobileBottomOffset} left-0 right-0 z-40 md:hidden px-3 transition-all duration-300 ease-out pointer-events-auto`}
+      className={`fixed ${bottomOffsetClass} left-0 right-0 z-40 px-3 transition-[bottom,transform] duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] pointer-events-auto select-none`}
     >
-      <div className="max-w-md mx-auto">
+      <div className={`max-w-md sm:max-w-lg mx-auto ${animationClass}`}>
         <button
           type="button"
           onClick={handleAction}
-          className="w-full bg-white text-[#554D44] border border-[#ECE7E0] shadow-[0_4px_20px_rgba(0,0,0,0.06)] rounded-2xl py-2.5 px-4 flex flex-col items-center justify-center text-center active:scale-[0.99] transition-all cursor-pointer"
+          className="w-full bg-white text-[#554D44] border border-[#ECE7E0] shadow-[0_8px_30px_rgba(0,0,0,0.08)] rounded-2xl sm:rounded-[22px] py-2.5 px-4 flex flex-col items-center justify-center text-center active:scale-[0.99] hover:border-[#E3A008]/50 transition-all cursor-pointer"
         >
           <span className="text-[11px] sm:text-xs text-[#6B6157] font-medium leading-none mb-1">
             Explore mais com sua conta Batata Top
           </span>
-          <span className="text-xs sm:text-[13px] font-bold text-[#E3A008] leading-tight">
+          <span className="text-xs sm:text-[13px] font-bold text-[#E3A008] hover:text-[#C1440E] leading-tight transition-colors">
             Entrar ou cadastrar-se
           </span>
         </button>
