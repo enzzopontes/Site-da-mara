@@ -289,8 +289,8 @@ export function AuthModal({ isOpen, onClose, initialEmail = "" }: AuthModalProps
         <div className="absolute top-0 inset-x-0 h-28 bg-gradient-to-b from-black/60 via-black/20 to-transparent pointer-events-none" />
       </div>
 
-      {/* ÁREA SUPERIOR: BOTÃO VOLTAR E BOTÃO DE INTERROGAÇÃO (?) */}
-      <div className="relative z-30 w-full max-w-md sm:max-w-lg mx-auto flex items-center justify-between px-4 pt-4 sm:pt-6">
+      {/* ÁREA SUPERIOR: BOTÃO VOLTAR E BOTÃO DE INTERROGAÇÃO (?) NAS EXTREMIDADES */}
+      <div className="relative z-30 w-full flex items-center justify-between px-4 sm:px-8 pt-4 sm:pt-6">
         <button
           type="button"
           onClick={() => {
@@ -301,7 +301,7 @@ export function AuthModal({ isOpen, onClose, initialEmail = "" }: AuthModalProps
             else onClose()
           }}
           aria-label="Voltar"
-          className="w-10 h-10 rounded-full bg-black/40 hover:bg-black/60 text-white backdrop-blur-md flex items-center justify-center shadow-md transition-all active:scale-95 cursor-pointer"
+          className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-black/40 hover:bg-black/60 text-white backdrop-blur-md flex items-center justify-center shadow-md transition-all active:scale-95 cursor-pointer"
         >
           <ChevronLeft className="h-6 w-6 stroke-[2.5]" />
         </button>
@@ -310,20 +310,21 @@ export function AuthModal({ isOpen, onClose, initialEmail = "" }: AuthModalProps
           type="button"
           onClick={() => setIsHelpOpen((prev) => !prev)}
           aria-label="Ajuda e suporte"
-          className="w-10 h-10 rounded-full bg-black/40 hover:bg-black/60 text-white backdrop-blur-md flex items-center justify-center shadow-md transition-all active:scale-95 cursor-pointer"
+          className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-black/40 hover:bg-black/60 text-white backdrop-blur-md flex items-center justify-center shadow-md transition-all active:scale-95 cursor-pointer"
         >
-          <HelpCircle className="h-5 w-5 stroke-[2.5]" />
+          <HelpCircle className="h-5 w-5 sm:h-6 sm:w-6 stroke-[2.5]" />
         </button>
       </div>
 
       {/* ÁREA CLICÁVEL TRANSPARENTE ACIMA DO BOTTOM SHEET PARA FECHAR */}
       <div className="flex-1 w-full relative z-20 cursor-pointer" onClick={onClose} />
 
-      {/* BOTTOM SHEET: FIXO NA BASE, PONTAS DE BAIXO RETAS (SEM REDONDEZA) E PONTAS SUPERIORES ARREDONDADAS */}
-      <div className="relative z-30 w-full max-w-md sm:max-w-lg mx-auto animate-in slide-in-from-bottom duration-300">
-        <div className="bg-white rounded-t-[28px] sm:rounded-t-[32px] rounded-b-none border-t border-[#ECE7E0] shadow-[0_-12px_40px_rgba(0,0,0,0.35)] px-6 pt-3 pb-[max(1.75rem,env(safe-area-inset-bottom))] flex flex-col max-h-[85vh] overflow-y-auto">
-          {/* HANDLE SUPERIOR CINZA */}
-          <div className="w-11 h-1 bg-[#D6CEC4] rounded-full mx-auto mb-3 shrink-0" />
+      {/* BOTTOM SHEET: COBRINDO A PARTE DE BAIXO INTEIRA (W-FULL DE PONTA A PONTA), PONTAS DE BAIXO RETAS */}
+      <div className="relative z-30 w-full animate-in slide-in-from-bottom duration-300">
+        <div className="bg-white rounded-t-[28px] sm:rounded-t-[36px] rounded-b-none border-t border-[#ECE7E0] shadow-[0_-12px_40px_rgba(0,0,0,0.35)] px-4 sm:px-8 pt-3 pb-[max(1.75rem,env(safe-area-inset-bottom))] flex flex-col max-h-[85vh] overflow-y-auto">
+          <div className="w-full max-w-md sm:max-w-lg mx-auto flex flex-col">
+            {/* HANDLE SUPERIOR CINZA */}
+            <div className="w-11 h-1 bg-[#D6CEC4] rounded-full mx-auto mb-3 shrink-0" />
 
           {/* ═══════════════════════════════════════════════════════════════ */}
           {/* TELA DE AJUDA / FAQ (DISPARADA PELO BOTÃO ?)                   */}
@@ -652,6 +653,7 @@ export function AuthModal({ isOpen, onClose, initialEmail = "" }: AuthModalProps
               )}
             </>
           )}
+          </div>
         </div>
       </div>
     </div>
