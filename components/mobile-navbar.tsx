@@ -10,11 +10,14 @@ import {
   UtensilsCrossed,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
+import { useCart } from "@/lib/cart-context"
 
 export function MobileNavbar() {
   const pathname = usePathname()
   const router = useRouter()
   const { user, openAuthModal } = useAuth()
+  const { items } = useCart()
+  const hasCartItems = items.reduce((sum, item) => sum + item.quantity, 0) > 0
   const [isMapActive, setIsMapActive] = useState(false)
 
   // Desativa completamente a Mobile Navbar quando o usuário entra na seleção do mapa
@@ -97,7 +100,14 @@ export function MobileNavbar() {
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden">
       {/* Bottom Navigation */}
-      <nav aria-label="Navegação móvel principal" className="bg-white border-t border-[#ECE7E0] pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+      <nav
+        aria-label="Navegação móvel principal"
+        className={`bg-white pb-safe ${
+          hasCartItems
+            ? "border-t-0 shadow-none"
+            : "border-t border-[#ECE7E0] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]"
+        }`}
+      >
         <div className="flex items-center justify-around h-16 relative max-w-lg mx-auto px-2">
           {navItems.map((item) => {
             const Icon = item.icon
