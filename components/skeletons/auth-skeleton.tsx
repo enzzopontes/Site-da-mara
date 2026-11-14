@@ -7,37 +7,26 @@ export function AuthSkeleton() {
       aria-busy="true"
       aria-live="polite"
       aria-label="Carregando autenticação"
-      className="min-h-screen flex items-center justify-center bg-gray-50 p-4 sm:p-6 select-none"
+      className="min-h-dvh w-full bg-white text-[#1F1B16] flex flex-col select-none"
     >
-      <div className="max-w-md w-full bg-white rounded-3xl p-6 sm:p-8 border border-[#ECE7E0] shadow-sm space-y-6">
-        <div className="flex flex-col items-center text-center space-y-3">
-          <Skeleton className="w-16 h-16 rounded-full" />
-          <Skeleton className="h-7 w-48 rounded-lg" />
-          <Skeleton className="h-4 w-64 rounded" />
+      <div className="w-full max-w-md mx-auto px-5 pt-6 pb-10 flex-1 flex flex-col">
+        <div className="mb-8">
+          <Skeleton className="w-10 h-10 rounded-full" />
         </div>
 
-        <div className="space-y-4 pt-2">
-          <div className="space-y-1.5">
-            <Skeleton className="h-4 w-16 rounded" />
-            <Skeleton className="h-14 w-full rounded-2xl" />
-          </div>
-          <div className="space-y-1.5">
-            <Skeleton className="h-4 w-16 rounded" />
-            <Skeleton className="h-14 w-full rounded-2xl" />
-          </div>
-          <div className="flex justify-end">
-            <Skeleton className="h-4 w-28 rounded" />
-          </div>
-          <Skeleton className="h-14 sm:h-16 w-full rounded-2xl" />
+        <div className="space-y-3 mb-8">
+          <Skeleton className="h-7 w-56 rounded-lg" />
+          <Skeleton className="h-4 w-72 rounded" />
         </div>
 
-        <div className="flex items-center gap-3 pt-2">
-          <Skeleton className="h-px flex-1 rounded" />
-          <Skeleton className="h-3 w-8 rounded" />
-          <Skeleton className="h-px flex-1 rounded" />
+        <div className="space-y-4">
+          <Skeleton className="h-14 w-full rounded-2xl" />
+          <Skeleton className="h-14 w-full rounded-2xl" />
         </div>
 
-        <Skeleton className="h-14 w-full rounded-2xl" />
+        <div className="mt-auto pt-8">
+          <Skeleton className="h-14 w-full rounded-2xl" />
+        </div>
       </div>
     </div>
   )

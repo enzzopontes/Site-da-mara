@@ -1,15 +1,68 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { useCart } from "@/lib/cart-context"
+import { useKeyboardViewport } from "@/hooks/use-keyboard-viewport"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
-import { validateEmail, checkOtpRateLimit } from "@/lib/security-auth"
-import { ChevronLeft, X, AlertCircle } from "lucide-react"
-import { toast } from "sonner"
+import {
+  OTP_CODE_REGEX,
+  validateEmail,
+  checkOtpRateLimit,
+  getOtpCooldownRemaining,
+  writeSavedUserProfile,
+  consumePendingCartItem,
+  sanitizeReturnUrl,
+} from "@/lib/security-auth"
+import { appToast } from "@/lib/app-toast"
+import { ChevronLeft, X, Loader2 } from "lucide-react"
 
 const RESEND_SECONDS = 59
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function ThreeDotsLoader({ color = "#1F1B16" }: { color?: string }) {
+  const dotSize = 7
+  const gap = 6
+
+  return (
+    <span
+      role="progressbar"
+      aria-busy={true}
+      aria-label="Carregando"
+      className="inline-flex items-center justify-center"
+      style={{ gap: `${gap}px` }}
+    >
+      <style>{`
+        @keyframes batata-three-dots {
+          0%, 80%, 100% {
+            transform: translateY(0);
+            opacity: 0.35;
+          }
+          40% {
+            transform: translateY(-5px);
+            opacity: 1;
+          }
+        }
+      `}</style>
+      {[0, 140, 280].map((delayMs) => (
+        <span
+          key={delayMs}
+          aria-hidden="true"
+          className="block rounded-full"
+          style={{
+            width: `${dotSize}px`,
+            height: `${dotSize}px`,
+            backgroundColor: color,
+            opacity: 0.35,
+            animation: "batata-three-dots 800ms ease-in-out infinite",
+            animationDelay: `${delayMs}ms`,
+          }}
+        />
+      ))}
+    </span>
+  )
+}
 
 // Máscara 000.000.000-00
 const formatCpf = (value: string) => {
@@ -37,7 +90,7 @@ const isValidCpf = (digits: string) => {
 }
 
 export function AuthContainer({
-  initialMode = "login",
+  initialMode: _initialMode = "login",
 }: {
   initialMode?: "login" | "register"
 }) {
@@ -45,21 +98,45 @@ export function AuthContainer({
   const searchParams = useSearchParams()
   const { signInWithOtp, verifyOtp, signInWithGoogle, user, signOut } = useAuth()
   const { addItem } = useCart()
+  const { keyboardOffset, isKeyboardOpen } = useKeyboardViewport()
+
+  const initialEmailParam = searchParams.get("email")?.trim() || ""
+  const initialStepParam = searchParams.get("step")
+  const hasValidInitialEmail = EMAIL_REGEX.test(initialEmailParam)
 
   // 'email' -> tela 1 | 'code' -> tela 2 | 'name' -> tela 3 (usuário novo)
-  const [step, setStep] = useState<"email" | "code" | "name">("email")
-  const [email, setEmail] = useState("")
+  const [step, setStep] = useState<"email" | "code" | "name">(
+    initialStepParam === "code" && hasValidInitialEmail ? "code" : "email"
+  )
+  const [email, setEmail] = useState(hasValidInitialEmail ? initialEmailParam : "")
   const [emailFocused, setEmailFocused] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [isVerifying, setIsVerifying] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   // 6 dígitos do código
   const [code, setCode] = useState<string[]>(["", "", "", "", "", ""])
   const [focusedBox, setFocusedBox] = useState<number | null>(null)
-  const [secondsLeft, setSecondsLeft] = useState(RESEND_SECONDS)
+  const [secondsLeft, setSecondsLeft] = useState<number>(0)
   const [helpVisible, setHelpVisible] = useState(false)
   const codeRefs = useRef<(HTMLInputElement | null)[]>([])
+  const emailInputRef = useRef<HTMLInputElement | null>(null)
+  const firstNameInputRef = useRef<HTMLInputElement | null>(null)
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isVerifyingRef = useRef(false)
+  const isSendingOtpRef = useRef(false)
+  const isBackingOutRef = useRef(false)
+
+  const scheduleFocus = useCallback((fn: () => void, delayMs: number) => {
+    if (focusTimerRef.current !== null) {
+      clearTimeout(focusTimerRef.current)
+      focusTimerRef.current = null
+    }
+    focusTimerRef.current = setTimeout(() => {
+      focusTimerRef.current = null
+      fn()
+    }, delayMs)
+  }, [])
 
   // Nome e CPF (step === 'name')
   const [firstName, setFirstName] = useState("")
@@ -70,122 +147,193 @@ export function AuthContainer({
   const [cpfFocused, setCpfFocused] = useState(false)
   const [nameSaving, setNameSaving] = useState(false)
 
-  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+  const isEmailValid = EMAIL_REGEX.test(email.trim())
   const isNameValid = firstName.trim().length >= 2 && lastName.trim().length >= 2
   const cpfDigits = cpf.replace(/\D/g, "")
   const isCpfValid = cpfDigits.length === 0 || isValidCpf(cpfDigits)
 
-  // Inicializa e-mail via query param se existir
+  // Sincroniza query params (?email=...&step=code) ao entrar direto na etapa de OTP
   useEffect(() => {
-    const qEmail = searchParams.get("email")
-    if (qEmail && qEmail.includes("@")) {
-      setEmail(qEmail.trim())
+    const qEmail = searchParams.get("email")?.trim() || ""
+    const qStep = searchParams.get("step")
+    if (qEmail && EMAIL_REGEX.test(qEmail)) {
+      setEmail(qEmail)
+      if (qStep === "code") {
+        setStep("code")
+        const rem = getOtpCooldownRemaining(qEmail)
+        setSecondsLeft(Math.min(RESEND_SECONDS, rem))
+      }
     }
   }, [searchParams])
 
+  // Limpa timer de foco ao desmontar o componente
+  useEffect(() => {
+    return () => {
+      if (focusTimerRef.current !== null) {
+        clearTimeout(focusTimerRef.current)
+        focusTimerRef.current = null
+      }
+    }
+  }, [])
+
+  // Foco automático ao alternar entre as etapas do fluxo
+  useEffect(() => {
+    if (step === "email") {
+      scheduleFocus(() => emailInputRef.current?.focus(), 250)
+    } else if (step === "code") {
+      scheduleFocus(() => codeRefs.current[0]?.focus(), 150)
+    } else if (step === "name") {
+      scheduleFocus(() => firstNameInputRef.current?.focus(), 250)
+    }
+  }, [step, scheduleFocus])
+
   // Despacha item pendente na sacola
   const processPendingCartItem = () => {
-    try {
-      const stored = sessionStorage.getItem("batata_pending_cart_item")
-      if (stored) {
-        sessionStorage.removeItem("batata_pending_cart_item")
-        const parsed = JSON.parse(stored)
-        if (parsed.product) addItem(parsed.product)
-        if (Array.isArray(parsed.bebidas)) {
-          parsed.bebidas.forEach((b: any) => addItem(b))
-        }
-        toast.success("Item adicionado à sua sacola!")
-      }
-    } catch {}
+    const added = consumePendingCartItem(addItem)
+    if (added) {
+      appToast.success("Item adicionado à sua sacola!")
+    }
   }
 
-  // Redireciona se já estiver autenticado
+  // Redireciona se já estiver autenticado na etapa inicial
   useEffect(() => {
     if (user && step === "email") {
       processPendingCartItem()
-      const returnUrl = searchParams.get("returnUrl") || "/cardapio"
+      const returnUrl = sanitizeReturnUrl(searchParams.get("returnUrl"))
       router.replace(returnUrl)
     }
   }, [user, step, router, searchParams])
 
-  // Contador de reenvio de código
+  // Contador regressivo sincronizado com timestamp persistido (60s)
   useEffect(() => {
-    if (step !== "code" || secondsLeft <= 0) return
-    const t = setTimeout(() => setSecondsLeft((s) => s - 1), 1000)
-    return () => clearTimeout(t)
-  }, [step, secondsLeft])
+    if (step !== "code") return
+
+    const syncRemaining = () => {
+      const rem = getOtpCooldownRemaining(email.trim())
+      setSecondsLeft(rem > 0 ? Math.min(RESEND_SECONDS, rem) : 0)
+    }
+
+    syncRemaining()
+    const interval = setInterval(syncRemaining, 500)
+    return () => clearInterval(interval)
+  }, [step, email])
 
   const formatTime = (s: number) => `0:${String(s).padStart(2, "0")}`
 
-  // Enviar código OTP
+  // Enviar código OTP respeitando a trava de 60s no banco
   const sendCode = async () => {
+    if (isSendingOtpRef.current) return { ok: false, skipped: true, cooldownRemaining: getOtpCooldownRemaining(email.trim()) }
+    isSendingOtpRef.current = true
     setLoading(true)
-    setErrorMessage(null)
+    appToast.dismiss()
 
     const validation = validateEmail(email.trim())
     if (!validation.isValid || !validation.cleanEmail) {
-      setErrorMessage(validation.error || "Informe um e-mail válido.")
+      appToast.error(validation.error || "Informe um e-mail válido.")
+      isSendingOtpRef.current = false
       setLoading(false)
-      return false
+      return { ok: false, skipped: false, cooldownRemaining: 0 }
     }
 
     try {
-      await signInWithOtp(validation.cleanEmail)
-      return true
+      const res = await signInWithOtp(validation.cleanEmail)
+      return {
+        ok: true,
+        skipped: Boolean(res.skipped),
+        cooldownRemaining: res.cooldownRemaining || 0,
+      }
     } catch (err: any) {
-      setErrorMessage(err?.message || "Não foi possível enviar o código. Tente novamente.")
-      return false
+      appToast.error(
+        err?.message || "Não foi possível enviar o código. Tente novamente."
+      )
+      return { ok: false, skipped: false, cooldownRemaining: 0 }
     } finally {
+      isSendingOtpRef.current = false
       setLoading(false)
     }
   }
 
   const handleEmailContinue = async () => {
     if (!isEmailValid || loading) return
-    const ok = await sendCode()
-    if (ok) {
+
+    const cleanEmail = email.trim().toLowerCase()
+    const remaining = getOtpCooldownRemaining(cleanEmail)
+    if (remaining > 0) {
+      // Trava anti-sobrecarga: não dispara nova requisição ao Supabase antes de 60s
       setCode(["", "", "", "", "", ""])
-      setSecondsLeft(RESEND_SECONDS)
+      setSecondsLeft(Math.min(RESEND_SECONDS, remaining))
       setStep("code")
-      toast.success("Código enviado!")
-      setTimeout(() => codeRefs.current[0]?.focus(), 150)
+      return
+    }
+
+    const res = await sendCode()
+    if (res.ok) {
+      setCode(["", "", "", "", "", ""])
+      const updatedRemaining = getOtpCooldownRemaining(cleanEmail)
+      setSecondsLeft(
+        updatedRemaining > 0 ? Math.min(RESEND_SECONDS, updatedRemaining) : RESEND_SECONDS
+      )
+      setStep("code")
+      if (!res.skipped) {
+        appToast.success("Código enviado")
+      }
     }
   }
 
   const handleResend = async () => {
     setHelpVisible(false)
-    const ok = await sendCode()
-    if (ok) {
+    const cleanEmail = email.trim().toLowerCase()
+    const remaining = getOtpCooldownRemaining(cleanEmail)
+    if (remaining > 0) {
+      setSecondsLeft(Math.min(RESEND_SECONDS, remaining))
+      appToast.warning(`Aguarde ${remaining}s para reenviar o código.`)
+      return
+    }
+
+    const res = await sendCode()
+    if (res.ok) {
       setCode(["", "", "", "", "", ""])
-      setSecondsLeft(RESEND_SECONDS)
-      toast.success("Código reenviado com sucesso!")
-      setTimeout(() => codeRefs.current[0]?.focus(), 150)
+      const updatedRemaining = getOtpCooldownRemaining(cleanEmail)
+      setSecondsLeft(
+        updatedRemaining > 0 ? Math.min(RESEND_SECONDS, updatedRemaining) : RESEND_SECONDS
+      )
+      if (!res.skipped) {
+        appToast.success("Código reenviado")
+      }
+      scheduleFocus(() => codeRefs.current[0]?.focus(), 150)
     }
   }
 
   // Finalização do login e redirecionamento
-  const finishSuccessLogin = () => {
-    try {
-      if (email) {
-        localStorage.setItem("batata_last_login_email", email.trim())
-      }
-    } catch {}
+  const finishSuccessLogin = (fullName?: string) => {
+    const cleanEmail = email.trim()
+    if (cleanEmail) {
+      writeSavedUserProfile({
+        name: fullName?.trim() || cleanEmail.split("@")[0],
+        email: cleanEmail,
+        provider: "email",
+      })
+    }
     processPendingCartItem()
-    toast.success("Login realizado com sucesso!")
-    const returnUrl = searchParams.get("returnUrl") || "/cardapio"
+    appToast.success("Login realizado com sucesso!")
+    const returnUrl = sanitizeReturnUrl(searchParams.get("returnUrl"))
     router.replace(returnUrl)
   }
 
-  // Verificação de código OTP
+  // Verificação de código OTP com trava contra chamadas duplicadas e Alert Global
   const verifyCode = async (token: string) => {
+    if (isVerifyingRef.current || loading) return
+    isVerifyingRef.current = true
+    setIsVerifying(true)
     setLoading(true)
-    setErrorMessage(null)
 
     const rateLimitCheck = checkOtpRateLimit()
     if (rateLimitCheck.isBlocked) {
-      setErrorMessage(
+      appToast.error(
         `Limite de tentativas excedido. Aguarde ${rateLimitCheck.remainingMinutes || 5} minutos por segurança.`
       )
+      isVerifyingRef.current = false
+      setIsVerifying(false)
       setLoading(false)
       return
     }
@@ -193,9 +341,11 @@ export function AuthContainer({
     try {
       const res = await verifyOtp(email.trim(), token)
       if (!res.success) {
-        setErrorMessage(res.error || "Código inválido ou expirado. Tente novamente.")
+        appToast.error(
+          res.error || "Código inválido ou expirado. Tente novamente."
+        )
         setCode(["", "", "", "", "", ""])
-        setTimeout(() => codeRefs.current[0]?.focus(), 100)
+        scheduleFocus(() => codeRefs.current[0]?.focus(), 100)
         return
       }
 
@@ -207,61 +357,114 @@ export function AuthContainer({
 
       const fullName = currentUser?.user_metadata?.full_name
       if (fullName && fullName.trim().length > 0) {
-        finishSuccessLogin()
+        finishSuccessLogin(fullName.trim())
       } else {
         // Usuário novo: pedir nome completo
+        appToast.dismiss()
         setStep("name")
       }
     } catch (err: any) {
-      setErrorMessage(err?.message || "Erro ao validar o código.")
+      appToast.error(err?.message || "Erro ao validar o código.")
       setCode(["", "", "", "", "", ""])
-      setTimeout(() => codeRefs.current[0]?.focus(), 100)
+      scheduleFocus(() => codeRefs.current[0]?.focus(), 100)
     } finally {
+      isVerifyingRef.current = false
+      setIsVerifying(false)
       setLoading(false)
     }
   }
 
+  // Colagem completa de 6 dígitos (Ctrl+V / colar do e-mail)
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    if (loading || isVerifyingRef.current) return
+    e.preventDefault()
+
+    const pasted = e.clipboardData.getData("text").trim()
+    if (!OTP_CODE_REGEX.test(pasted)) {
+      appToast.error("Cole um código válido de 6 dígitos numéricos.")
+      return
+    }
+    setCode(pasted.split(""))
+    appToast.dismiss()
+    codeRefs.current[5]?.focus()
+    verifyCode(pasted)
+  }
+
   // Digitação nos 6 campos de PIN
   const handleDigitChange = (value: string, index: number) => {
-    const raw = value.replace(/\D/g, "")
-    setErrorMessage(null)
+    if (loading || isVerifyingRef.current) return
 
-    // Se colar múltiplos dígitos
-    if (raw.length > 1) {
-      const chars = raw.slice(0, 6).split("")
+    const raw = value.replace(/\D/g, "")
+    appToast.dismiss()
+
+    if (!raw) {
       const next = [...code]
-      chars.forEach((c, i) => {
-        if (i < 6) next[i] = c
-      })
+      next[index] = ""
       setCode(next)
+      return
+    }
+
+    // Caso o navegador envie múltiplos dígitos via autocomplete SMS/e-mail ou teclado móvel
+    if (raw.length > 1) {
+      if (code[index] && raw.length === 2) {
+        const typedDigit = raw[0] === code[index] ? raw[1] : raw[0]
+        const next = [...code]
+        next[index] = typedDigit
+        setCode(next)
+
+        if (index < 5) {
+          codeRefs.current[index + 1]?.focus()
+        }
+
+        const token = next.join("")
+        if (token.length === 6) {
+          verifyCode(token)
+        }
+        return
+      }
+
+      const clipped = raw.slice(0, 6)
+      const next = Array.from({ length: 6 }, (_, i) => clipped[i] || "")
+      setCode(next)
+
+      const lastFilledIndex = Math.min(clipped.length, 6) - 1
+      codeRefs.current[lastFilledIndex]?.focus()
+
       const token = next.join("")
       if (token.length === 6) {
         verifyCode(token)
-      } else {
-        const nextIndex = Math.min(chars.length, 5)
-        codeRefs.current[nextIndex]?.focus()
       }
       return
     }
 
-    const digit = raw.slice(-1)
     const next = [...code]
-    next[index] = digit
+    next[index] = raw
     setCode(next)
 
-    if (digit && index < 5) {
+    if (index < 5) {
       codeRefs.current[index + 1]?.focus()
     }
 
-    if (digit && index === 5) {
-      const token = next.join("")
-      if (token.length === 6) verifyCode(token)
+    const token = next.join("")
+    if (token.length === 6) {
+      verifyCode(token)
     }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
+    if (loading || isVerifyingRef.current) return
+
     if (e.key === "Backspace" && !code[index] && index > 0) {
+      const next = [...code]
+      next[index - 1] = ""
+      setCode(next)
       codeRefs.current[index - 1]?.focus()
+    } else if (e.key === "ArrowLeft" && index > 0) {
+      e.preventDefault()
+      codeRefs.current[index - 1]?.focus()
+    } else if (e.key === "ArrowRight" && index < 5) {
+      e.preventDefault()
+      codeRefs.current[index + 1]?.focus()
     }
   }
 
@@ -269,7 +472,7 @@ export function AuthContainer({
   const handleNameContinue = async () => {
     if (!isNameValid || !isCpfValid || nameSaving) return
     setNameSaving(true)
-    setErrorMessage(null)
+    appToast.dismiss()
 
     const trimmedName = `${firstName.trim()} ${lastName.trim()}`.trim()
     try {
@@ -282,13 +485,13 @@ export function AuthContainer({
       })
 
       if (error) {
-        setErrorMessage("Não foi possível salvar os dados. Tente novamente.")
+        appToast.error("Não foi possível salvar os dados. Tente novamente.")
         return
       }
 
-      finishSuccessLogin()
+      finishSuccessLogin(trimmedName)
     } catch {
-      setErrorMessage("Erro ao salvar cadastro.")
+      appToast.error("Erro ao salvar cadastro.")
     } finally {
       setNameSaving(false)
     }
@@ -297,30 +500,49 @@ export function AuthContainer({
   // Voltar tela
   const handleBack = async () => {
     if (step === "name") {
-      await signOut()
-      router.replace("/")
+      if (isBackingOutRef.current) return
+      isBackingOutRef.current = true
+      try {
+        await signOut({ forgetAccount: true })
+        router.replace("/")
+      } finally {
+        isBackingOutRef.current = false
+      }
     } else if (step === "code") {
       setStep("email")
-      setErrorMessage(null)
+      appToast.dismiss()
     } else {
       router.back()
     }
   }
 
   const handleGoogleLogin = async () => {
+    if (googleLoading) return
     setGoogleLoading(true)
-    setErrorMessage(null)
+    appToast.dismiss()
     try {
       await signInWithGoogle()
     } catch {
-      setErrorMessage("Não foi possível conectar com o Google.")
+      appToast.error("Não foi possível conectar com o Google.")
       setGoogleLoading(false)
     }
   }
 
+  const codeToken = code.join("")
+  const isCodeValid = codeToken.length === 6
   const isFooterValid =
-    step === "email" ? isEmailValid : isNameValid && isCpfValid
-  const footerLoading = step === "email" ? loading : nameSaving
+    step === "email"
+      ? isEmailValid
+      : step === "code"
+      ? isCodeValid
+      : isNameValid && isCpfValid
+  const footerLoading = step === "name" ? nameSaving : loading || isVerifying
+  const handleFooterContinue = () => {
+    if (!isFooterValid || footerLoading) return
+    if (step === "email") handleEmailContinue()
+    else if (step === "code") verifyCode(codeToken)
+    else handleNameContinue()
+  }
 
   return (
     <div className="min-h-dvh w-full bg-white text-[#1F1B16] flex flex-col justify-between selection:bg-[#E3A008]/20">
@@ -330,24 +552,17 @@ export function AuthContainer({
           type="button"
           onClick={handleBack}
           aria-label="Voltar"
-          className="w-10 h-10 -ml-2 rounded-full hover:bg-[#F7F4EF] active:scale-95 text-[#E3A008] flex items-center justify-center transition-all cursor-pointer"
+          className="w-9 h-9 -ml-1.5 rounded-full bg-transparent hover:bg-[#F7F4EF] active:scale-95 text-[#1F1B16] flex items-center justify-center transition-all cursor-pointer"
         >
-          <ChevronLeft className="h-6 w-6 stroke-[2.5]" />
+          <ChevronLeft className="h-6 w-6 stroke-[2.25]" />
         </button>
       </header>
 
       {/* CONTEÚDO CENTRAL */}
-      <main className="w-full max-w-xl mx-auto px-6 sm:px-8 flex-1 flex flex-col pt-4 pb-32">
-        {errorMessage && (
-          <div
-            role="alert"
-            className="mb-5 flex items-center gap-2 p-3.5 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-xl animate-in fade-in"
-          >
-            <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
-            <span className="leading-tight">{errorMessage}</span>
-          </div>
-        )}
-
+      <main
+        className="w-full max-w-xl mx-auto px-6 sm:px-8 flex-1 flex flex-col pt-4 overflow-y-auto"
+        style={{ paddingBottom: `${Math.max(168, keyboardOffset + 168)}px` }}
+      >
         {/* ═══════════════════════════════════════════════════════════════ */}
         {/* ETAPA 1: QUAL O SEU E-MAIL?                                     */}
         {/* ═══════════════════════════════════════════════════════════════ */}
@@ -359,7 +574,7 @@ export function AuthContainer({
 
             {/* Input E-mail com Floating Label e botão Limpar */}
             <div
-              className={`relative h-[52px] border rounded-[10px] px-4 flex items-center transition-all ${
+              className={`relative h-[52px] border rounded-[10px] px-4 flex items-center scroll-mb-44 transition-all ${
                 emailFocused
                   ? "border-2 border-[#1F1B16]"
                   : "border-[#ECE7E0]"
@@ -372,16 +587,21 @@ export function AuthContainer({
                 E-mail
               </label>
               <input
+                ref={emailInputRef}
                 id="login-email-input"
                 type="email"
                 autoComplete="email"
-                autoFocus
                 placeholder="E-mail"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 onFocus={() => setEmailFocused(true)}
                 onBlur={() => setEmailFocused(false)}
-                className="w-full text-base text-[#1F1B16] bg-transparent outline-none placeholder:text-[#999]"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && isEmailValid && !loading) {
+                    handleEmailContinue()
+                  }
+                }}
+                className="w-full text-base text-[#1F1B16] bg-transparent outline-none placeholder:text-[#999] scroll-mb-44"
               />
               {email.length > 0 && (
                 <button
@@ -458,20 +678,35 @@ export function AuthContainer({
                   }}
                   type="text"
                   inputMode="numeric"
-                  maxLength={1}
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  autoComplete={index === 0 ? "one-time-code" : "off"}
+                  aria-label={`Dígito ${index + 1} de 6`}
+                  readOnly={loading || isVerifying}
                   value={digit}
                   onChange={(e) => handleDigitChange(e.target.value, index)}
+                  onPaste={handlePaste}
                   onKeyDown={(e) => handleKeyDown(e, index)}
-                  onFocus={() => setFocusedBox(index)}
+                  onFocus={(e) => {
+                    setFocusedBox(index)
+                    e.currentTarget.select()
+                  }}
                   onBlur={() => setFocusedBox(null)}
-                  className={`w-11 h-14 sm:w-12 sm:h-14 border rounded-lg text-center text-[22px] font-bold text-[#1F1B16] bg-white transition-all outline-none ${
+                  className={`w-11 h-14 sm:w-12 sm:h-14 border rounded-lg text-center text-[22px] font-bold text-[#1F1B16] bg-white scroll-mb-44 transition-all outline-none ${
                     focusedBox === index
                       ? "border-2 border-[#1F1B16]"
                       : "border-[#ECE7E0]"
-                  }`}
+                  } ${loading || isVerifying ? "opacity-60 cursor-not-allowed" : ""}`}
                 />
               ))}
             </div>
+
+            {isVerifying && (
+              <div className="flex items-center gap-2 text-xs font-semibold text-[#6B6157] mb-3">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#1F1B16]" />
+                <span>Validando código...</span>
+              </div>
+            )}
 
             {/* Contador ou link "Não recebi meu código" */}
             <div className="mt-2">
@@ -485,7 +720,8 @@ export function AuthContainer({
                 </button>
               ) : (
                 <p className="text-[13px] text-[#9C9188]">
-                  Para reenviar o código, espere {formatTime(secondsLeft)}
+                  Para reenviar o código, espere {formatTime(secondsLeft)} (aguarde{" "}
+                  {secondsLeft}s para reenviar)
                 </p>
               )}
             </div>
@@ -510,27 +746,27 @@ export function AuthContainer({
 
             {/* Input Nome */}
             <div
-              className={`h-[52px] border rounded-[10px] px-4 flex items-center mb-3 transition-all ${
+              className={`h-[52px] border rounded-[10px] px-4 flex items-center mb-3 scroll-mb-44 transition-all ${
                 firstNameFocused
                   ? "border-2 border-[#1F1B16]"
                   : "border-[#ECE7E0]"
               }`}
             >
               <input
+                ref={firstNameInputRef}
                 type="text"
                 placeholder="Nome"
-                autoFocus
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
                 onFocus={() => setFirstNameFocused(true)}
                 onBlur={() => setFirstNameFocused(false)}
-                className="w-full text-base text-[#1F1B16] bg-transparent outline-none placeholder:text-[#999]"
+                className="w-full text-base text-[#1F1B16] bg-transparent outline-none placeholder:text-[#999] scroll-mb-44"
               />
             </div>
 
             {/* Input Sobrenome */}
             <div
-              className={`h-[52px] border rounded-[10px] px-4 flex items-center mb-6 transition-all ${
+              className={`h-[52px] border rounded-[10px] px-4 flex items-center mb-6 scroll-mb-44 transition-all ${
                 lastNameFocused
                   ? "border-2 border-[#1F1B16]"
                   : "border-[#ECE7E0]"
@@ -543,7 +779,7 @@ export function AuthContainer({
                 onChange={(e) => setLastName(e.target.value)}
                 onFocus={() => setLastNameFocused(true)}
                 onBlur={() => setLastNameFocused(false)}
-                className="w-full text-base text-[#1F1B16] bg-transparent outline-none placeholder:text-[#999]"
+                className="w-full text-base text-[#1F1B16] bg-transparent outline-none placeholder:text-[#999] scroll-mb-44"
               />
             </div>
 
@@ -553,8 +789,12 @@ export function AuthContainer({
 
             {/* Input CPF com máscara */}
             <div
-              className={`h-[52px] border rounded-[10px] px-4 flex items-center mb-2 transition-all ${
-                cpfFocused ? "border-2 border-[#1F1B16]" : "border-[#ECE7E0]"
+              className={`h-[52px] border rounded-[10px] px-4 flex items-center mb-2 scroll-mb-44 transition-all ${
+                cpfFocused
+                  ? "border-2 border-[#1F1B16]"
+                  : !isCpfValid
+                  ? "border-red-500"
+                  : "border-[#ECE7E0]"
               }`}
             >
               <input
@@ -565,9 +805,14 @@ export function AuthContainer({
                 onChange={(e) => setCpf(formatCpf(e.target.value))}
                 onFocus={() => setCpfFocused(true)}
                 onBlur={() => setCpfFocused(false)}
-                className="w-full text-base text-[#1F1B16] bg-transparent outline-none placeholder:text-[#999]"
+                className="w-full text-base text-[#1F1B16] bg-transparent outline-none placeholder:text-[#999] scroll-mb-44"
               />
             </div>
+            {!isCpfValid && (
+              <p className="text-xs text-[#EA1D2C] mb-2">
+                CPF inválido — confira os números
+              </p>
+            )}
             <p className="text-xs text-[#9C9188] mb-6">
               Usado para identificação segura na entrega.
             </p>
@@ -575,41 +820,51 @@ export function AuthContainer({
         )}
       </main>
 
-      {/* FOOTER FIXO / FLUTUANTE INFERIOR COM BOTÃO CONTINUAR/CRIAR CONTA */}
-      {(step === "email" || step === "name") && (
-        <footer className="fixed bottom-0 inset-x-0 bg-white border-t border-[#ECE7E0]/60 p-4 sm:py-5 z-20">
-          <div className="w-full max-w-xl mx-auto flex flex-col">
-            {step === "email" ? (
-              <p className="text-xs text-[#9C9188] leading-[17px] mb-3 text-center sm:text-left">
-                Enviaremos comunicações sobre sua conta neste e-mail. Pra cancelar a inscrição acesse &apos;Configurações&apos;.
-              </p>
-            ) : (
-              <p className="text-xs text-[#9C9188] leading-[17px] mb-3 text-center sm:text-left">
-                Ao continuar, você concorda com os{" "}
-                <span className="font-bold text-[#1F1B16]">Termos de Uso</span> e confirma que leu nossa{" "}
-                <span className="font-bold text-[#1F1B16]">Política de Privacidade do Batata Top</span>.
-              </p>
-            )}
+      {/* FOOTER FIXO / FLUTUANTE INFERIOR COM BOTÃO CONTINUAR */}
+      <footer
+        className="fixed bottom-0 inset-x-0 z-20 bg-white border-t border-[#ECE7E0]/60 px-6 pt-3 will-change-transform transition-[padding] duration-150 ease-out"
+        style={{
+          transform: `translate3d(0, -${keyboardOffset}px, 0)`,
+          paddingBottom: isKeyboardOpen
+            ? "16px"
+            : "max(24px, calc(env(safe-area-inset-bottom, 0px) + 16px))",
+        }}
+      >
+        <div className="w-full max-w-xl mx-auto flex flex-col">
+          {step === "email" && (
+            <p className="text-xs text-[#9C9188] leading-[17px] mb-4 text-center sm:text-left">
+              Enviaremos comunicações sobre sua conta neste e-mail. Pra cancelar a inscrição acesse &apos;Configurações&apos;.
+            </p>
+          )}
+          {step === "code" && (
+            <p className="text-xs text-[#9C9188] leading-[17px] mb-4 text-center sm:text-left">
+              Digite os 6 dígitos enviados para o seu e-mail. Não compartilhe este código com ninguém.
+            </p>
+          )}
+          {step === "name" && (
+            <p className="text-xs text-[#9C9188] leading-[17px] mb-4 text-center sm:text-left">
+              Ao continuar, você concorda com os <span className="font-bold text-[#1F1B16]">Termos de Uso</span> e confirma que leu nossa <span className="font-bold text-[#1F1B16]">Política de Privacidade do Batata Top</span>.
+            </p>
+          )}
 
-            <button
-              type="button"
-              disabled={!isFooterValid || footerLoading}
-              onClick={step === "email" ? handleEmailContinue : handleNameContinue}
-              className={`w-full h-[52px] rounded-[10px] font-bold text-base flex items-center justify-center transition-all cursor-pointer ${
-                isFooterValid && !footerLoading
-                  ? "bg-[#E3A008] text-[#1F1B16] hover:bg-[#d09106] active:scale-[0.99]"
-                  : "bg-[#F7F4EF] text-[#9C9188] cursor-not-allowed opacity-80"
-              }`}
-            >
-              {footerLoading
-                ? "Carregando..."
-                : step === "email"
-                ? "Continuar"
-                : "Criar conta"}
-            </button>
-          </div>
-        </footer>
-      )}
+          <button
+            type="button"
+            disabled={!isFooterValid || footerLoading}
+            onClick={handleFooterContinue}
+            className={`w-full h-[52px] rounded-[10px] font-bold text-base flex items-center justify-center transition-all ${
+              isFooterValid
+                ? "bg-[#E3A008] text-[#1F1B16] hover:bg-[#d09106] active:scale-[0.99] cursor-pointer"
+                : "bg-[#F7F4EF] text-[#9C9188] cursor-not-allowed opacity-80"
+            }`}
+          >
+            {footerLoading ? (
+              <ThreeDotsLoader color={isFooterValid ? "#1F1B16" : "#9C9188"} />
+            ) : (
+              "Continuar"
+            )}
+          </button>
+        </div>
+      </footer>
 
       {/* BOTTOM SHEET MODAL: "NÃO RECEBEU O CÓDIGO?" */}
       {helpVisible && (
@@ -647,6 +902,7 @@ export function AuthContainer({
                 onClick={() => {
                   setHelpVisible(false)
                   setStep("email")
+                  appToast.dismiss()
                 }}
                 className="w-full h-[52px] rounded-xl border-[1.5px] border-[#1F1B16] bg-white hover:bg-[#F7F4EF] text-[#1F1B16] font-bold text-sm flex items-center justify-center transition-all cursor-pointer active:scale-[0.99]"
               >

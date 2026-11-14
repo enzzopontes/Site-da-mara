@@ -19,7 +19,6 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import Image from "next/image"
 import { AddressModal } from "@/components/address-modal"
 import { GuestTopbar } from "@/components/guest-topbar"
-import { AuthModal } from "@/components/auth-modal"
 import { addressesManager } from "@/lib/addresses-manager"
 import { storeStatusManager } from "@/lib/store-status-manager"
 import { isAdminUser, isAdmin as checkIsAdmin } from "@/lib/supabase/admin"
@@ -48,7 +47,7 @@ export function Header({ variant = "default" }: HeaderProps) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const { items } = useCart()
-  const { user, loading: authLoading, authModalOpen, openAuthModal, closeAuthModal } = useAuth()
+  const { user, loading: authLoading, openAuthModal } = useAuth()
 
   const [mounted, setMounted] = useState(false)
   const [timeGreeting, setTimeGreeting] = useState("Olá")
@@ -82,22 +81,29 @@ export function Header({ variant = "default" }: HeaderProps) {
       setIsAdmin(true)
       return
     }
-    checkIsAdmin(user.id).then((res) => {
-      if (res) setIsAdmin(true)
-    })
+    let active = true
+    checkIsAdmin(user.id)
+      .then((res) => {
+        if (active) setIsAdmin(Boolean(res))
+      })
+      .catch(() => {
+        if (active) setIsAdmin(false)
+      })
+    return () => {
+      active = false
+    }
   }, [user])
 
-  const loadDefaultAddress = async () => {
-    if (authLoading) return
+  const loadDefaultAddress = async (isActive: () => boolean = () => true) => {
+    if (authLoading || !isActive()) return
     setAddressLoading(true)
     try {
+      let nextAddress = "Iacanga - SP"
       if (user) {
         const addresses = await addressesManager.getUserAddresses(user.id)
         const def = addresses.find((a) => a.is_default) || addresses[0]
         if (def) {
-          setDefaultAddress(`${def.street}, ${def.number}`)
-        } else {
-          setDefaultAddress("Iacanga - SP")
+          nextAddress = `${def.street}, ${def.number}`
         }
       } else {
         const guestAddr = typeof window !== "undefined" ? localStorage.getItem("batata_top_guest_address") : null
@@ -105,45 +111,51 @@ export function Header({ variant = "default" }: HeaderProps) {
           try {
             const parsed = JSON.parse(guestAddr)
             if (parsed?.street && parsed?.number) {
-              setDefaultAddress(`${parsed.street}, ${parsed.number}`)
-            } else {
-              setDefaultAddress("Iacanga - SP")
+              nextAddress = `${parsed.street}, ${parsed.number}`
             }
           } catch {
-            setDefaultAddress("Iacanga - SP")
+            nextAddress = "Iacanga - SP"
           }
-        } else {
-          setDefaultAddress("Iacanga - SP")
         }
       }
+      if (isActive()) setDefaultAddress(nextAddress)
+    } catch {
+      if (isActive()) setDefaultAddress("Iacanga - SP")
     } finally {
-      setAddressLoading(false)
+      if (isActive()) setAddressLoading(false)
     }
   }
 
   useEffect(() => {
     if (authLoading) return
-    loadDefaultAddress()
-    const handleAddressChange = () => loadDefaultAddress()
+    let active = true
+    const isActive = () => active
+    loadDefaultAddress(isActive)
+    const handleAddressChange = () => loadDefaultAddress(isActive)
     window.addEventListener("address-changed", handleAddressChange)
-    return () => window.removeEventListener("address-changed", handleAddressChange)
+    return () => {
+      active = false
+      window.removeEventListener("address-changed", handleAddressChange)
+    }
   }, [user, authLoading])
 
   useEffect(() => {
+    let active = true
     const updateStoreStatus = async () => {
       try {
         const status = await storeStatusManager.getStatus()
-        setIsOpen(status.isOpen)
+        if (active) setIsOpen(status.isOpen)
       } catch (err) {
         console.error("Erro ao carregar status da loja:", err)
       } finally {
-        setStatusLoading(false)
+        if (active) setStatusLoading(false)
       }
     }
     updateStoreStatus()
     window.addEventListener("store-status-changed", updateStoreStatus)
     const interval = setInterval(updateStoreStatus, 10000)
     return () => {
+      active = false
       window.removeEventListener("store-status-changed", updateStoreStatus)
       clearInterval(interval)
     }
@@ -406,11 +418,6 @@ export function Header({ variant = "default" }: HeaderProps) {
       <AddressModal
         isOpen={isAddressModalOpen}
         onClose={() => setIsAddressModalOpen(false)}
-      />
-
-      <AuthModal
-        isOpen={authModalOpen}
-        onClose={closeAuthModal}
       />
     </>
   )

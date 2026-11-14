@@ -1,11 +1,11 @@
 "use client"
 
-import React, { useRef, useEffect } from "react"
+import React, { useRef, useEffect, useState } from "react"
 
 interface OtpInputProps {
   value: string
   onChange: (val: string) => void
-  onComplete?: (code: string) => void
+  onComplete?: (code: string) => void | Promise<void>
   disabled?: boolean
   error?: boolean
   autoFocus?: boolean
@@ -20,9 +20,31 @@ export function OtpInput({
   autoFocus = true,
 }: OtpInputProps) {
   const inputsRef = useRef<(HTMLInputElement | null)[]>([])
+  const isSubmittingRef = useRef(false)
 
   // Divide o valor em 6 caracteres
-  const digits = Array.from({ length: 6 }, (_, index) => value[index] || "")
+  const toSlots = (raw: string) =>
+    Array.from({ length: 6 }, (_, index) => (raw[index] && /\d/.test(raw[index]) ? raw[index] : ""))
+
+  const [digits, setDigits] = useState<string[]>(() => toSlots(value))
+
+  useEffect(() => {
+    if (value !== digits.join("")) {
+      setDigits(toSlots(value))
+    }
+  }, [value])
+
+  useEffect(() => {
+    if (value.length < 6) {
+      isSubmittingRef.current = false
+    }
+  }, [value])
+
+  useEffect(() => {
+    if (!disabled) {
+      isSubmittingRef.current = false
+    }
+  }, [disabled])
 
   useEffect(() => {
     if (autoFocus && inputsRef.current[0] && !disabled) {
@@ -30,23 +52,43 @@ export function OtpInput({
     }
   }, [autoFocus, disabled])
 
+  const triggerComplete = (code: string) => {
+    if (!/^\d{6}$/.test(code) || !onComplete || isSubmittingRef.current || disabled) return
+    isSubmittingRef.current = true
+    try {
+      Promise.resolve(onComplete(code))
+        .catch(() => {})
+        .finally(() => {
+          isSubmittingRef.current = false
+        })
+    } catch (error) {
+      isSubmittingRef.current = false
+      throw error
+    }
+  }
+
+  const updateSlots = (nextSlots: string[]) => {
+    setDigits(nextSlots)
+    const joined = nextSlots.join("")
+    onChange(joined)
+    if (nextSlots.every((d) => /^\d$/.test(d))) {
+      triggerComplete(joined)
+    }
+  }
+
   const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (disabled) return
+    if (disabled || isSubmittingRef.current) return
 
     if (e.key === "Backspace") {
       e.preventDefault()
       if (digits[index]) {
-        // Se já tem valor na posição atual, limpa ela
         const newDigits = [...digits]
         newDigits[index] = ""
-        const newVal = newDigits.join("")
-        onChange(newVal)
+        updateSlots(newDigits)
       } else if (index > 0) {
-        // Se está vazia, limpa a anterior e move o foco
         const newDigits = [...digits]
         newDigits[index - 1] = ""
-        const newVal = newDigits.join("")
-        onChange(newVal)
+        updateSlots(newDigits)
         inputsRef.current[index - 1]?.focus()
       }
     } else if (e.key === "ArrowLeft" && index > 0) {
@@ -59,49 +101,52 @@ export function OtpInput({
   }
 
   const handleChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
-    if (disabled) return
+    if (disabled || isSubmittingRef.current) return
     const rawVal = e.target.value.replace(/\D/g, "")
 
     if (!rawVal) {
       const newDigits = [...digits]
       newDigits[index] = ""
-      onChange(newDigits.join(""))
+      updateSlots(newDigits)
       return
     }
 
-    // Se o usuário digitou ou colou um caractere no campo
-    const char = rawVal[rawVal.length - 1]
-    const newDigits = [...digits]
-    newDigits[index] = char
-    const nextVal = newDigits.join("")
-    onChange(nextVal)
+    if (rawVal.length > 1) {
+      if (digits[index] && rawVal.length === 2) {
+        const typedChar = rawVal[0] === digits[index] ? rawVal[1] : rawVal[0]
+        const newDigits = [...digits]
+        newDigits[index] = typedChar
+        updateSlots(newDigits)
 
-    // Move o foco para o próximo campo
-    if (index < 5) {
-      inputsRef.current[index + 1]?.focus()
+        if (index < 5) {
+          inputsRef.current[index + 1]?.focus()
+        }
+        return
+      }
+
+      const clipped = rawVal.slice(0, 6)
+      updateSlots(toSlots(clipped))
+      const nextIndex = Math.min(clipped.length, 6) - 1
+      inputsRef.current[nextIndex]?.focus()
+      return
     }
 
-    // Se completou 6 dígitos, dispara onComplete
-    if (nextVal.length === 6 && onComplete) {
-      onComplete(nextVal)
+    const newDigits = [...digits]
+    newDigits[index] = rawVal
+    updateSlots(newDigits)
+
+    if (index < 5) {
+      inputsRef.current[index + 1]?.focus()
     }
   }
 
   const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
-    if (disabled) return
+    if (disabled || isSubmittingRef.current) return
     e.preventDefault()
-    const pastedData = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6)
-    if (!pastedData) return
-
-    onChange(pastedData)
-
-    // Foca no próximo índice vazio ou no último
-    const nextIndex = Math.min(pastedData.length, 5)
-    inputsRef.current[nextIndex]?.focus()
-
-    if (pastedData.length === 6 && onComplete) {
-      onComplete(pastedData)
-    }
+    const pastedData = e.clipboardData.getData("text").trim()
+    if (!/^\d{6}$/.test(pastedData)) return
+    updateSlots(pastedData.split(""))
+    inputsRef.current[5]?.focus()
   }
 
   return (
@@ -112,7 +157,10 @@ export function OtpInput({
     >
       {Array.from({ length: 6 }).map((_, idx) => {
         const isCurrentActive =
-          !disabled && (digits[idx] !== "" || (idx === 0 && !value) || value.length === idx)
+          !disabled &&
+          (digits[idx] !== "" ||
+            (idx === 0 && digits.every((d) => d === "")) ||
+            digits.findIndex((d) => d === "") === idx)
 
         return (
           <input
@@ -123,7 +171,7 @@ export function OtpInput({
             type="text"
             inputMode="numeric"
             pattern="[0-9]*"
-            maxLength={1}
+            maxLength={6}
             autoComplete={idx === 0 ? "one-time-code" : "off"}
             value={digits[idx] || ""}
             disabled={disabled}
@@ -137,7 +185,7 @@ export function OtpInput({
               error
                 ? "border-red-400 bg-red-50/50 text-red-600 focus:border-red-500 focus:ring-2 focus:ring-red-100"
                 : isCurrentActive
-                  ? "border-[#E3A008] bg-white text-[#1F1B16] shadow-xs ring-2 ring-[#E3A008]/20"
+                  ? "border-2 border-[#1F1B16] bg-white text-[#1F1B16]"
                   : "border-[#ECE7E0] bg-[#F7F4EF] text-[#1F1B16] hover:border-[#D6CEC4]"
             } ${disabled ? "opacity-50 cursor-not-allowed bg-gray-100" : ""}`}
           />

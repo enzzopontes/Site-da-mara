@@ -25,9 +25,10 @@ export function validateEmail(email: string): { isValid: boolean; error?: string
   return { isValid: true, cleanEmail: result.data.toLowerCase() }
 }
 
+export const OTP_CODE_REGEX = /^\d{6}$/
+
 export function validateOtpToken(token: string): { isValid: boolean; error?: string } {
-  const cleaned = token.replace(/\D/g, "")
-  if (cleaned.length !== 6) {
+  if (typeof token !== "string" || !OTP_CODE_REGEX.test(token.trim())) {
     return { isValid: false, error: "O código deve conter exatamente 6 dígitos numéricos" }
   }
   return { isValid: true }
@@ -109,13 +110,28 @@ function getSecurityState(): OtpAttemptState {
   try {
     const raw = sessionStorage.getItem(attemptStorageKey)
     if (!raw) return { attempts: 0, lockoutUntil: null }
-    const parsed = JSON.parse(raw) as OtpAttemptState
-    if (parsed.lockoutUntil && Date.now() > parsed.lockoutUntil) {
-      sessionStorage.removeItem(attemptStorageKey)
-      return { attempts: 0, lockoutUntil: null }
+    const parsed = JSON.parse(raw) as Partial<OtpAttemptState> | null
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      typeof parsed.attempts === "number" &&
+      Number.isFinite(parsed.attempts) &&
+      parsed.attempts >= 0 &&
+      (parsed.lockoutUntil === null ||
+        (typeof parsed.lockoutUntil === "number" && Number.isFinite(parsed.lockoutUntil)))
+    ) {
+      if (parsed.lockoutUntil && Date.now() > parsed.lockoutUntil) {
+        sessionStorage.removeItem(attemptStorageKey)
+        return { attempts: 0, lockoutUntil: null }
+      }
+      return { attempts: parsed.attempts, lockoutUntil: parsed.lockoutUntil }
     }
-    return parsed
+    sessionStorage.removeItem(attemptStorageKey)
+    return { attempts: 0, lockoutUntil: null }
   } catch {
+    try {
+      sessionStorage.removeItem(attemptStorageKey)
+    } catch {}
     return { attempts: 0, lockoutUntil: null }
   }
 }
@@ -159,6 +175,237 @@ export function resetOtpAttempts() {
   } catch {}
 }
 
+// ─── Cooldown Persistente de Envio de OTP (60s por e-mail) ────────────────
+export const OTP_SEND_COOLDOWN_SECONDS = 60
+export const OTP_SEND_COOLDOWN_MS = OTP_SEND_COOLDOWN_SECONDS * 1000
+const OTP_SEND_COOLDOWN_STORAGE_KEY = "bt_otp_send_cooldowns"
+
+const memoryOtpCooldowns = new Map<string, number>()
+const inFlightOtpRequests = new Set<string>()
+
+function normalizeCooldownEmail(rawEmail: string): string {
+  return String(rawEmail || "").trim().toLowerCase()
+}
+
+function readCooldownState(): { map: Record<string, number>; hadExpired: boolean } {
+  const merged: Record<string, number> = {}
+  const now = Date.now()
+  let hadExpired = false
+
+  memoryOtpCooldowns.forEach((expiresAt, key) => {
+    if (typeof expiresAt === "number" && Number.isFinite(expiresAt) && expiresAt > now) {
+      merged[key] = expiresAt
+    } else {
+      memoryOtpCooldowns.delete(key)
+      hadExpired = true
+    }
+  })
+
+  if (typeof window === "undefined") return { map: merged, hadExpired }
+
+  for (const storage of [window.sessionStorage, window.localStorage]) {
+    try {
+      const raw = storage.getItem(OTP_SEND_COOLDOWN_STORAGE_KEY)
+      if (!raw) continue
+      const parsed = JSON.parse(raw) as Record<string, unknown>
+      if (!parsed || typeof parsed !== "object") continue
+      for (const [key, val] of Object.entries(parsed)) {
+        if (typeof val === "number" && Number.isFinite(val) && val > now) {
+          merged[key] = Math.max(merged[key] || 0, val)
+        } else {
+          hadExpired = true
+        }
+      }
+    } catch {}
+  }
+
+  return { map: merged, hadExpired }
+}
+
+function writeCooldownMapToStorage(map: Record<string, number>) {
+  const now = Date.now()
+  const cleaned: Record<string, number> = {}
+
+  for (const [key, val] of Object.entries(map)) {
+    if (typeof val === "number" && Number.isFinite(val) && val > now) {
+      cleaned[key] = val
+      memoryOtpCooldowns.set(key, val)
+    }
+  }
+
+  if (typeof window === "undefined") return
+
+  const serialized = JSON.stringify(cleaned)
+  for (const storage of [window.sessionStorage, window.localStorage]) {
+    try {
+      if (Object.keys(cleaned).length === 0) {
+        storage.removeItem(OTP_SEND_COOLDOWN_STORAGE_KEY)
+      } else {
+        storage.setItem(OTP_SEND_COOLDOWN_STORAGE_KEY, serialized)
+      }
+    } catch {}
+  }
+}
+
+/** Retorna quantos segundos restam na janela de cooldown de 60s para o e-mail. */
+export function getOtpCooldownRemaining(rawEmail: string): number {
+  const email = normalizeCooldownEmail(rawEmail)
+  if (!email) return 0
+
+  const { map, hadExpired } = readCooldownState()
+  if (hadExpired) {
+    writeCooldownMapToStorage(map)
+  }
+
+  const expiresAt = map[email]
+  if (!expiresAt) return 0
+
+  const diffMs = expiresAt - Date.now()
+  if (diffMs <= 0) return 0
+  return Math.ceil(diffMs / 1000)
+}
+
+/** Registra o timestamp de envio do OTP para travar reenvios durante 60s. */
+export function recordOtpSentCooldown(
+  rawEmail: string,
+  durationSeconds = OTP_SEND_COOLDOWN_SECONDS
+): number {
+  const email = normalizeCooldownEmail(rawEmail)
+  if (!email) return 0
+
+  const safeSeconds = Math.max(1, Math.floor(durationSeconds))
+  const expiresAt = Date.now() + safeSeconds * 1000
+  const { map } = readCooldownState()
+  map[email] = expiresAt
+  writeCooldownMapToStorage(map)
+
+  return safeSeconds
+}
+
+/** Adquire trava síncrona em memória para evitar chamadas concorrentes por e-mail. */
+export function acquireOtpSendLock(rawEmail: string): boolean {
+  const email = normalizeCooldownEmail(rawEmail)
+  if (!email || inFlightOtpRequests.has(email)) {
+    return false
+  }
+  inFlightOtpRequests.add(email)
+  return true
+}
+
+/** Libera a trava síncrona em memória para o e-mail após o envio. */
+export function releaseOtpSendLock(rawEmail: string): void {
+  const email = normalizeCooldownEmail(rawEmail)
+  if (email) {
+    inFlightOtpRequests.delete(email)
+  }
+}
+
+// ─── Sanitização de Conta Salva (Paridade LGPD com App Mobile) ─────────────
+export const SAVED_USER_STORAGE_KEY = "@batatatop:savedUser"
+export const LAST_LOGIN_EMAIL_STORAGE_KEY = "batata_last_login_email"
+
+export interface SavedUserProfile {
+  name: string
+  email: string
+  provider: string
+}
+
+/** Lê e sanitiza o perfil salvo localmente, removendo qualquer campo de telefone legado. */
+export function readSavedUserProfile(): SavedUserProfile | null {
+  if (typeof window === "undefined") return null
+
+  try {
+    const rawSaved = localStorage.getItem(SAVED_USER_STORAGE_KEY)
+    if (rawSaved) {
+      const parsed = JSON.parse(rawSaved) as Record<string, unknown>
+      if (parsed && typeof parsed === "object") {
+        const hadPhone = "phone" in parsed
+        const rawEmail = typeof parsed.email === "string" ? parsed.email.trim() : ""
+        if (rawEmail && rawEmail.includes("@")) {
+          const sanitized: SavedUserProfile = {
+            name:
+              typeof parsed.name === "string" && parsed.name.trim()
+                ? parsed.name.trim()
+                : rawEmail.split("@")[0],
+            email: rawEmail,
+            provider:
+              typeof parsed.provider === "string" && parsed.provider.trim() && parsed.provider !== "phone"
+                ? parsed.provider
+                : "email",
+          }
+          if (hadPhone || parsed.provider === "phone") {
+            localStorage.setItem(SAVED_USER_STORAGE_KEY, JSON.stringify(sanitized))
+          }
+          return sanitized
+        }
+      }
+    }
+
+    const legacyEmail = localStorage.getItem(LAST_LOGIN_EMAIL_STORAGE_KEY)
+    if (legacyEmail && legacyEmail.includes("@")) {
+      const cleanEmail = legacyEmail.trim()
+      return {
+        name: cleanEmail.split("@")[0],
+        email: cleanEmail,
+        provider: "email",
+      }
+    }
+  } catch {}
+
+  return null
+}
+
+/** Persiste a conta reconhecida localmente sem dados de telefone. */
+export function writeSavedUserProfile(profile: SavedUserProfile): void {
+  if (typeof window === "undefined") return
+  const cleanEmail = profile.email.trim()
+  if (!cleanEmail || !cleanEmail.includes("@")) return
+
+  try {
+    const sanitized: SavedUserProfile = {
+      name: profile.name?.trim() || cleanEmail.split("@")[0],
+      email: cleanEmail,
+      provider: profile.provider && profile.provider !== "phone" ? profile.provider : "email",
+    }
+    localStorage.setItem(SAVED_USER_STORAGE_KEY, JSON.stringify(sanitized))
+    localStorage.setItem(LAST_LOGIN_EMAIL_STORAGE_KEY, cleanEmail)
+  } catch {}
+}
+
+/** Remove todos os rastros da conta salva localmente. */
+export function clearSavedUserProfile(): void {
+  if (typeof window === "undefined") return
+  try {
+    localStorage.removeItem(SAVED_USER_STORAGE_KEY)
+    localStorage.removeItem(LAST_LOGIN_EMAIL_STORAGE_KEY)
+  } catch {}
+}
+
+/** Consome eventual item pendente salvo antes do login e adiciona na sacola. */
+export function consumePendingCartItem(addItem: (item: any) => void): boolean {
+  if (typeof window === "undefined") return false
+  try {
+    const stored = sessionStorage.getItem("batata_pending_cart_item")
+    if (!stored) return false
+    sessionStorage.removeItem("batata_pending_cart_item")
+    const parsed = JSON.parse(stored)
+    let added = false
+    if (parsed?.product) {
+      addItem(parsed.product)
+      added = true
+    }
+    if (Array.isArray(parsed?.bebidas)) {
+      parsed.bebidas.forEach((b: any) => {
+        addItem(b)
+        added = true
+      })
+    }
+    return added
+  } catch {
+    return false
+  }
+}
+
 // ─── Verificação de Admin Seguro ───────────────────────────────────────────
 export function isSecureAdminCheck(user: any, allowedEmailsCsv?: string): boolean {
   if (!user || typeof user !== "object") return false
@@ -185,6 +432,16 @@ export function isSecureAdminCheck(user: any, allowedEmailsCsv?: string): boolea
   }
 
   return false
+}
+
+// ─── Sanitização de URL de Retorno ─────────────────────────────────────────
+export function sanitizeReturnUrl(rawUrl: string | null | undefined, fallback = "/cardapio"): string {
+  if (!rawUrl || typeof rawUrl !== "string") return fallback
+  const trimmed = rawUrl.trim()
+  if (trimmed.startsWith("/") && !trimmed.startsWith("//") && !trimmed.includes("\\") && !trimmed.includes(":")) {
+    return trimmed
+  }
+  return fallback
 }
 
 // Validação de senha legada mantida para retrocompatibilidade sem breaking change

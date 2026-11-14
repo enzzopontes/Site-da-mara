@@ -6,6 +6,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react"
 import { getSupabaseBrowserClient } from "./supabase/client"
@@ -17,7 +18,81 @@ import {
   checkOtpRateLimit,
   recordFailedOtpAttempt,
   resetOtpAttempts,
+  getOtpCooldownRemaining,
+  recordOtpSentCooldown,
+  acquireOtpSendLock,
+  releaseOtpSendLock,
+  OTP_SEND_COOLDOWN_SECONDS,
+  writeSavedUserProfile,
+  clearSavedUserProfile,
 } from "./security-auth"
+
+export interface ContinueSavedAccountResult {
+  status: "authenticated" | "otp_sent" | "otp_cooldown"
+  remainingSeconds?: number
+  error?: string
+}
+
+export interface OtpSendResult {
+  success: boolean
+  message?: string
+  cooldownRemaining?: number
+  skipped?: boolean
+}
+
+function clearSupabaseBrowserCookiesAndStorage() {
+  if (typeof window === "undefined") return
+
+  try {
+    Object.keys(localStorage).forEach((key) => {
+      if (key.startsWith("sb-") || key.includes("supabase.auth.token")) {
+        localStorage.removeItem(key)
+      }
+    })
+    localStorage.removeItem("batata_saved_session")
+    localStorage.removeItem("batata_soft_logged_out")
+  } catch {}
+
+  try {
+    Object.keys(sessionStorage).forEach((key) => {
+      if (key.startsWith("sb-") || key.includes("supabase.auth.token")) {
+        sessionStorage.removeItem(key)
+      }
+    })
+    sessionStorage.removeItem("batata_saved_session")
+    sessionStorage.removeItem("batata_soft_logged_out")
+  } catch {}
+
+  try {
+    if (typeof document !== "undefined" && document.cookie) {
+      document.cookie.split(";").forEach((cookieStr) => {
+        const eqPos = cookieStr.indexOf("=")
+        const cookieName = (eqPos > -1 ? cookieStr.slice(0, eqPos) : cookieStr).trim()
+        if (cookieName.startsWith("sb-") || cookieName.includes("supabase.auth.token")) {
+          document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`
+          document.cookie = `${cookieName}=; max-age=0; path=/`
+        }
+      })
+    }
+  } catch {}
+}
+
+function persistSavedAccountSession(session: Session | null) {
+  if (typeof window === "undefined" || !session?.user?.email) return
+
+  const cleanEmail = session.user.email.trim().toLowerCase()
+  const rawName =
+    session.user.user_metadata?.full_name ||
+    session.user.user_metadata?.name ||
+    cleanEmail.split("@")[0]
+  const rawProvider = session.user.app_metadata?.provider || "email"
+
+  writeSavedUserProfile({
+    name: String(rawName),
+    email: cleanEmail,
+    provider: String(rawProvider),
+  })
+}
 
 interface AuthContextType {
   user: User | null
@@ -25,16 +100,17 @@ interface AuthContextType {
   authModalOpen: boolean
   openAuthModal: () => void
   closeAuthModal: () => void
-  signInWithOtp: (email: string) => Promise<{ success: boolean; message?: string }>
+  signInWithOtp: (email: string) => Promise<OtpSendResult>
   verifyOtp: (email: string, token: string) => Promise<{ success: boolean; error?: string }>
-  resendOtp: (email: string) => Promise<{ success: boolean; message?: string }>
+  resendOtp: (email: string) => Promise<OtpSendResult>
+  continueWithSavedAccount: (email: string) => Promise<ContinueSavedAccountResult>
   signInWithGoogle: () => Promise<void>
   signIn: () => Promise<void>
   // Métodos legados mantidos com fallback seguro
   signInWithEmail: (email: string, password: string) => Promise<void>
   signUpWithEmail: (email: string, password: string) => Promise<void>
   resetPassword: (email: string) => Promise<void>
-  signOut: () => Promise<void>
+  signOut: (options?: { forgetAccount?: boolean }) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -43,6 +119,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [authModalOpen, setAuthModalOpen] = useState(false)
+  const authEpochRef = useRef(0)
+  const signOutPromiseRef = useRef<Promise<void> | null>(null)
   const supabase = getSupabaseBrowserClient()
 
   const openAuthModal = useCallback(() => setAuthModalOpen(true), [])
@@ -51,17 +129,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let isMounted = true
 
+    if (typeof window !== "undefined") {
+      try {
+        const hadLegacySoftLogout = localStorage.getItem("batata_soft_logged_out") === "true"
+        localStorage.removeItem("batata_saved_session")
+        localStorage.removeItem("batata_soft_logged_out")
+        if (hadLegacySoftLogout) {
+          clearSupabaseBrowserCookiesAndStorage()
+        }
+      } catch {}
+    }
+
+    const epochAtStart = authEpochRef.current
+
     // 1. Carrega sessão inicial de forma assíncrona segura
     supabase.auth
       .getSession()
       .then(({ data: { session } }: { data: { session: Session | null } }) => {
-        if (!isMounted) return
+        if (!isMounted || authEpochRef.current !== epochAtStart) return
+        if (session) {
+          persistSavedAccountSession(session)
+        }
         setUser(session?.user ?? null)
         setLoading(false)
       })
       .catch((err: any) => {
         console.error("[Auth] Erro ao recuperar sessão inicial:", err)
-        if (isMounted) setLoading(false)
+        if (isMounted && authEpochRef.current === epochAtStart) setLoading(false)
       })
 
     // 2. Listener ativo para mudanças de estado de autenticação em tempo real
@@ -69,13 +163,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event: any, session: any) => {
       if (!isMounted) return
+      authEpochRef.current += 1
+
       const currentUser = session?.user ?? null
       setUser(currentUser)
       setLoading(false)
 
-      if (event === "SIGNED_IN") {
-        resetOtpAttempts()
-        setAuthModalOpen(false)
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+        if (session) {
+          persistSavedAccountSession(session)
+        }
+        if (event === "SIGNED_IN") {
+          resetOtpAttempts()
+          setAuthModalOpen(false)
+        }
       } else if (event === "SIGNED_OUT") {
         setUser(null)
       }
@@ -87,8 +188,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [supabase])
 
-  // ─── Envio do Código de 6 Dígitos (signInWithOtp) ─────────────────────────
-  const signInWithOtp = async (rawEmail: string): Promise<{ success: boolean; message?: string }> => {
+  // ─── Envio do Código de 6 Dígitos (signInWithOtp) com Cooldown de 60s ─────
+  const signInWithOtp = async (rawEmail: string): Promise<OtpSendResult> => {
     const validation = validateEmail(rawEmail)
     if (!validation.isValid || !validation.cleanEmail) {
       throw new Error(validation.error || "E-mail inválido")
@@ -96,22 +197,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const email = validation.cleanEmail
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        shouldCreateUser: true, // Cria automaticamente se for novo usuário (Passwordless sem dupla senha)
-      },
-    })
-
-    if (error) {
-      console.error("[Auth] Erro ao enviar OTP:", error)
-      const sanitized = sanitizeAuthErrorMessage(error.message)
-      throw new Error(sanitized)
+    const cooldownRemaining = getOtpCooldownRemaining(email)
+    if (cooldownRemaining > 0) {
+      return {
+        success: true,
+        skipped: true,
+        cooldownRemaining,
+        message: `Aguarde ${cooldownRemaining}s para reenviar`,
+      }
     }
 
-    return {
-      success: true,
-      message: "Se o e-mail informado for válido, você receberá um código de acesso de 6 dígitos.",
+    if (!acquireOtpSendLock(email)) {
+      const lockRemaining = getOtpCooldownRemaining(email) || OTP_SEND_COOLDOWN_SECONDS - 1
+      return {
+        success: true,
+        skipped: true,
+        cooldownRemaining: lockRemaining,
+        message: "Envio já em andamento.",
+      }
+    }
+
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: true, // Cria automaticamente se for novo usuário (Passwordless sem dupla senha)
+        },
+      })
+
+      if (error) {
+        console.error("[Auth] Erro ao enviar OTP:", error)
+        const errorMsg = error.message?.toLowerCase() || ""
+        if (
+          errorMsg.includes("429") ||
+          errorMsg.includes("too many requests") ||
+          errorMsg.includes("rate limit") ||
+          errorMsg.includes("over_email_send_rate_limit") ||
+          errorMsg.includes("over_request_rate_limit")
+        ) {
+          recordOtpSentCooldown(email, OTP_SEND_COOLDOWN_SECONDS)
+        }
+        const sanitized = sanitizeAuthErrorMessage(error.message)
+        throw new Error(sanitized)
+      }
+
+      recordOtpSentCooldown(email, OTP_SEND_COOLDOWN_SECONDS)
+
+      return {
+        success: true,
+        skipped: false,
+        cooldownRemaining: OTP_SEND_COOLDOWN_SECONDS - 1,
+        message: "Se o e-mail informado for válido, você receberá um código de acesso de 6 dígitos.",
+      }
+    } finally {
+      releaseOtpSendLock(email)
     }
   }
 
@@ -138,7 +277,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const email = emailValidation.cleanEmail
-    const token = rawToken.trim().replace(/\D/g, "")
+    const token = rawToken.trim()
 
     const { data, error } = await supabase.auth.verifyOtp({
       email,
@@ -167,6 +306,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Sucesso: reseta histórico de erros e atualiza usuário instantaneamente
     resetOtpAttempts()
+    authEpochRef.current += 1
+    if (data?.session) {
+      persistSavedAccountSession(data.session)
+    }
     if (data?.user) {
       setUser(data.user)
       setAuthModalOpen(false)
@@ -178,6 +321,92 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Reenvio seguro de código
   const resendOtp = async (rawEmail: string) => {
     return signInWithOtp(rawEmail)
+  }
+
+  /** Valida sessão salva no banco (Cenário A: autentica direto; Cenário B: encaminha OTP com trava de 60s). */
+  const continueWithSavedAccount = async (rawEmail: string): Promise<ContinueSavedAccountResult> => {
+    if (signOutPromiseRef.current) {
+      await signOutPromiseRef.current.catch(() => {})
+    }
+
+    const validation = validateEmail(rawEmail)
+    if (!validation.isValid || !validation.cleanEmail) {
+      throw new Error(validation.error || "E-mail inválido")
+    }
+
+    const cleanEmail = validation.cleanEmail
+
+    try {
+      let {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (session?.expires_at && session.expires_at * 1000 <= Date.now() + 60000) {
+        try {
+          const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession()
+          if (!refreshError && refreshed?.session) {
+            session = refreshed.session
+          }
+        } catch (refreshErr) {
+          console.warn("[Auth] Falha ao renovar sessão da conta salva:", refreshErr)
+        }
+      }
+
+      if (session) {
+        const {
+          data: { user: verifiedUser },
+          error: userError,
+        } = await supabase.auth.getUser()
+
+        if (!userError && verifiedUser && verifiedUser.email?.toLowerCase() === cleanEmail) {
+          const {
+            data: { session: latestSession },
+          } = await supabase.auth.getSession()
+
+          const profileUser = latestSession?.user ?? verifiedUser
+          const profileEmail = profileUser.email?.trim().toLowerCase() || cleanEmail
+          writeSavedUserProfile({
+            name: String(
+              profileUser.user_metadata?.full_name ||
+                profileUser.user_metadata?.name ||
+                profileEmail.split("@")[0]
+            ),
+            email: profileEmail,
+            provider: String(profileUser.app_metadata?.provider || "email"),
+          })
+          setUser(verifiedUser)
+          setAuthModalOpen(false)
+          return { status: "authenticated" }
+        }
+      }
+    } catch (err) {
+      console.warn("[Auth] Sessão salva inválida ou expirada no banco:", err)
+    }
+
+    // Cenário B: Token expirado/inválido ou ausente -> limpa tokens inválidos e checa cooldown de 60s
+    clearSupabaseBrowserCookiesAndStorage()
+    setUser(null)
+
+    const cooldownRemaining = getOtpCooldownRemaining(cleanEmail)
+    if (cooldownRemaining > 0) {
+      return {
+        status: "otp_cooldown",
+        remainingSeconds: cooldownRemaining,
+      }
+    }
+
+    const sendRes = await signInWithOtp(cleanEmail)
+    if (sendRes.skipped) {
+      return {
+        status: "otp_cooldown",
+        remainingSeconds: sendRes.cooldownRemaining || getOtpCooldownRemaining(cleanEmail) || 59,
+      }
+    }
+
+    return {
+      status: "otp_sent",
+      remainingSeconds: OTP_SEND_COOLDOWN_SECONDS - 1,
+    }
   }
 
   // ─── Login com Google ─────────────────────────────────────────────────────
@@ -228,31 +457,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw new Error(sanitizeAuthErrorMessage(error.message))
   }
 
-  // ─── Limpeza Atômica de Logout ────────────────────────────────────────────
-  const signOut = async () => {
+  // ─── Limpeza Atômica de Logout (Preserva ou Esquece Sessão como no App) ──
+  const signOut = async (options?: { forgetAccount?: boolean }) => {
+    authEpochRef.current += 1
+    const forgetAccount = Boolean(options?.forgetAccount)
+
+    if (!forgetAccount) {
+      try {
+        const {
+          data: { session: activeSession },
+        } = await supabase.auth.getSession()
+        if (activeSession) {
+          persistSavedAccountSession(activeSession)
+        } else if (user?.email) {
+          writeSavedUserProfile({
+            name:
+              user.user_metadata?.full_name ||
+              user.user_metadata?.name ||
+              user.email.split("@")[0],
+            email: user.email,
+            provider: String(user.app_metadata?.provider || "email"),
+          })
+        }
+      } catch {}
+
+      try {
+        if (typeof window !== "undefined") {
+          clearSupabaseBrowserCookiesAndStorage()
+          sessionStorage.removeItem("bt_otp_security_state")
+        }
+      } catch {}
+    } else {
+      clearSavedUserProfile()
+    }
+
     // 1. Zera imediatamente o estado na memória do React para a UI alternar instantaneamente
     setUser(null)
 
-    // 2. Limpa dados de sessão e rascunhos de carrinho/autenticação no storage local
-    try {
-      if (typeof window !== "undefined") {
-        sessionStorage.removeItem("bt_otp_security_state")
-        // Remove qualquer chave supabase armazenada localmente se houver
-        Object.keys(localStorage).forEach((key) => {
-          if (key.startsWith("sb-") || key.includes("supabase.auth.token")) {
-            localStorage.removeItem(key)
+    // 2. Encerra sessão no Supabase antes de limpar cookies/storage para preservar o token em logout global
+    const pendingPromise = (async () => {
+      try {
+        await supabase.auth.signOut({ scope: forgetAccount ? "global" : "local" })
+      } catch (error) {
+        console.error("[Auth] Erro ao encerrar sessão no servidor:", error)
+      } finally {
+        // 3. Limpa dados ativos da sessão do navegador
+        try {
+          if (typeof window !== "undefined") {
+            clearSupabaseBrowserCookiesAndStorage()
+            sessionStorage.removeItem("bt_otp_security_state")
           }
-        })
+        } catch (e) {
+          console.warn("[Auth] Aviso ao limpar local storage:", e)
+        }
       }
-    } catch (e) {
-      console.warn("[Auth] Aviso ao limpar local storage:", e)
-    }
+    })()
 
-    // 3. Notifica o backend do Supabase para invalidar o refresh token
+    signOutPromiseRef.current = pendingPromise
     try {
-      await supabase.auth.signOut()
-    } catch (error) {
-      console.error("[Auth] Erro ao encerrar sessão no servidor:", error)
+      await pendingPromise
+    } finally {
+      if (signOutPromiseRef.current === pendingPromise) {
+        signOutPromiseRef.current = null
+      }
     }
   }
 
@@ -267,6 +534,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signInWithOtp,
         verifyOtp,
         resendOtp,
+        continueWithSavedAccount,
         signInWithGoogle,
         signIn,
         signInWithEmail,

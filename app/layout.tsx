@@ -8,6 +8,7 @@ import { OfflineDetector } from "@/components/offline-detector"
 import { MobileNavbar } from "@/components/mobile-navbar"
 import { CartBar } from "@/components/cart-bar"
 import { GuestTopbar } from "@/components/guest-topbar"
+import { AuthModal } from "@/components/auth-modal"
 import { CookieConsent } from "@/components/cookie-consent"
 import "./globals.css"
 
@@ -51,6 +52,7 @@ export default function RootLayout({
               <CartBar />
               <GuestTopbar />
               <MobileNavbar />
+              <AuthModal />
               <Toaster position="top-center" />
               <CookieConsent />
             </OfflineDetector>

@@ -1,19 +1,23 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import React, { useState, useEffect, useCallback, useRef } from "react"
+import { useRouter, usePathname } from "next/navigation"
 import Image from "next/image"
 import {
   ChevronLeft,
   ChevronDown,
   HelpCircle,
   MessageCircle,
+  Loader2,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
+import { useCart } from "@/lib/cart-context"
+import { appToast } from "@/lib/app-toast"
+import { readSavedUserProfile, consumePendingCartItem } from "@/lib/security-auth"
 
 interface AuthModalProps {
-  isOpen: boolean
-  onClose: () => void
+  isOpen?: boolean
+  onClose?: () => void
   initialEmail?: string
 }
 
@@ -53,9 +57,26 @@ const FAQ_ITEMS = [
   },
 ]
 
-export function AuthModal({ isOpen, onClose }: AuthModalProps) {
+export function AuthModal({ isOpen, onClose, initialEmail }: AuthModalProps) {
   const router = useRouter()
-  const { signInWithGoogle, user } = useAuth()
+  const pathname = usePathname()
+  const {
+    signInWithGoogle,
+    continueWithSavedAccount,
+    user,
+    authModalOpen,
+    closeAuthModal,
+  } = useAuth()
+  const { addItem } = useCart()
+
+  const effectiveOpen = isOpen ?? authModalOpen
+  const effectiveOnClose = useCallback(() => {
+    if (onClose) {
+      onClose()
+    } else {
+      closeAuthModal()
+    }
+  }, [onClose, closeAuthModal])
 
   const [mounted, setMounted] = useState(false)
   const [view, setView] = useState<AuthView>("welcome")
@@ -63,14 +84,46 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [expandedFaq, setExpandedFaq] = useState<string | null>(null)
   const [savedEmail, setSavedEmail] = useState<string | null>(null)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [continueLoading, setContinueLoading] = useState(false)
+  const isContinuingRef = useRef(false)
+  const isMountedRef = useRef(true)
+  const effectiveOpenRef = useRef(effectiveOpen)
+  const [isNavigatingToAuth, setIsNavigatingToAuth] = useState(false)
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
+
+  useEffect(() => {
+    effectiveOpenRef.current = effectiveOpen
+  }, [effectiveOpen])
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
+  // Prefetch imediato de /login ao abrir para eliminar latência da ponte direta
+  useEffect(() => {
+    if (effectiveOpen) {
+      router.prefetch("/login")
+    }
+  }, [effectiveOpen, router])
+
+  // Fecha o overlay opaco apenas quando a rota de destino (/login ou /cadastro) já estiver ativa
+  useEffect(() => {
+    if (isNavigatingToAuth && (pathname === "/login" || pathname === "/cadastro")) {
+      setIsNavigatingToAuth(false)
+      setContinueLoading(false)
+      effectiveOnClose()
+    }
+  }, [pathname, isNavigatingToAuth, effectiveOnClose])
+
   // Trava scroll da página de fundo enquanto o modal estiver aberto
   useEffect(() => {
-    if (isOpen) {
+    if (effectiveOpen) {
       document.body.style.overflow = "hidden"
     } else {
       document.body.style.overflow = ""
@@ -78,66 +131,147 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     return () => {
       document.body.style.overflow = ""
     }
-  }, [isOpen])
+  }, [effectiveOpen])
 
-  // Fecha no Escape
+  // Fecha no Escape (bloqueado durante ponte direta para evitar flash da Home)
   useEffect(() => {
-    if (!isOpen) return
+    if (!effectiveOpen || isNavigatingToAuth || continueLoading) return
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose()
+      if (e.key === "Escape") effectiveOnClose()
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isOpen, onClose])
+  }, [effectiveOpen, isNavigatingToAuth, continueLoading, effectiveOnClose])
 
-  // Recupera último e-mail salvo para a tela "Que bom te ver novamente"
+  // Recupera última conta salva (sanitizada sem telefone) para a tela "Que bom te ver novamente"
   useEffect(() => {
-    if (typeof window !== "undefined" && isOpen) {
-      const stored = localStorage.getItem("batata_last_login_email")
-      if (stored && stored.includes("@")) {
-        setSavedEmail(stored.trim())
+    isContinuingRef.current = false
+    if (typeof window !== "undefined" && effectiveOpen) {
+      setIsNavigatingToAuth(false)
+      setContinueLoading(false)
+      setGoogleLoading(false)
+      setIsHelpOpen(false)
+
+      const savedProfile = readSavedUserProfile()
+      const candidateEmail = initialEmail?.trim() || savedProfile?.email
+      if (candidateEmail && candidateEmail.includes("@")) {
+        setSavedEmail(candidateEmail)
         setView("saved_account")
       } else {
         setSavedEmail(null)
         setView("welcome")
       }
     }
-  }, [isOpen])
+  }, [effectiveOpen, initialEmail])
 
-  // Se já estiver logado, fecha modal
+  // Se já estiver logado (fora de navegação em curso), fecha modal
   useEffect(() => {
-    if (user && isOpen) {
-      onClose()
+    if (user && effectiveOpen && !isNavigatingToAuth) {
+      effectiveOnClose()
     }
-  }, [user, isOpen, onClose])
+  }, [user, effectiveOpen, isNavigatingToAuth, effectiveOnClose])
 
-  // Navega para página dedicada de login
-  const handleGoToLogin = (emailPrefill?: string) => {
-    onClose()
-    if (emailPrefill) {
-      router.push(`/login?email=${encodeURIComponent(emailPrefill)}`)
-    } else {
-      router.push("/login")
-    }
+  const navigateDirectToAuth = useCallback(
+    (targetUrl: string) => {
+      if (pathname === "/login" || pathname === "/cadastro") {
+        setIsNavigatingToAuth(false)
+        setContinueLoading(false)
+        effectiveOnClose()
+        router.replace(targetUrl)
+        return
+      }
+      // Mantém overlay opaco cobrindo a Home até a página /login assumir a rota
+      setIsNavigatingToAuth(true)
+      router.push(targetUrl)
+    },
+    [pathname, effectiveOnClose, router]
+  )
+
+  // Navega para página dedicada de login sem desmontar o overlay antes da rota carregar
+  const handleGoToLogin = (emailPrefill?: string, stepParam?: "code") => {
+    const params = new URLSearchParams()
+    if (emailPrefill) params.set("email", emailPrefill)
+    if (stepParam) params.set("step", stepParam)
+    const qs = params.toString()
+    navigateDirectToAuth(qs ? `/login?${qs}` : "/login")
   }
 
-  // Navega para página dedicada de cadastro
+  // Navega para página dedicada de cadastro sem flash da Home
   const handleGoToRegister = () => {
-    onClose()
-    router.push("/login?mode=register")
+    navigateDirectToAuth("/login?mode=register")
+  }
+
+  // Fluxo "Continuar" na conta recente deslogada (Cenário A: token válido / Cenário B: OTP + cooldown 60s)
+  const handleContinueSavedAccount = async () => {
+    if (!savedEmail || continueLoading || isNavigatingToAuth || isContinuingRef.current) return
+    isContinuingRef.current = true
+    setContinueLoading(true)
+
+    try {
+      const result = await continueWithSavedAccount(savedEmail)
+      if (!isMountedRef.current || !effectiveOpenRef.current) return
+
+      if (result.status === "authenticated") {
+        const added = consumePendingCartItem(addItem)
+        if (added) {
+          appToast.success("Item adicionado à sua sacola!")
+        }
+        appToast.success("Login realizado com sucesso!")
+        setContinueLoading(false)
+        effectiveOnClose()
+        router.refresh()
+        return
+      }
+
+      if (result.status === "otp_sent") {
+        appToast.success("Código enviado")
+      }
+
+      handleGoToLogin(savedEmail, "code")
+    } catch (err: any) {
+      if (!isMountedRef.current || !effectiveOpenRef.current) return
+      appToast.error(
+        err?.message || "Não foi possível enviar o código. Tente novamente."
+      )
+      setContinueLoading(false)
+      handleGoToLogin(savedEmail)
+    } finally {
+      isContinuingRef.current = false
+    }
   }
 
   // Google Sign-in
   const handleGoogleSignIn = async () => {
+    if (googleLoading || isNavigatingToAuth) return
     setGoogleLoading(true)
     try {
       await signInWithGoogle()
     } catch {
+      if (!isMountedRef.current) return
+      appToast.error("Não foi possível conectar com o Google.")
       setGoogleLoading(false)
     }
   }
 
-  if (!mounted || !isOpen) return null
+  if (!mounted || !effectiveOpen) return null
+
+  if (isNavigatingToAuth) {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        aria-label="Abrindo tela de autenticação"
+        className="fixed inset-0 z-[100] w-screen h-dvh bg-white flex flex-col items-center justify-center select-none"
+      >
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-7 w-7 animate-spin text-[#1F1B16]" />
+          <span className="text-xs font-semibold text-[#6B6157]">
+            Abrindo acesso seguro...
+          </span>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -166,7 +300,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           onClick={() => {
             if (isHelpOpen) setIsHelpOpen(false)
             else if (view === "saved_account") setView("welcome")
-            else onClose()
+            else effectiveOnClose()
           }}
           aria-label="Voltar"
           className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-black/40 hover:bg-black/60 text-white backdrop-blur-md flex items-center justify-center shadow-md transition-all active:scale-95 cursor-pointer"
@@ -185,7 +319,12 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       </div>
 
       {/* ÁREA CLICÁVEL TRANSPARENTE ACIMA DO BOTTOM SHEET PARA FECHAR */}
-      <div className="flex-1 w-full relative z-20 cursor-pointer" onClick={onClose} />
+      <div
+        className="flex-1 w-full relative z-20 cursor-pointer"
+        onClick={() => {
+          if (!continueLoading && !isNavigatingToAuth) effectiveOnClose()
+        }}
+      />
 
       {/* BOTTOM SHEET: COBRINDO A PARTE DE BAIXO INTEIRA (W-FULL DE PONTA A PONTA), PONTAS DE BAIXO RETAS */}
       <div className="relative z-30 w-full animate-in slide-in-from-bottom duration-300">
@@ -206,7 +345,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   <button
                     type="button"
                     onClick={() => setIsHelpOpen(false)}
-                    className="text-xs font-bold text-[#E3A008] hover:text-[#C1440E] transition-colors cursor-pointer"
+                    className="text-xs font-bold text-[#1F1B16] hover:text-[#6B6157] transition-colors cursor-pointer"
                   >
                     Voltar ao início
                   </button>
@@ -311,10 +450,18 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                     {/* Botão Amarelo Pílula "Continuar" (h-13) */}
                     <button
                       type="button"
-                      onClick={() => handleGoToLogin(savedEmail)}
-                      className="w-full h-13 bg-[#E3A008] hover:bg-[#C1440E] active:scale-[0.99] text-white font-bold text-sm sm:text-base rounded-full shadow-xs flex items-center justify-center transition-all cursor-pointer"
+                      disabled={continueLoading || isNavigatingToAuth}
+                      onClick={handleContinueSavedAccount}
+                      className="w-full h-13 bg-[#E3A008] hover:bg-[#C1440E] active:scale-[0.99] disabled:opacity-70 disabled:cursor-not-allowed text-white font-bold text-sm sm:text-base rounded-full shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
                     >
-                      Continuar
+                      {continueLoading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Verificando...</span>
+                        </>
+                      ) : (
+                        "Continuar"
+                      )}
                     </button>
 
                     {/* Divisor "ou" */}
@@ -330,8 +477,9 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                     {/* Link "Acessar de outra forma" */}
                     <button
                       type="button"
+                      disabled={continueLoading}
                       onClick={() => setView("welcome")}
-                      className="w-full text-center text-xs sm:text-sm font-bold text-[#E3A008] hover:text-[#C1440E] transition-colors py-1 cursor-pointer"
+                      className="w-full text-center text-xs sm:text-sm font-bold text-[#E3A008] hover:text-[#C1440E] transition-colors py-1 cursor-pointer disabled:opacity-50"
                     >
                       Acessar de outra forma
                     </button>
