@@ -81,9 +81,9 @@ export function useKeyboardViewport(): KeyboardViewportState {
           Math.abs(currentWidth - lastWidthRef.current) > WIDTH_CHANGE_THRESHOLD_PX
         ) {
           lastWidthRef.current = currentWidth
-          maxHeightRef.current = vvHeight
+          maxHeightRef.current = Math.max(layoutHeight, vvHeight)
         } else {
-          maxHeightRef.current = Math.max(maxHeightRef.current, vvHeight)
+          maxHeightRef.current = Math.max(maxHeightRef.current, layoutHeight, vvHeight)
         }
       }
 
@@ -94,11 +94,13 @@ export function useKeyboardViewport(): KeyboardViewportState {
         0,
         Math.round(maxHeightRef.current - vvHeight)
       )
+      const isOffsetActive = offsetBottom > OFFSET_THRESHOLD_PX
       const isOpen =
         !isZoomed &&
-        (offsetBottom > OFFSET_THRESHOLD_PX ||
-          heightDrop > HEIGHT_DROP_THRESHOLD_PX)
-      const nextOffset = isOpen ? offsetBottom : 0
+        (isOffsetActive || heightDrop > HEIGHT_DROP_THRESHOLD_PX)
+      // iOS Safari does not shrink layoutHeight, so offsetBottom > 60px pushes the footer above keyboard.
+      // Android Chrome resizes layoutHeight with visualViewport (offsetBottom ~0), so fixed bottom-0 already anchors above keyboard natively.
+      const nextOffset = isOpen && isOffsetActive ? offsetBottom : 0
       const nextViewportHeight = Math.round(vvHeight)
 
       const prevState = stateRef.current

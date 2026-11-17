@@ -822,7 +822,7 @@ export function AuthContainer({
 
       {/* FOOTER FIXO / FLUTUANTE INFERIOR COM BOTÃO CONTINUAR */}
       <footer
-        className="fixed bottom-0 inset-x-0 z-20 bg-white border-t border-[#ECE7E0]/60 px-6 pt-3 will-change-transform transition-[padding] duration-150 ease-out"
+        className="fixed bottom-0 inset-x-0 z-20 bg-white border-t border-[#ECE7E0]/60 px-6 pt-3 will-change-transform transition-[transform,padding] duration-200 ease-out"
         style={{
           transform: `translate3d(0, -${keyboardOffset}px, 0)`,
           paddingBottom: isKeyboardOpen

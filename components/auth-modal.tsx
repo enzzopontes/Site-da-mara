@@ -273,15 +273,241 @@ export function AuthModal({ isOpen, onClose, initialEmail }: AuthModalProps) {
     )
   }
 
+  const renderModalContent = () => (
+    <>
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* TELA DE AJUDA / FAQ (DISPARADA PELO BOTÃO ?)                   */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {isHelpOpen ? (
+        <div className="flex flex-col animate-in fade-in duration-200">
+          <div className="flex items-center justify-between pb-3 mb-2 border-b border-[#ECE7E0]">
+            <h3 className="text-base font-extrabold text-[#1F1B16]">
+              Central de Ajuda
+            </h3>
+            <button
+              type="button"
+              onClick={() => setIsHelpOpen(false)}
+              className="text-xs font-bold text-[#1F1B16] hover:text-[#6B6157] transition-colors cursor-pointer"
+            >
+              Voltar ao início
+            </button>
+          </div>
+
+          {/* Banner WhatsApp */}
+          <div className="bg-[#FEF8EC] border border-[#FCE8C3] rounded-2xl p-4 flex flex-col items-center text-center mb-4">
+            <div className="relative w-14 h-14 mb-2">
+              <Image
+                src="/images/imageajuda.png"
+                alt="Atendimento Batata Top"
+                width={56}
+                height={56}
+                className="object-contain"
+              />
+            </div>
+            <h4 className="font-extrabold text-sm text-[#1F1B16] mb-1">
+              Precisa de suporte agora?
+            </h4>
+            <p className="text-xs text-[#6B6157] mb-3 leading-relaxed">
+              Nossa equipe atende rapidamente pelo WhatsApp oficial para tirar dúvidas e ajudar com seu acesso.
+            </p>
+            <a
+              href="https://wa.me/5514997361015?text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20com%20meu%20login%20no%20Batata%20Top"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full h-11 bg-[#25D366] hover:bg-[#1EBE5D] active:scale-[0.98] text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span>Falar no WhatsApp oficial</span>
+            </a>
+          </div>
+
+          {/* FAQ Items */}
+          <div className="space-y-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#9C9188] px-1">
+              Dúvidas frequentes
+            </span>
+            {FAQ_ITEMS.map((item) => {
+              const isExpanded = expandedFaq === item.id
+              return (
+                <div
+                  key={item.id}
+                  className="border border-[#ECE7E0] rounded-xl overflow-hidden bg-white"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setExpandedFaq(isExpanded ? null : item.id)}
+                    className="w-full p-3 text-left flex items-center justify-between gap-2 hover:bg-[#FAF8F5] transition-colors cursor-pointer"
+                  >
+                    <span className="text-xs font-bold text-[#1F1B16]">
+                      {item.question}
+                    </span>
+                    <ChevronDown
+                      className={`h-4 w-4 text-[#9C9188] shrink-0 transition-transform duration-200 ${
+                        isExpanded ? "rotate-180 text-[#E3A008]" : ""
+                      }`}
+                    />
+                  </button>
+                  {isExpanded && (
+                    <div className="px-3 pb-3 pt-1 text-xs text-[#6B6157] leading-relaxed border-t border-[#ECE7E0]/50 bg-[#FFFDF7]">
+                      {item.answer}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* TELA 1: "QUE BOM TE VER NOVAMENTE" (quando há e-mail salvo)   */}
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {view === "saved_account" && savedEmail ? (
+            <div className="flex flex-col my-auto animate-in fade-in">
+              <h2 className="text-base font-bold text-[#1F1B16] text-center mb-4">
+                Que bom te ver novamente
+              </h2>
+
+              {/* Card com a conta salva */}
+              <div className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-white border border-[#ECE7E0] shadow-2xs mb-5">
+                <div className="relative w-11 h-11 shrink-0 rounded-xl bg-[#F7F4EF] flex items-center justify-center overflow-hidden">
+                  <Image
+                    src="/assets/batatanacaixa.png"
+                    alt="Avatar Batata Top"
+                    width={36}
+                    height={36}
+                    className="object-contain"
+                  />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[11px] text-[#9C9188] font-normal leading-tight">
+                    Encontramos seu último login
+                  </span>
+                  <span className="text-xs sm:text-sm font-semibold text-[#1F1B16] truncate">
+                    {savedEmail}
+                  </span>
+                </div>
+              </div>
+
+              {/* Botão Amarelo Pílula "Continuar" (h-13) */}
+              <button
+                type="button"
+                disabled={continueLoading || isNavigatingToAuth}
+                onClick={handleContinueSavedAccount}
+                className="w-full h-13 bg-[#E3A008] hover:bg-[#C1440E] active:scale-[0.99] disabled:opacity-70 disabled:cursor-not-allowed text-white font-bold text-sm sm:text-base rounded-full shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                {continueLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Verificando...</span>
+                  </>
+                ) : (
+                  "Continuar"
+                )}
+              </button>
+
+              {/* Divisor "ou" */}
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-[#ECE7E0]" />
+                </div>
+                <div className="relative flex justify-center text-[11px] text-[#9C9188]">
+                  <span className="bg-white px-2">ou</span>
+                </div>
+              </div>
+
+              {/* Link "Acessar de outra forma" */}
+              <button
+                type="button"
+                disabled={continueLoading}
+                onClick={() => setView("welcome")}
+                className="w-full text-center text-xs sm:text-sm font-bold text-[#E3A008] hover:text-[#C1440E] transition-colors py-1 cursor-pointer disabled:opacity-50"
+              >
+                Acessar de outra forma
+              </button>
+            </div>
+          ) : (
+            /* ═══════════════════════════════════════════════════════════════ */
+            /* TELA 2: WELCOME (IDÊNTICO À PRIMEIRA CAPTURA DO APP)         */
+            /* ═══════════════════════════════════════════════════════════════ */
+            <div className="flex flex-col space-y-3 pt-1 my-auto animate-in fade-in">
+              {/* Botão Amarelo Pílula: "Já tenho uma conta" (h-13) */}
+              <button
+                type="button"
+                onClick={() => handleGoToLogin()}
+                className="w-full h-13 bg-[#E3A008] hover:bg-[#C1440E] active:scale-[0.99] text-white font-bold text-sm sm:text-base rounded-full shadow-xs flex items-center justify-center transition-all cursor-pointer"
+              >
+                Já tenho uma conta
+              </button>
+
+              {/* Botão Branco com Borda Amarela Pílula: "Criar nova conta" (h-13) */}
+              <button
+                type="button"
+                onClick={handleGoToRegister}
+                className="w-full h-13 bg-white hover:bg-[#FFFDF7] border-2 border-[#E3A008] active:scale-[0.99] text-[#E3A008] hover:text-[#C1440E] font-bold text-sm sm:text-base rounded-full flex items-center justify-center transition-all cursor-pointer"
+              >
+                Criar nova conta
+              </button>
+
+              {/* Texto Central: "Acessar com" */}
+              <div className="pt-2 pb-1 text-center">
+                <span className="text-xs text-[#6B6157] font-medium">Acessar com</span>
+              </div>
+
+              {/* Botão Redondo com Ícone do Google */}
+              <div className="flex justify-center pb-1">
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  disabled={googleLoading}
+                  aria-label="Acessar com Google"
+                  className="w-12 h-12 rounded-full border border-[#ECE7E0] hover:bg-[#F7F4EF] flex items-center justify-center active:scale-95 shadow-2xs transition-all cursor-pointer"
+                >
+                  <svg className="h-5 w-5" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </>
+  )
+
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-label="Autenticação Batata Top"
-      className="fixed inset-0 z-[100] w-screen h-dvh overflow-hidden flex flex-col justify-between animate-in fade-in duration-200 select-none"
+      className="fixed inset-0 z-[100] w-screen h-dvh overflow-hidden select-none animate-in fade-in duration-200 flex flex-col justify-between md:flex-row md:items-center md:justify-center md:p-6"
     >
-      {/* FOTO COBRINDO A TELA INTEIRA POSICIONADA NO TOPO (MOBILE & PC) */}
-      <div className="absolute inset-0 w-full h-full overflow-hidden bg-black">
+      {/* ── DESKTOP: BACKDROP COM BLUR (>= md) ── */}
+      <div
+        className="hidden md:block fixed inset-0 z-0 bg-black/60 backdrop-blur-sm"
+        aria-hidden="true"
+        onClick={() => {
+          if (!continueLoading && !isNavigatingToAuth) effectiveOnClose()
+        }}
+      />
+
+      {/* ── MOBILE: FOTO FULLSCREEN AO FUNDO (< md) ── */}
+      <div className="md:hidden absolute inset-0 w-full h-full overflow-hidden bg-black">
         <Image
           src="/images/loginfoto.jpeg"
           alt="Batata Top Delivery"
@@ -293,8 +519,8 @@ export function AuthModal({ isOpen, onClose, initialEmail }: AuthModalProps) {
         <div className="absolute top-0 inset-x-0 h-28 bg-gradient-to-b from-black/60 via-black/20 to-transparent pointer-events-none" />
       </div>
 
-      {/* ÁREA SUPERIOR: BOTÃO VOLTAR E BOTÃO DE INTERROGAÇÃO (?) NAS EXTREMIDADES */}
-      <div className="relative z-30 w-full flex items-center justify-between px-4 sm:px-8 pt-4 sm:pt-6">
+      {/* ── MOBILE: ÁREA SUPERIOR COM BOTÃO VOLTAR E AJUDA (< md) ── */}
+      <div className="md:hidden relative z-30 w-full flex items-center justify-between px-4 sm:px-8 pt-4 sm:pt-6">
         <button
           type="button"
           onClick={() => {
@@ -318,233 +544,68 @@ export function AuthModal({ isOpen, onClose, initialEmail }: AuthModalProps) {
         </button>
       </div>
 
-      {/* ÁREA CLICÁVEL TRANSPARENTE ACIMA DO BOTTOM SHEET PARA FECHAR */}
+      {/* ── MOBILE: ÁREA CLICÁVEL TRANSPARENTE ACIMA DO BOTTOM SHEET (< md) ── */}
       <div
-        className="flex-1 w-full relative z-20 cursor-pointer"
+        className="md:hidden flex-1 w-full relative z-20 cursor-pointer"
         onClick={() => {
           if (!continueLoading && !isNavigatingToAuth) effectiveOnClose()
         }}
       />
 
-      {/* BOTTOM SHEET: COBRINDO A PARTE DE BAIXO INTEIRA (W-FULL DE PONTA A PONTA), PONTAS DE BAIXO RETAS */}
-      <div className="relative z-30 w-full animate-in slide-in-from-bottom duration-300">
+      {/* ── MOBILE: BOTTOM SHEET (< md) ── */}
+      <div className="md:hidden relative z-30 w-full animate-in slide-in-from-bottom duration-300">
         <div className="bg-white rounded-t-[28px] sm:rounded-t-[36px] rounded-b-none border-t border-[#ECE7E0] shadow-[0_-12px_40px_rgba(0,0,0,0.35)] px-4 sm:px-8 pt-3 pb-[max(1.75rem,env(safe-area-inset-bottom))] flex flex-col max-h-[85vh] overflow-y-auto">
           <div className="w-full max-w-md sm:max-w-lg mx-auto flex flex-col">
             {/* HANDLE SUPERIOR CINZA */}
-            <div className="w-11 h-1 bg-[#D6CEC4] rounded-full mx-auto mb-3 shrink-0" />
+            <div className="w-11 h-1 bg-[#D6CEC4] rounded-full mx-auto mb-3 shrink-0 md:hidden" />
+            {renderModalContent()}
+          </div>
+        </div>
+      </div>
 
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* TELA DE AJUDA / FAQ (DISPARADA PELO BOTÃO ?)                   */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {isHelpOpen ? (
-              <div className="flex flex-col animate-in fade-in duration-200">
-                <div className="flex items-center justify-between pb-3 mb-2 border-b border-[#ECE7E0]">
-                  <h3 className="text-base font-extrabold text-[#1F1B16]">
-                    Central de Ajuda
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => setIsHelpOpen(false)}
-                    className="text-xs font-bold text-[#1F1B16] hover:text-[#6B6157] transition-colors cursor-pointer"
-                  >
-                    Voltar ao início
-                  </button>
-                </div>
+      {/* ── DESKTOP: SPLIT CARD CENTRALIZADO (>= md) ── */}
+      <div className="hidden md:grid relative z-10 max-w-[780px] w-full rounded-3xl overflow-hidden bg-white shadow-2xl md:grid-cols-2 min-h-[480px] max-h-[88vh] animate-in zoom-in-95 duration-200">
+        {/* Coluna Esquerda: Foto */}
+        <div className="relative w-full h-full min-h-[480px] bg-black">
+          <Image
+            src="/images/loginfoto.jpeg"
+            alt="Batata Top Delivery"
+            fill
+            priority
+            className="object-cover object-center"
+          />
+        </div>
 
-                {/* Banner WhatsApp */}
-                <div className="bg-[#FEF8EC] border border-[#FCE8C3] rounded-2xl p-4 flex flex-col items-center text-center mb-4">
-                  <div className="relative w-14 h-14 mb-2">
-                    <Image
-                      src="/images/imageajuda.png"
-                      alt="Atendimento Batata Top"
-                      width={56}
-                      height={56}
-                      className="object-contain"
-                    />
-                  </div>
-                  <h4 className="font-extrabold text-sm text-[#1F1B16] mb-1">
-                    Precisa de suporte agora?
-                  </h4>
-                  <p className="text-xs text-[#6B6157] mb-3 leading-relaxed">
-                    Nossa equipe atende rapidamente pelo WhatsApp oficial para tirar dúvidas e ajudar com seu acesso.
-                  </p>
-                  <a
-                    href="https://wa.me/5514997361015?text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20com%20meu%20login%20no%20Batata%20Top"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full h-11 bg-[#25D366] hover:bg-[#1EBE5D] active:scale-[0.98] text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                    <span>Falar no WhatsApp oficial</span>
-                  </a>
-                </div>
+        {/* Coluna Direita: Conteúdo */}
+        <div className="bg-white flex flex-col h-full overflow-hidden">
+          {/* Cabeçalho interno com botões Voltar e Ajuda */}
+          <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-[#ECE7E0]/60 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                if (isHelpOpen) setIsHelpOpen(false)
+                else if (view === "saved_account") setView("welcome")
+                else effectiveOnClose()
+              }}
+              aria-label="Voltar"
+              className="w-9 h-9 rounded-full bg-[#F7F4EF] hover:bg-[#ECE7E0] text-[#1F1B16] flex items-center justify-center transition-all active:scale-95 cursor-pointer"
+            >
+              <ChevronLeft className="h-5 w-5 stroke-[2.25]" />
+            </button>
 
-                {/* FAQ Items */}
-                <div className="space-y-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#9C9188] px-1">
-                    Dúvidas frequentes
-                  </span>
-                  {FAQ_ITEMS.map((item) => {
-                    const isExpanded = expandedFaq === item.id
-                    return (
-                      <div
-                        key={item.id}
-                        className="border border-[#ECE7E0] rounded-xl overflow-hidden bg-white"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => setExpandedFaq(isExpanded ? null : item.id)}
-                          className="w-full p-3 text-left flex items-center justify-between gap-2 hover:bg-[#FAF8F5] transition-colors cursor-pointer"
-                        >
-                          <span className="text-xs font-bold text-[#1F1B16]">
-                            {item.question}
-                          </span>
-                          <ChevronDown
-                            className={`h-4 w-4 text-[#9C9188] shrink-0 transition-transform duration-200 ${
-                              isExpanded ? "rotate-180 text-[#E3A008]" : ""
-                            }`}
-                          />
-                        </button>
-                        {isExpanded && (
-                          <div className="px-3 pb-3 pt-1 text-xs text-[#6B6157] leading-relaxed border-t border-[#ECE7E0]/50 bg-[#FFFDF7]">
-                            {item.answer}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            ) : (
-              <>
-                {/* ═══════════════════════════════════════════════════════════════ */}
-                {/* TELA 1: "QUE BOM TE VER NOVAMENTE" (quando há e-mail salvo)   */}
-                {/* ═══════════════════════════════════════════════════════════════ */}
-                {view === "saved_account" && savedEmail ? (
-                  <div className="flex flex-col animate-in fade-in">
-                    <h2 className="text-base font-bold text-[#1F1B16] text-center mb-4">
-                      Que bom te ver novamente
-                    </h2>
+            <button
+              type="button"
+              onClick={() => setIsHelpOpen((prev) => !prev)}
+              aria-label="Ajuda e suporte"
+              className="w-9 h-9 rounded-full bg-[#F7F4EF] hover:bg-[#ECE7E0] text-[#1F1B16] flex items-center justify-center transition-all active:scale-95 cursor-pointer"
+            >
+              <HelpCircle className="h-5 w-5 stroke-[2.25]" />
+            </button>
+          </div>
 
-                    {/* Card com a conta salva */}
-                    <div className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-white border border-[#ECE7E0] shadow-2xs mb-5">
-                      <div className="relative w-11 h-11 shrink-0 rounded-xl bg-[#F7F4EF] flex items-center justify-center overflow-hidden">
-                        <Image
-                          src="/assets/batatanacaixa.png"
-                          alt="Avatar Batata Top"
-                          width={36}
-                          height={36}
-                          className="object-contain"
-                        />
-                      </div>
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-[11px] text-[#9C9188] font-normal leading-tight">
-                          Encontramos seu último login
-                        </span>
-                        <span className="text-xs sm:text-sm font-semibold text-[#1F1B16] truncate">
-                          {savedEmail}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Botão Amarelo Pílula "Continuar" (h-13) */}
-                    <button
-                      type="button"
-                      disabled={continueLoading || isNavigatingToAuth}
-                      onClick={handleContinueSavedAccount}
-                      className="w-full h-13 bg-[#E3A008] hover:bg-[#C1440E] active:scale-[0.99] disabled:opacity-70 disabled:cursor-not-allowed text-white font-bold text-sm sm:text-base rounded-full shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
-                    >
-                      {continueLoading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span>Verificando...</span>
-                        </>
-                      ) : (
-                        "Continuar"
-                      )}
-                    </button>
-
-                    {/* Divisor "ou" */}
-                    <div className="relative my-4">
-                      <div className="absolute inset-0 flex items-center">
-                        <div className="w-full border-t border-[#ECE7E0]" />
-                      </div>
-                      <div className="relative flex justify-center text-[11px] text-[#9C9188]">
-                        <span className="bg-white px-2">ou</span>
-                      </div>
-                    </div>
-
-                    {/* Link "Acessar de outra forma" */}
-                    <button
-                      type="button"
-                      disabled={continueLoading}
-                      onClick={() => setView("welcome")}
-                      className="w-full text-center text-xs sm:text-sm font-bold text-[#E3A008] hover:text-[#C1440E] transition-colors py-1 cursor-pointer disabled:opacity-50"
-                    >
-                      Acessar de outra forma
-                    </button>
-                  </div>
-                ) : (
-                  /* ═══════════════════════════════════════════════════════════════ */
-                  /* TELA 2: WELCOME (IDÊNTICO À PRIMEIRA CAPTURA DO APP)         */
-                  /* ═══════════════════════════════════════════════════════════════ */
-                  <div className="flex flex-col space-y-3 pt-1 animate-in fade-in">
-                    {/* Botão Amarelo Pílula: "Já tenho uma conta" (h-13) */}
-                    <button
-                      type="button"
-                      onClick={() => handleGoToLogin()}
-                      className="w-full h-13 bg-[#E3A008] hover:bg-[#C1440E] active:scale-[0.99] text-white font-bold text-sm sm:text-base rounded-full shadow-xs flex items-center justify-center transition-all cursor-pointer"
-                    >
-                      Já tenho uma conta
-                    </button>
-
-                    {/* Botão Branco com Borda Amarela Pílula: "Criar nova conta" (h-13) */}
-                    <button
-                      type="button"
-                      onClick={handleGoToRegister}
-                      className="w-full h-13 bg-white hover:bg-[#FFFDF7] border-2 border-[#E3A008] active:scale-[0.99] text-[#E3A008] hover:text-[#C1440E] font-bold text-sm sm:text-base rounded-full flex items-center justify-center transition-all cursor-pointer"
-                    >
-                      Criar nova conta
-                    </button>
-
-                    {/* Texto Central: "Acessar com" */}
-                    <div className="pt-2 pb-1 text-center">
-                      <span className="text-xs text-[#6B6157] font-medium">Acessar com</span>
-                    </div>
-
-                    {/* Botão Redondo com Ícone do Google */}
-                    <div className="flex justify-center pb-1">
-                      <button
-                        type="button"
-                        onClick={handleGoogleSignIn}
-                        disabled={googleLoading}
-                        aria-label="Acessar com Google"
-                        className="w-12 h-12 rounded-full border border-[#ECE7E0] hover:bg-[#F7F4EF] flex items-center justify-center active:scale-95 shadow-2xs transition-all cursor-pointer"
-                      >
-                        <svg className="h-5 w-5" viewBox="0 0 24 24">
-                          <path
-                            fill="#4285F4"
-                            d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                          />
-                          <path
-                            fill="#34A853"
-                            d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                          />
-                          <path
-                            fill="#FBBC05"
-                            d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                          />
-                          <path
-                            fill="#EA4335"
-                            d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
+          {/* Conteúdo com scroll interno se necessário */}
+          <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col">
+            {renderModalContent()}
           </div>
         </div>
       </div>
