@@ -209,10 +209,11 @@ function ActiveOrderCard({
       <div className="py-2.5 space-y-2 border-y border-[#F5F2ED]">
         {order.items && order.items.length > 0 ? (
           order.items.map((item: any, idx: number) => {
-            const adicText = (item.adicionais || [])
-              .map((a: any) => (typeof a === "string" ? a : a?.name || a?.nome))
-              .filter(Boolean)
-              .join(", ")
+            const adicsTotal = (item.adicionais || []).reduce(
+              (s: number, a: any) => s + Number(a.price || a.preco || 0) * Number(a.quantity || 1),
+              0
+            )
+            const itemTotal = (Number(item.price || 0) + adicsTotal) * Number(item.quantity || 1)
 
             return (
               <div key={idx} className="text-xs">
@@ -224,11 +225,26 @@ function ActiveOrderCard({
                     <span className="font-bold text-[#1F1B16] truncate">{item.name}</span>
                   </div>
                   <span className="font-bold text-[#1F1B16] shrink-0">
-                    R$ {(item.price * item.quantity).toFixed(2).replace(".", ",")}
+                    R$ {itemTotal.toFixed(2).replace(".", ",")}
                   </span>
                 </div>
-                {adicText && (
-                  <p className="text-[11px] text-[#6B6157] pl-7 mt-0.5">+ {adicText}</p>
+                {item.adicionais && item.adicionais.length > 0 && (
+                  <div className="pl-7 mt-0.5 space-y-0.5">
+                    {item.adicionais.map((a: any, aIdx: number) => {
+                      const aPrice = Number(a.price || a.preco || 0)
+                      const aQty = Number(a.quantity || 1)
+                      return (
+                        <p key={aIdx} className="text-[11px] text-[#6B6157] flex items-center justify-between">
+                          <span>+ {aQty}x {a.name || a.nome || a}</span>
+                          {aPrice > 0 && (
+                            <span className="text-emerald-700 font-bold ml-1">
+                              + R$ {(aPrice * aQty).toFixed(2).replace(".", ",")}
+                            </span>
+                          )}
+                        </p>
+                      )
+                    })}
+                  </div>
                 )}
                 {item.notes && (
                   <p className="text-[11px] text-[#9C9188] italic pl-7 mt-0.5">Obs: {item.notes}</p>
@@ -349,10 +365,11 @@ function CompletedOrderCard({
       <div className="mt-3 py-2.5 space-y-2 border-y border-[#F5F2ED]">
         {order.items && order.items.length > 0 ? (
           order.items.map((item: any, idx: number) => {
-            const adicText = (item.adicionais || [])
-              .map((a: any) => (typeof a === "string" ? a : a?.name || a?.nome))
-              .filter(Boolean)
-              .join(", ")
+            const adicsTotal = (item.adicionais || []).reduce(
+              (s: number, a: any) => s + Number(a.price || a.preco || 0) * Number(a.quantity || 1),
+              0
+            )
+            const itemTotal = (Number(item.price || 0) + adicsTotal) * Number(item.quantity || 1)
 
             return (
               <div key={idx} className="text-xs">
@@ -364,11 +381,26 @@ function CompletedOrderCard({
                     <span className="font-bold text-[#1F1B16] truncate">{item.name}</span>
                   </div>
                   <span className="font-bold text-[#1F1B16] shrink-0">
-                    R$ {(item.price * item.quantity).toFixed(2).replace(".", ",")}
+                    R$ {itemTotal.toFixed(2).replace(".", ",")}
                   </span>
                 </div>
-                {adicText && (
-                  <p className="text-[11px] text-[#6B6157] pl-7 mt-0.5">+ {adicText}</p>
+                {item.adicionais && item.adicionais.length > 0 && (
+                  <div className="pl-7 mt-0.5 space-y-0.5">
+                    {item.adicionais.map((a: any, aIdx: number) => {
+                      const aPrice = Number(a.price || a.preco || 0)
+                      const aQty = Number(a.quantity || 1)
+                      return (
+                        <p key={aIdx} className="text-[11px] text-[#6B6157] flex items-center justify-between">
+                          <span>+ {aQty}x {a.name || a.nome || a}</span>
+                          {aPrice > 0 && (
+                            <span className="text-emerald-700 font-bold ml-1">
+                              + R$ {(aPrice * aQty).toFixed(2).replace(".", ",")}
+                            </span>
+                          )}
+                        </p>
+                      )
+                    })}
+                  </div>
                 )}
                 {item.notes && (
                   <p className="text-[11px] text-[#9C9188] italic pl-7 mt-0.5">Obs: {item.notes}</p>

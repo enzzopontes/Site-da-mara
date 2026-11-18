@@ -690,22 +690,35 @@ export default function AdminCaixaPage() {
 
               <div className="space-y-3">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Itens do Pedido</p>
-                {selectedOrder?.items.map((item, i) => (
-                  <div key={i} className="flex justify-between gap-4 py-1.5 border-b border-slate-50 last:border-none">
-                    <div className="flex-1">
-                      <p className="text-xs font-bold text-slate-900">
-                        <span className="text-amber-600 font-extrabold">{item.quantity}x</span> {item.name}
-                      </p>
-                      {item.pastaType && (
-                        <p className="text-[10px] font-bold text-amber-600 uppercase mt-0.5">Tipo: {item.pastaType}</p>
-                      )}
-                      {item.adicionais?.map((a: any, j: number) => (
-                        <p key={j} className="text-[10px] text-slate-500 font-medium">+ {a.quantity}x {a.name}</p>
-                      ))}
+                {selectedOrder?.items.map((item, i) => {
+                  const adicsTotal = (item.adicionais || []).reduce(
+                    (s: number, a: any) => s + Number(a.price || a.preco || 0) * Number(a.quantity || 1),
+                    0
+                  )
+                  const itemTotal = (Number(item.price || 0) + adicsTotal) * Number(item.quantity || 1)
+                  return (
+                    <div key={i} className="flex justify-between gap-4 py-2 border-b border-slate-100 last:border-none">
+                      <div className="flex-1">
+                        <p className="text-xs font-bold text-slate-900">
+                          <span className="text-amber-600 font-extrabold">{item.quantity}x</span> {item.name}
+                        </p>
+                        {item.pastaType && (
+                          <p className="text-[10px] font-bold text-amber-600 uppercase mt-0.5">Tipo: {item.pastaType}</p>
+                        )}
+                        {item.adicionais?.map((a: any, j: number) => {
+                          const adPrice = Number(a.price || a.preco || 0)
+                          const adQty = Number(a.quantity || 1)
+                          return (
+                            <p key={j} className="text-[11px] text-slate-600 font-medium pl-2">
+                              + {adQty}x {a.name || a.nome} {adPrice > 0 ? `(+ R$ ${(adPrice * adQty).toFixed(2).replace('.', ',')})` : ''}
+                            </p>
+                          )
+                        })}
+                      </div>
+                      <p className="text-xs font-black text-slate-900">R$ {itemTotal.toFixed(2).replace('.', ',')}</p>
                     </div>
-                    <p className="text-xs font-black text-slate-900">R$ {(item.price * item.quantity).toFixed(2).replace('.', ',')}</p>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
 
               {selectedOrder?.notes && (
@@ -722,7 +735,7 @@ export default function AdminCaixaPage() {
                 </div>
                 {selectedOrder?.discountAmount ? (
                   <div className="flex justify-between text-xs font-bold text-emerald-600">
-                    <span>Desconto aplicado</span>
+                    <span>Desconto ({selectedOrder.couponCode || "Cupom"})</span>
                     <span>- R$ {selectedOrder.discountAmount.toFixed(2).replace('.', ',')}</span>
                   </div>
                 ) : null}

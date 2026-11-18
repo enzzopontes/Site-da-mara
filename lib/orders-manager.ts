@@ -46,6 +46,7 @@ class OrdersManager {
       adicionais: (item.adicionais || []).map((a: any) => ({
         id: a.id || undefined,
         name: a.name || a.nome || undefined,
+        price: Number(a.price ?? a.preco ?? 0),
         quantity: Math.max(1, Math.min(20, Math.floor(Number(a.quantity) || 1))),
       })),
     }))
@@ -63,7 +64,10 @@ class OrdersManager {
       p_coupon_code: order.couponCode || null,
       p_notes: order.notes || null,
       p_wants_cutlery: order.wantsCutlery ?? false,
-      p_metadata: order.metadata || {},
+      p_metadata: {
+        ...(order.metadata || {}),
+        items: order.items || [],
+      },
       p_items: p_items,
     })
 
@@ -95,8 +99,14 @@ class OrdersManager {
           name: item.product_name,
           quantity: item.quantity,
           price: Number(item.product_price),
-          adicionais: item.adicionais || [],
-          pastaType: item.pasta_type || null // Mapeando o tipo de macarrão
+          adicionais: (item.adicionais || []).map((a: any) => ({
+            id: a.id,
+            name: a.name || a.nome,
+            price: Number(a.price ?? a.preco ?? 0),
+            quantity: Number(a.quantity || 1),
+          })),
+          pastaType: item.pasta_type || null,
+          notes: item.notes || null,
         }))
       } else if (o.metadata?.items && o.metadata.items.length > 0) {
         finalItems = o.metadata.items.map((item: any) => ({
@@ -104,8 +114,14 @@ class OrdersManager {
           name: item.product_name || item.name,
           quantity: item.quantity,
           price: Number(item.product_price || item.price),
-          adicionais: item.adicionais || [],
-          pastaType: item.pastaType || null // Mapeando do metadata
+          adicionais: (item.adicionais || []).map((a: any) => ({
+            id: a.id,
+            name: a.name || a.nome,
+            price: Number(a.price ?? a.preco ?? 0),
+            quantity: Number(a.quantity || 1),
+          })),
+          pastaType: item.pastaType || null,
+          notes: item.notes || item.observacoes || null,
         }))
       }
     }

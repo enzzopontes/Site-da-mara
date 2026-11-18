@@ -148,13 +148,26 @@ export class ThermalPrinter {
       const cleanQty = Number(item.quantity) || 1;
       const cleanName = this.sanitize(item.name || 'Item');
       commands.push(...Array.from(encoder.encode(`${cleanQty}x ${cleanName}\n`)));
+      let adicsTotal = 0;
       if (item.adicionais && item.adicionais.length > 0) {
-        const adds = item.adicionais.map((a: any) => this.sanitize(a.name)).filter(Boolean).join(", ");
-        commands.push(...Array.from(encoder.encode(` + ${adds}\n`)));
+        item.adicionais.forEach((a: any) => {
+          const aQty = Number(a.quantity || 1);
+          const aPrice = Number(a.price || a.preco || 0);
+          adicsTotal += aPrice * aQty;
+          const aText = ` + ${aQty}x ${this.sanitize(a.name || a.nome || 'Adicional')}${aPrice > 0 ? ` (R$ ${(aPrice * aQty).toFixed(2).replace('.', ',')})` : ''}\n`;
+          commands.push(...Array.from(encoder.encode(aText)));
+        });
       }
-      const price = (Number(item.price || 0) * cleanQty).toFixed(2).replace('.', ',');
+      const itemTotal = (Number(item.price || 0) + adicsTotal) * cleanQty;
+      const price = itemTotal.toFixed(2).replace('.', ',');
       commands.push(...Array.from(encoder.encode(`               R$ ${price}\n`)));
     });
+
+    if (order.discountAmount && Number(order.discountAmount) > 0) {
+      const disc = Number(order.discountAmount).toFixed(2).replace('.', ',');
+      const cupom = this.sanitize(order.couponCode || 'Cupom');
+      commands.push(...Array.from(encoder.encode(`Desconto (${cupom}): -R$ ${disc}\n`)));
+    }
 
     commands.push(...Array.from(encoder.encode("--------------------------------\n")));
     

@@ -37,6 +37,7 @@ import {
 } from "lucide-react"
 import { ordersManager, type Order } from "@/lib/orders-manager"
 import { storeStatusManager } from "@/lib/store-status-manager"
+import { adicionaisManager, type Adicional } from "@/lib/adicionais-manager"
 import Link from "next/link"
 
 const ADMIN_EMAILS = ["enzzobaraldo2008@gmail.com", "maraysis9010@gmail.com"]
@@ -124,6 +125,59 @@ export default function AdminPedidosPage() {
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null)
   const lastOrdersCount = useRef<number>(0)
   const [isTestingBark, setIsTestingBark] = useState(false)
+  const [adicionaisCatalog, setAdicionaisCatalog] = useState<Record<string, Adicional>>({})
+
+  useEffect(() => {
+    adicionaisManager
+      .getAllAdicionais()
+      .then((list) => {
+        const map: Record<string, Adicional> = {}
+        list.forEach((ad) => {
+          if (ad.id) map[ad.id] = ad
+          if (ad.name) map[ad.name.trim().toLowerCase()] = ad
+        })
+        setAdicionaisCatalog(map)
+      })
+      .catch((err) => {
+        console.warn("[AdminPedidos] Não foi possível carregar catálogo de adicionais:", err)
+      })
+  }, [])
+
+  const getAdicionalPrice = (ad: any): number => {
+    if (ad.price !== undefined && ad.price !== null && !isNaN(Number(ad.price)) && Number(ad.price) > 0) {
+      return Number(ad.price)
+    }
+    if (ad.preco !== undefined && ad.preco !== null && !isNaN(Number(ad.preco)) && Number(ad.preco) > 0) {
+      return Number(ad.preco)
+    }
+    if (ad.id && adicionaisCatalog[ad.id]?.price) {
+      return Number(adicionaisCatalog[ad.id].price)
+    }
+    const key = (ad.name || ad.nome || "").trim().toLowerCase()
+    if (key && adicionaisCatalog[key]?.price) {
+      return Number(adicionaisCatalog[key].price)
+    }
+    return 0
+  }
+
+  const getItemAdicionaisTotal = (item: any): number => {
+    if (!item.adicionais || !Array.isArray(item.adicionais)) return 0
+    return item.adicionais.reduce((sum: number, ad: any) => {
+      const qty = Number(ad.quantity || 1)
+      const price = getAdicionalPrice(ad)
+      return sum + price * qty
+    }, 0)
+  }
+
+  const getItemUnitTotal = (item: any): number => {
+    const basePrice = Number(item.price || 0)
+    return basePrice + getItemAdicionaisTotal(item)
+  }
+
+  const getItemTotal = (item: any): number => {
+    const qty = Number(item.quantity || 1)
+    return getItemUnitTotal(item) * qty
+  }
 
   const handleTestBarkAlarm = async () => {
     setIsTestingBark(true)
@@ -277,28 +331,53 @@ export default function AdminPedidosPage() {
 
           <div className="py-2 border-b border-dashed border-black">
             <p className="font-bold mb-1">ITENS DO PEDIDO:</p>
-            {receiptOrder.items.map((item, idx) => (
-              <div key={idx} className="mb-2">
-                <div className="flex justify-between font-bold">
-                  <span>{item.quantity}x {item.name}</span>
-                  <span>R$ {(Number(item.price || 0) * item.quantity).toFixed(2)}</span>
-                </div>
-                {item.pastaType && (
-                  <p className="text-[10px] pl-3 italic">Massa: {item.pastaType}</p>
-                )}
-                {item.adicionais && item.adicionais.length > 0 && (
-                  <div className="pl-3 text-[10px]">
-                    {item.adicionais.map((ad: any, aIdx: number) => (
-                      <p key={aIdx}>+ {ad.quantity}x {ad.name || ad.nome}</p>
-                    ))}
+            {receiptOrder.items.map((item, idx) => {
+              const itemTotal = getItemTotal(item)
+              return (
+                <div key={idx} className="mb-2">
+                  <div className="flex justify-between font-bold">
+                    <span>{item.quantity}x {item.name}</span>
+                    <span>R$ {itemTotal.toFixed(2)}</span>
                   </div>
-                )}
-                {item.notes && (
-                  <p className="text-[10px] pl-3 font-semibold">Obs: {item.notes}</p>
-                )}
-              </div>
-            ))}
+                  {item.pastaType && (
+                    <p className="text-[10px] pl-3 italic">Massa: {item.pastaType}</p>
+                  )}
+                  {item.adicionais && item.adicionais.length > 0 && (
+                    <div className="pl-3 text-[10px] space-y-0.5">
+                      {item.adicionais.map((ad: any, aIdx: number) => {
+                        const adPrice = getAdicionalPrice(ad)
+                        const adQty = Number(ad.quantity || 1)
+                        return (
+                          <div key={aIdx} className="flex justify-between">
+                            <span>+ {adQty}x {ad.name || ad.nome}</span>
+                            {adPrice > 0 ? (
+                              <span>R$ {(adPrice * adQty).toFixed(2)}</span>
+                            ) : (
+                              <span>(Incluso)</span>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                  {item.notes && (
+                    <p className="text-[10px] pl-3 font-semibold">Obs: {item.notes}</p>
+                  )}
+                </div>
+              )
+            })}
           </div>
+
+          {(receiptOrder.couponCode || (receiptOrder.discountAmount ?? 0) > 0) && (
+            <div className="my-2 p-1.5 border border-black border-dashed text-center">
+              <p className="font-bold text-[11px]">
+                &gt;&gt;&gt; CUPOM APLICADO: {receiptOrder.couponCode || "DESCONTO"} &lt;&lt;&lt;
+              </p>
+              <p className="text-[10px]">
+                Desconto concedido: - R$ {(receiptOrder.discountAmount ?? 0).toFixed(2)}
+              </p>
+            </div>
+          )}
 
           {receiptOrder.notes && (
             <div className="py-2 border-b border-dashed border-black">
@@ -317,22 +396,40 @@ export default function AdminPedidosPage() {
             <p><span className="font-bold">FORMA DE PAGAMENTO:</span> {(receiptOrder.paymentMethod || "").toUpperCase()}</p>
           </div>
 
-          <div className="pt-2 text-right space-y-0.5">
-            <div className="flex justify-between text-[11px]">
-              <span>Subtotal:</span>
-              <span>R$ {((receiptOrder.total || 0) + (receiptOrder.discountAmount || 0)).toFixed(2)}</span>
-            </div>
-            {(receiptOrder.discountAmount ?? 0) > 0 && (
-              <div className="flex justify-between text-[11px]">
-                <span>Desconto ({receiptOrder.couponCode || "Cupom"}):</span>
-                <span>- R$ {(receiptOrder.discountAmount ?? 0).toFixed(2)}</span>
+          {(() => {
+            const receiptItemsSubtotal = (receiptOrder.items || []).reduce(
+              (sum, it) => sum + getItemTotal(it),
+              0
+            )
+            const receiptDeliveryFee = receiptOrder.deliveryType === "pickup"
+              ? 0
+              : Number(receiptOrder.metadata?.deliveryFee ?? Math.max(0, (receiptOrder.total || 0) - receiptItemsSubtotal + (receiptOrder.discountAmount || 0)))
+
+            return (
+              <div className="pt-2 text-right space-y-0.5">
+                <div className="flex justify-between text-[11px]">
+                  <span>Subtotal Itens:</span>
+                  <span>R$ {receiptItemsSubtotal.toFixed(2)}</span>
+                </div>
+                {receiptDeliveryFee > 0 && (
+                  <div className="flex justify-between text-[11px]">
+                    <span>Taxa de Entrega:</span>
+                    <span>R$ {receiptDeliveryFee.toFixed(2)}</span>
+                  </div>
+                )}
+                {(receiptOrder.discountAmount ?? 0) > 0 && (
+                  <div className="flex justify-between text-[11px] font-bold">
+                    <span>Desconto ({receiptOrder.couponCode || "Cupom"}):</span>
+                    <span>- R$ {(receiptOrder.discountAmount ?? 0).toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold text-sm pt-1 border-t border-black">
+                  <span>TOTAL:</span>
+                  <span>R$ {Number(receiptOrder.total || 0).toFixed(2)}</span>
+                </div>
               </div>
-            )}
-            <div className="flex justify-between font-bold text-sm pt-1 border-t border-black">
-              <span>TOTAL:</span>
-              <span>R$ {Number(receiptOrder.total || 0).toFixed(2)}</span>
-            </div>
-          </div>
+            )
+          })()}
 
           <div className="mt-4 pt-2 text-center text-[9px] border-t border-dashed border-black">
             <p>Batata Top Gourmet • Gestor de Pedidos</p>
@@ -545,6 +642,14 @@ export default function AdminPedidosPage() {
                                   <Utensils className="h-3.5 w-3.5 opacity-40" /> Sem Talheres
                                 </Badge>
                               )}
+
+                              {/* Badge de Cupom de Desconto */}
+                              {(order.couponCode || (order.discountAmount ?? 0) > 0) && (
+                                <Badge className="bg-emerald-100 text-emerald-800 border-2 border-emerald-300 font-black gap-1.5 text-xs px-2.5 py-0.5 shadow-xs">
+                                  <Ticket className="h-3.5 w-3.5 text-emerald-600" />
+                                  Cupom: {order.couponCode || "Aplicado"} (-R$ {Number(order.discountAmount || 0).toFixed(2).replace('.', ',')})
+                                </Badge>
+                              )}
                             </div>
 
                             <p className="text-sm text-gray-600 font-medium mt-1">
@@ -668,42 +773,106 @@ export default function AdminPedidosPage() {
                               <ShoppingBag className="h-3.5 w-3.5 text-[#E3A008]" /> Itens do Pedido ({order.items.length})
                             </h4>
                             <div className="space-y-3">
-                              {order.items.map((item, idx) => (
-                                <div
-                                  key={idx}
-                                  className="flex items-start justify-between p-3.5 rounded-2xl bg-gray-50/80 border border-gray-100"
-                                >
-                                  <div className="flex gap-3">
-                                    <div className="h-10 w-10 bg-white rounded-xl flex items-center justify-center font-black text-[#C1440E] border border-amber-200 text-sm shrink-0">
-                                      {item.quantity}x
-                                    </div>
-                                    <div>
-                                      <p className="font-bold text-gray-900 text-base">{item.name}</p>
-                                      {item.pastaType && (
-                                        <span className="inline-block bg-amber-100 text-[#C1440E] text-[10px] font-bold px-2 py-0.5 rounded-md uppercase mt-1">
-                                          Massa: {item.pastaType}
-                                        </span>
-                                      )}
-                                      {item.adicionais && item.adicionais.length > 0 && (
-                                        <p className="text-xs text-gray-600 mt-1">
-                                          <span className="font-semibold text-gray-500">Adicionais: </span>
-                                          {item.adicionais
-                                            .map((a: any) => `${a.quantity || 1}x ${a.name || a.nome}`)
-                                            .join(", ")}
+                              {order.items.map((item, idx) => {
+                                const basePrice = Number(item.price || 0)
+                                const adicsTotal = getItemAdicionaisTotal(item)
+                                const itemUnitTotal = getItemUnitTotal(item)
+                                const itemTotal = getItemTotal(item)
+                                const hasAdicionais = Boolean(item.adicionais && item.adicionais.length > 0)
+
+                                return (
+                                  <div
+                                    key={idx}
+                                    className="p-4 rounded-2xl bg-white border border-gray-200 shadow-xs hover:border-amber-300 transition-all space-y-3"
+                                  >
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="flex gap-3 min-w-0">
+                                        <div className="h-10 w-10 bg-amber-50 rounded-xl flex items-center justify-center font-black text-[#C1440E] border border-amber-200 text-sm shrink-0">
+                                          {item.quantity}x
+                                        </div>
+                                        <div className="min-w-0">
+                                          <p className="font-black text-gray-900 text-base leading-snug">{item.name}</p>
+                                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                            <span className="text-[11px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">
+                                              Base: R$ {basePrice.toFixed(2).replace('.', ',')}
+                                            </span>
+                                            {item.pastaType && (
+                                              <span className="inline-block bg-amber-100 text-[#C1440E] text-[11px] font-extrabold px-2 py-0.5 rounded-md uppercase">
+                                                Massa: {item.pastaType}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <div className="text-right shrink-0">
+                                        <p className="font-black text-[#C1440E] text-lg">
+                                          R$ {itemTotal.toFixed(2).replace('.', ',')}
                                         </p>
-                                      )}
-                                      {item.notes && (
-                                        <p className="text-xs text-amber-700 italic mt-1 bg-amber-50 px-2 py-0.5 rounded border border-amber-100 inline-block">
-                                          Obs item: {item.notes}
-                                        </p>
-                                      )}
+                                        {hasAdicionais && (
+                                          <p className="text-[10px] font-semibold text-gray-400">
+                                            {item.quantity > 1 ? `${item.quantity}x ` : ""}
+                                            (R$ {itemUnitTotal.toFixed(2).replace('.', ',')} un.)
+                                          </p>
+                                        )}
+                                      </div>
                                     </div>
+
+                                    {/* Bloco Destaque de Adicionais */}
+                                    {hasAdicionais && (
+                                      <div className="bg-amber-50/70 rounded-xl p-3 border border-amber-200/70">
+                                        <div className="flex items-center justify-between text-[11px] font-black text-amber-900 uppercase tracking-wider mb-2">
+                                          <span className="flex items-center gap-1.5">
+                                            <Sparkles className="h-3.5 w-3.5 text-[#E3A008]" />
+                                            Adicionais do Item ({item.adicionais.length})
+                                          </span>
+                                          <span className="text-[#C1440E] font-bold text-xs">
+                                            Total Adicionais: + R$ {(adicsTotal * item.quantity).toFixed(2).replace('.', ',')}
+                                          </span>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                          {item.adicionais.map((ad: any, aIdx: number) => {
+                                            const adPrice = getAdicionalPrice(ad)
+                                            const adQty = Number(ad.quantity || 1)
+                                            const adSubtotal = adPrice * adQty
+
+                                            return (
+                                              <div
+                                                key={aIdx}
+                                                className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border border-amber-100 text-xs shadow-2xs"
+                                              >
+                                                <div className="flex items-center gap-1.5 min-w-0 pr-2">
+                                                  <span className="bg-amber-100 text-[#C1440E] font-black px-1.5 py-0.5 rounded text-[10px] shrink-0">
+                                                    {adQty}x
+                                                  </span>
+                                                  <span className="font-bold text-gray-800 truncate">
+                                                    {ad.name || ad.nome}
+                                                  </span>
+                                                </div>
+                                                <span className="font-extrabold text-emerald-700 text-xs shrink-0">
+                                                  {adPrice > 0 ? (
+                                                    <>+ R$ {adSubtotal.toFixed(2).replace('.', ',')}</>
+                                                  ) : (
+                                                    <span className="text-gray-400 font-medium text-[10px]">Incluso</span>
+                                                  )}
+                                                </span>
+                                              </div>
+                                            )
+                                          })}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {item.notes && (
+                                      <div className="text-xs text-amber-800 italic bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200/80 flex items-center gap-1.5">
+                                        <FileText className="h-3 w-3 text-amber-600 shrink-0" />
+                                        <span>Obs do item: {item.notes}</span>
+                                      </div>
+                                    )}
                                   </div>
-                                  <p className="font-black text-gray-900 text-base">
-                                    R$ {(Number(item.price || 0) * item.quantity).toFixed(2)}
-                                  </p>
-                                </div>
-                              ))}
+                                )
+                              })}
                             </div>
                           </div>
 
@@ -780,30 +949,73 @@ export default function AdminPedidosPage() {
                           </div>
 
                           {/* Totais Financeiros */}
-                          <div className="pt-4 border-t border-gray-200 space-y-2">
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-gray-500 font-semibold">Subtotal</span>
-                              <span className="font-bold text-gray-900">
-                                R$ {(order.total + (order.discountAmount || 0)).toFixed(2)}
-                              </span>
-                            </div>
+                          {(() => {
+                            const itemsSubtotal = (order.items || []).reduce(
+                              (sum, it) => sum + getItemTotal(it),
+                              0
+                            )
+                            const deliveryFee = order.deliveryType === "pickup"
+                              ? 0
+                              : Number(order.metadata?.deliveryFee ?? Math.max(0, order.total - itemsSubtotal + (order.discountAmount || 0)))
+                            const hasCoupon = Boolean(order.couponCode || (order.discountAmount ?? 0) > 0)
 
-                            {(order.discountAmount ?? 0) > 0 && (
-                              <div className="flex items-center justify-between text-sm text-emerald-600">
-                                <span className="font-bold flex items-center gap-1">
-                                  <Ticket className="h-3.5 w-3.5" /> Desconto ({order.couponCode || "Cupom"})
-                                </span>
-                                <span className="font-bold">- R$ {(order.discountAmount ?? 0).toFixed(2)}</span>
+                            return (
+                              <div className="pt-4 border-t border-gray-200 space-y-3">
+                                {/* Banner de Cupom de Desconto */}
+                                {hasCoupon && (
+                                  <div className="p-3 rounded-2xl bg-emerald-50 border-2 border-emerald-200 text-emerald-900 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <div className="h-8 w-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                                        <Ticket className="h-4 w-4" />
+                                      </div>
+                                      <div>
+                                        <p className="text-[10px] font-black uppercase tracking-wider text-emerald-700">Cupom de Desconto Ativo</p>
+                                        <p className="font-black text-sm text-emerald-950 uppercase">{order.couponCode || "DESCONTO APLICADO"}</p>
+                                      </div>
+                                    </div>
+                                    <span className="text-base font-black text-emerald-700">
+                                      - R$ {Number(order.discountAmount || 0).toFixed(2).replace('.', ',')}
+                                    </span>
+                                  </div>
+                                )}
+
+                                <div className="space-y-1.5 text-sm bg-gray-50/80 p-3.5 rounded-2xl border border-gray-100">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-gray-600 font-semibold">Subtotal dos Itens</span>
+                                    <span className="font-bold text-gray-900">
+                                      R$ {itemsSubtotal.toFixed(2).replace('.', ',')}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center justify-between text-xs">
+                                    <span className="text-gray-500 font-semibold">
+                                      {order.deliveryType === "pickup" ? "Retirada no Balcão" : "Taxa de Entrega"}
+                                    </span>
+                                    <span className="font-bold text-gray-900">
+                                      {deliveryFee > 0 ? `R$ ${deliveryFee.toFixed(2).replace('.', ',')}` : "Grátis"}
+                                    </span>
+                                  </div>
+
+                                  {hasCoupon && (
+                                    <div className="flex items-center justify-between text-xs text-emerald-700 font-bold">
+                                      <span>Desconto do Cupom ({order.couponCode || "Cupom"})</span>
+                                      <span>- R$ {Number(order.discountAmount || 0).toFixed(2).replace('.', ',')}</span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200">
+                                  <div>
+                                    <span className="text-xs font-black text-gray-500 uppercase tracking-wider block">Total a Pagar</span>
+                                    <span className="text-sm font-bold text-gray-700">{order.paymentMethod?.toUpperCase()}</span>
+                                  </div>
+                                  <span className="text-3xl font-black text-[#C1440E]">
+                                    R$ {Number(order.total).toFixed(2).replace('.', ',')}
+                                  </span>
+                                </div>
                               </div>
-                            )}
-
-                            <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                              <span className="text-base font-black text-gray-900">Total do Pedido</span>
-                              <span className="text-2xl font-black text-[#C1440E]">
-                                R$ {Number(order.total).toFixed(2)}
-                              </span>
-                            </div>
-                          </div>
+                            )
+                          })()}
                         </div>
                       </div>
                     </CardContent>

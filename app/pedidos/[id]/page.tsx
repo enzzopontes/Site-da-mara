@@ -567,10 +567,11 @@ export default function DetalhesPedidoPage() {
             <div className="p-5 space-y-4">
               {order.items && order.items.length > 0 ? (
                 order.items.map((item: any, idx: number) => {
-                  const adicText = (item.adicionais || [])
-                    .map((a: any) => (typeof a === "string" ? a : a?.name || a?.nome))
-                    .filter(Boolean)
-                    .join(", ")
+                  const adicsTotal = (item.adicionais || []).reduce(
+                    (s: number, a: any) => s + Number(a.price || a.preco || 0) * Number(a.quantity || 1),
+                    0
+                  )
+                  const itemTotal = (Number(item.price || 0) + adicsTotal) * Number(item.quantity || 1)
 
                   return (
                     <div
@@ -593,10 +594,23 @@ export default function DetalhesPedidoPage() {
                           </span>
                         )}
 
-                        {adicText && (
-                          <p className="text-[11px] text-[#6B6157] font-medium pl-7 mt-0.5">
-                            + {adicText}
-                          </p>
+                        {item.adicionais && item.adicionais.length > 0 && (
+                          <div className="pl-7 mt-1 space-y-0.5">
+                            {item.adicionais.map((a: any, aIdx: number) => {
+                              const aPrice = Number(a.price || a.preco || 0)
+                              const aQty = Number(a.quantity || 1)
+                              return (
+                                <p key={aIdx} className="text-[11px] text-[#6B6157] font-medium flex items-center justify-between">
+                                  <span>+ {aQty}x {a.name || a.nome || a}</span>
+                                  {aPrice > 0 && (
+                                    <span className="text-emerald-700 font-bold ml-2">
+                                      + R$ {(aPrice * aQty).toFixed(2).replace(".", ",")}
+                                    </span>
+                                  )}
+                                </p>
+                              )
+                            })}
+                          </div>
                         )}
 
                         {item.notes && (
@@ -607,7 +621,7 @@ export default function DetalhesPedidoPage() {
                       </div>
 
                       <span className="font-extrabold text-[#1F1B16] shrink-0 text-right">
-                        R$ {(item.price * item.quantity).toFixed(2).replace(".", ",")}
+                        R$ {itemTotal.toFixed(2).replace(".", ",")}
                       </span>
                     </div>
                   )

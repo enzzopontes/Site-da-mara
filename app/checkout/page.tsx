@@ -579,8 +579,16 @@ export default function CheckoutPage() {
         },
         items: items.map((item) => ({
           product_id: item.id.slice(0, 36),
+          name: item.name,
+          price: item.price,
           quantity: item.quantity,
-          adicionais: item.adicionais || [],
+          notes: item.observacoes || null,
+          adicionais: (item.adicionais || []).map((a) => ({
+            id: a.id,
+            name: a.name,
+            price: Number(a.price || 0),
+            quantity: Number(a.quantity || 1),
+          })),
           pastaType: item.pastaType || null,
         })),
       }
