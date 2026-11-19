@@ -199,7 +199,10 @@ export function AuthContainer({
   useEffect(() => {
     if (user && step === "email") {
       processPendingCartItem()
-      const returnUrl = sanitizeReturnUrl(searchParams.get("returnUrl"))
+      const targetUrl =
+        searchParams.get("returnUrl") || searchParams.get("redirect") || "/cardapio"
+      const returnUrl = sanitizeReturnUrl(targetUrl, "/cardapio")
+      router.refresh()
       router.replace(returnUrl)
     }
   }, [user, step, router, searchParams])
@@ -316,7 +319,10 @@ export function AuthContainer({
     }
     processPendingCartItem()
     appToast.success("Login realizado com sucesso!")
-    const returnUrl = sanitizeReturnUrl(searchParams.get("returnUrl"))
+    const targetUrl =
+      searchParams.get("returnUrl") || searchParams.get("redirect") || "/cardapio"
+    const returnUrl = sanitizeReturnUrl(targetUrl, "/cardapio")
+    router.refresh()
     router.replace(returnUrl)
   }
 

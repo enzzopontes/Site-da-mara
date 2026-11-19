@@ -19,6 +19,7 @@ interface AuthModalProps {
   isOpen?: boolean
   onClose?: () => void
   initialEmail?: string
+  returnUrl?: string
 }
 
 type AuthView = "welcome" | "saved_account"
@@ -57,7 +58,7 @@ const FAQ_ITEMS = [
   },
 ]
 
-export function AuthModal({ isOpen, onClose, initialEmail }: AuthModalProps) {
+export function AuthModal({ isOpen, onClose, initialEmail, returnUrl }: AuthModalProps) {
   const router = useRouter()
   const pathname = usePathname()
   const {
@@ -67,7 +68,18 @@ export function AuthModal({ isOpen, onClose, initialEmail }: AuthModalProps) {
     authModalOpen,
     closeAuthModal,
   } = useAuth()
-  const { addItem } = useCart()
+  const { items, addItem } = useCart()
+
+  // Detecta se a intenção do fluxo é ir para o checkout (sacola cheia, item pendente ou rota atual)
+  const isCheckoutIntent = Boolean(
+    returnUrl === "/checkout" ||
+    pathname === "/checkout" ||
+    items.length > 0 ||
+    (typeof window !== "undefined" &&
+      Boolean(sessionStorage.getItem("batata_pending_cart_item")))
+  )
+
+  const resolvedReturnUrl = returnUrl || (isCheckoutIntent ? "/checkout" : undefined)
 
   const effectiveOpen = isOpen ?? authModalOpen
   const effectiveOnClose = useCallback(() => {
@@ -192,13 +204,19 @@ export function AuthModal({ isOpen, onClose, initialEmail }: AuthModalProps) {
     const params = new URLSearchParams()
     if (emailPrefill) params.set("email", emailPrefill)
     if (stepParam) params.set("step", stepParam)
+    if (resolvedReturnUrl) {
+      params.set("returnUrl", resolvedReturnUrl)
+    }
     const qs = params.toString()
     navigateDirectToAuth(qs ? `/login?${qs}` : "/login")
   }
 
   // Navega para página dedicada de cadastro sem flash da Home
   const handleGoToRegister = () => {
-    navigateDirectToAuth("/login?mode=register")
+    const target = resolvedReturnUrl
+      ? `/login?mode=register&returnUrl=${encodeURIComponent(resolvedReturnUrl)}`
+      : "/login?mode=register"
+    navigateDirectToAuth(target)
   }
 
   // Fluxo "Continuar" na conta recente deslogada (Cenário A: token válido / Cenário B: OTP + cooldown 60s)
@@ -220,6 +238,9 @@ export function AuthModal({ isOpen, onClose, initialEmail }: AuthModalProps) {
         setContinueLoading(false)
         effectiveOnClose()
         router.refresh()
+        if (isCheckoutIntent) {
+          router.push("/checkout")
+        }
         return
       }
 

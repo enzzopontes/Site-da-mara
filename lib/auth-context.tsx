@@ -309,6 +309,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     authEpochRef.current += 1
     if (data?.session) {
       persistSavedAccountSession(data.session)
+      try {
+        await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        })
+      } catch (syncErr) {
+        console.warn("[Auth] Aviso ao sincronizar setSession pós-OTP:", syncErr)
+      }
     }
     if (data?.user) {
       setUser(data.user)
@@ -374,6 +382,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email: profileEmail,
             provider: String(profileUser.app_metadata?.provider || "email"),
           })
+          if (latestSession) {
+            try {
+              await supabase.auth.setSession({
+                access_token: latestSession.access_token,
+                refresh_token: latestSession.refresh_token,
+              })
+            } catch {}
+          }
           setUser(verifiedUser)
           setAuthModalOpen(false)
           return { status: "authenticated" }
@@ -383,8 +399,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.warn("[Auth] Sessão salva inválida ou expirada no banco:", err)
     }
 
-    // Cenário B: Token expirado/inválido ou ausente -> limpa tokens inválidos e checa cooldown de 60s
-    clearSupabaseBrowserCookiesAndStorage()
+    // Cenário B: Token expirado ou ausente -> preserva estado sem limpeza agressiva de cookies
     setUser(null)
 
     const cooldownRemaining = getOtpCooldownRemaining(cleanEmail)

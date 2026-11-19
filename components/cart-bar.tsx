@@ -7,10 +7,27 @@ import { usePathname } from "next/navigation"
 import { useCart } from "@/lib/cart-context"
 import { useAuth } from "@/lib/auth-context"
 
+const hasLocalAuthToken = (): boolean => {
+  if (typeof window === "undefined") return false
+  try {
+    const hasCookie = Boolean(
+      document.cookie &&
+        (document.cookie.includes("sb-") ||
+          document.cookie.includes("supabase.auth.token"))
+    )
+    const hasStorage = Object.keys(localStorage).some(
+      (k) => k.startsWith("sb-") || k.includes("supabase.auth.token")
+    )
+    return hasCookie || hasStorage
+  } catch {
+    return false
+  }
+}
+
 export function CartBar() {
   const pathname = usePathname()
   const { items, getTotalPrice } = useCart()
-  const { user, openAuthModal } = useAuth()
+  const { user, loading: authLoading, openAuthModal } = useAuth()
   const [isMapActive, setIsMapActive] = useState(false)
 
   useEffect(() => {
@@ -79,11 +96,23 @@ export function CartBar() {
     : "bottom-0"
 
   const handleCheckoutClick = (e: React.MouseEvent) => {
-    if (!user) {
-      e.preventDefault()
-      openAuthModal()
+    // 1. Se autenticado ou com token presente nos cookies/localStorage, permite navegação direta
+    if (user || hasLocalAuthToken()) {
+      return
     }
+
+    // 2. Se a autenticação ainda está carregando, bloqueia sem abrir modal indevidamente
+    if (authLoading) {
+      e.preventDefault()
+      return
+    }
+
+    // 3. Usuário comprovadamente não autenticado: abre modal de auth
+    e.preventDefault()
+    openAuthModal()
   }
+
+  const isCheckingAuth = authLoading && !user && !hasLocalAuthToken()
 
   return (
     <aside
@@ -123,9 +152,17 @@ export function CartBar() {
         <Link
           href="/checkout"
           onClick={handleCheckoutClick}
+          aria-busy={isCheckingAuth}
           className="w-1/2 py-3 px-4 bg-[#E3A008] hover:bg-[#C1440E] active:scale-[0.98] text-white font-bold text-base rounded-[4px] flex items-center justify-center transition-all duration-200 cursor-pointer"
         >
-          Ver sacola
+          {isCheckingAuth ? (
+            <span className="flex items-center gap-2 text-sm font-semibold">
+              <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              <span>Verificando...</span>
+            </span>
+          ) : (
+            "Ver sacola"
+          )}
         </Link>
       </div>
     </aside>
