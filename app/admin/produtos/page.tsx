@@ -66,6 +66,7 @@ export default function AdminProdutosPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [editingAdicional, setEditingAdicional] = useState<Adicional | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [isAdicionalDialogOpen, setIsAdicionalDialogOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<"batata" | "macarrao" | "bebida" | "adicionais">("batata")
   const [searchQuery, setSearchQuery] = useState("")
@@ -291,25 +292,24 @@ export default function AdminProdutosPage() {
       category: formCategory,
     }
 
-    if (editingProduct) {
-      const updated = await productsManager.updateProduct(editingProduct.id, productPayload)
-
-      if (updated) {
-        await productsManager.setProductAdicionais(editingProduct.id, selectedAdicionais)
+    if (isSaving) return
+    setIsSaving(true)
+    try {
+      if (editingProduct) {
+        await productsManager.updateProduct(editingProduct.id, productPayload, selectedAdicionais)
+        appToast.success("Produto atualizado", `"${productPayload.name}" foi salvo com sucesso.`)
+      } else {
+        await productsManager.createProduct({ ...productPayload, available: true }, selectedAdicionais)
+        appToast.success("Produto criado", `"${productPayload.name}" foi cadastrado com sucesso.`)
       }
-    } else {
-      const created = await productsManager.createProduct({
-        ...productPayload,
-        available: true,
-      })
-
-      if (created) {
-        await productsManager.setProductAdicionais(created.id, selectedAdicionais)
-      }
+      await loadProducts()
+      setIsDialogOpen(false)
+    } catch (err) {
+      // Modal permanece aberto para o admin corrigir e tentar de novo
+      appToast.error("Não foi possível salvar o produto", err instanceof Error ? err.message : String(err))
+    } finally {
+      setIsSaving(false)
     }
-    loadProducts()
-    setIsDialogOpen(false)
-    return
   }
 
   const handleSaveAdicional = async () => {
@@ -364,9 +364,13 @@ export default function AdminProdutosPage() {
   const handleToggleAvailability = async (product: Product) => {
     const newStatus = !product.available
     setProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, available: newStatus } : p)))
-    await productsManager.updateProduct(product.id, {
-      available: newStatus,
-    })
+    try {
+      await productsManager.updateProduct(product.id, {
+        available: newStatus,
+      })
+    } catch (err) {
+      appToast.error("Erro ao alterar disponibilidade", err instanceof Error ? err.message : String(err))
+    }
     loadProducts()
   }
 
@@ -985,15 +989,17 @@ export default function AdminProdutosPage() {
                 type="button"
                 variant="outline"
                 onClick={() => setIsDialogOpen(false)}
+                disabled={isSaving}
                 className="rounded-xl font-bold text-xs h-10 px-4"
               >
                 Cancelar
               </Button>
               <Button
                 type="submit"
+                disabled={isSaving}
                 className="bg-[#EA1D2C] hover:bg-[#d01826] text-white font-bold rounded-xl text-xs h-10 px-6 shadow-sm"
               >
-                {editingProduct ? "Salvar Alterações" : "Criar Produto"}
+                {isSaving ? "Salvando..." : editingProduct ? "Salvar Alterações" : "Criar Produto"}
               </Button>
             </div>
           </form>

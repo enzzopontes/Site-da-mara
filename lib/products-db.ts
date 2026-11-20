@@ -1,5 +1,43 @@
 import { getSupabase } from "./supabase-fix"
 
+// Converte "12,50" ou 12.5 em number; vazio vira null.
+function toNumber(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null
+  const n = typeof v === "number" ? v : Number.parseFloat(String(v).replace(",", "."))
+  return Number.isFinite(n) ? n : null
+}
+
+/**
+ * Chama /api/admin/products. Retorna data em sucesso.
+ * Retorna null SOMENTE se a API estiver indisponivel (rede/404) => caller usa fallback.
+ * Lanca Error com a mensagem do servidor em qualquer falha de negocio (401/403/400/500).
+ */
+async function callAdminApi<T = any>(body: Record<string, unknown>): Promise<T | null> {
+  let res: Response
+  try {
+    res = await fetch("/api/admin/products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify(body),
+    })
+  } catch {
+    return null
+  }
+  if (res.status === 404) return null
+
+  let json: any = null
+  try {
+    json = await res.json()
+  } catch {
+    // corpo nao-JSON
+  }
+  if (!res.ok || !json?.success) {
+    throw new Error(json?.error || `Falha na API (HTTP ${res.status}).`)
+  }
+  return json.data as T
+}
+
 export interface Adicional {
   id: string
   name: string
@@ -376,84 +414,116 @@ class ProductsManager {
     return (await this.getProducts()).find(p => p.id === id)
   }
 
-  async createProduct(product: Omit<Product, "id" | "adicionais" | "createdAt" | "updatedAt">): Promise<Product | null> {
-    try {
+  async createProduct(
+    product: Omit<Product, "id" | "adicionais" | "createdAt" | "updatedAt">,
+    adicionalIds: string[] = [],
+  ): Promise<Product> {
+    const payload = {
+      name: product.name,
+      description: product.description,
+      price: toNumber(product.price),
+      image: product.image,
+      category: product.category,
+      available: product.available ?? true,
+      originalPrice: toNumber(product.originalPrice ?? (product as any).original_price),
+      discountPercentage: toNumber(product.discountPercentage ?? (product as any).discount_percentage),
+      badgeText: product.badgeText ?? (product as any).badge_text ?? null,
+      isFeatured: product.isFeatured ?? (product as any).is_featured ?? false,
+    }
+
+    const res = await callAdminApi<{ product: any; warning?: string }>({
+      action: "createProduct",
+      product: payload,
+      adicionalIds,
+    })
+
+    let data: any
+    if (res) {
+      data = res.product
+      if (res.warning) console.warn("createProduct:", res.warning)
+    } else {
+      // Fallback (API indisponivel): insert direto, sujeito a RLS
       const supabase = await getSupabase()
-      const { data, error } = await supabase
+      const { data: row, error } = await supabase
         .from("products")
         .insert([{
-          name: product.name,
-          description: product.description,
-          price: product.price,
-          image_url: product.image,
-          category: product.category,
-          available: product.available ?? true,
-          original_price: product.originalPrice ?? product.original_price ?? null,
-          discount_percentage: product.discountPercentage ?? product.discount_percentage ?? null,
-          badge_text: product.badgeText ?? product.badge_text ?? null,
-          is_featured: product.isFeatured ?? product.is_featured ?? false,
+          name: payload.name,
+          description: payload.description,
+          price: payload.price,
+          image_url: payload.image,
+          category: payload.category,
+          available: payload.available,
+          original_price: payload.originalPrice,
+          discount_percentage: payload.discountPercentage,
+          badge_text: payload.badgeText,
+          is_featured: payload.isFeatured,
         }])
         .select()
         .single()
+      if (error) throw new Error(`Erro ao criar produto: ${error.message}`)
+      data = row
+      if (adicionalIds.length) await this.setProductAdicionais(String(data.id), adicionalIds)
+    }
 
-      if (error) {
-        console.error("Erro ao criar produto:", error.message)
-        return null
-      }
-
-      return {
-        ...data,
-        id: data.id,
-        image: data.image_url,
-        adicionais: [],
-        createdAt: new Date(data.created_at),
-        updatedAt: new Date(data.updated_at)
-      }
-    } catch (error) {
-      console.error("Erro inesperado ao criar produto:", error)
-      return null
+    return {
+      ...data,
+      id: data.id,
+      image: data.image_url,
+      adicionais: [],
+      createdAt: new Date(data.created_at),
+      updatedAt: new Date(data.updated_at),
     }
   }
 
-  async updateProduct(id: string, updates: Partial<Omit<Product, "id" | "adicionais" | "createdAt" | "updatedAt">> & { available?: boolean }): Promise<boolean> {
-    try {
-      const supabase = await getSupabase()
-      const dataToUpdate: any = {}
-      
-      if (updates.name !== undefined) dataToUpdate.name = updates.name
-      if (updates.description !== undefined) dataToUpdate.description = updates.description
-      if (updates.price !== undefined) dataToUpdate.price = updates.price
-      if (updates.image !== undefined) dataToUpdate.image_url = updates.image
-      if (updates.category !== undefined) dataToUpdate.category = updates.category
-      if (updates.available !== undefined) dataToUpdate.available = updates.available
-      if (updates.originalPrice !== undefined || (updates as any).original_price !== undefined) {
-        dataToUpdate.original_price = updates.originalPrice ?? (updates as any).original_price ?? null
-      }
-      if (updates.discountPercentage !== undefined || (updates as any).discount_percentage !== undefined) {
-        dataToUpdate.discount_percentage = updates.discountPercentage ?? (updates as any).discount_percentage ?? null
-      }
-      if (updates.badgeText !== undefined || (updates as any).badge_text !== undefined) {
-        dataToUpdate.badge_text = updates.badgeText ?? (updates as any).badge_text ?? null
-      }
-      if (updates.isFeatured !== undefined || (updates as any).is_featured !== undefined) {
-        dataToUpdate.is_featured = updates.isFeatured ?? (updates as any).is_featured ?? false
-      }
+  /** Atualiza produto. Se adicionalIds for passado, sincroniza vinculos na mesma chamada. */
+  async updateProduct(
+    id: string,
+    updates: Partial<Omit<Product, "id" | "adicionais" | "createdAt" | "updatedAt">> & { available?: boolean },
+    adicionalIds?: string[],
+  ): Promise<boolean> {
+    const u: any = updates
+    const payload: Record<string, unknown> = {}
+    if (u.name !== undefined) payload.name = u.name
+    if (u.description !== undefined) payload.description = u.description
+    if (u.price !== undefined) payload.price = toNumber(u.price)
+    if (u.image !== undefined) payload.image = u.image
+    if (u.category !== undefined) payload.category = u.category
+    if (u.available !== undefined) payload.available = u.available
+    if (u.originalPrice !== undefined || u.original_price !== undefined)
+      payload.originalPrice = toNumber(u.originalPrice ?? u.original_price)
+    if (u.discountPercentage !== undefined || u.discount_percentage !== undefined)
+      payload.discountPercentage = toNumber(u.discountPercentage ?? u.discount_percentage)
+    if (u.badgeText !== undefined || u.badge_text !== undefined) payload.badgeText = u.badgeText ?? u.badge_text ?? null
+    if (u.isFeatured !== undefined || u.is_featured !== undefined)
+      payload.isFeatured = u.isFeatured ?? u.is_featured ?? false
 
-      const { error } = await supabase
-        .from("products")
-        .update(dataToUpdate)
-        .eq("id", id)
+    const res = await callAdminApi({
+      action: "updateProduct",
+      productId: id,
+      updates: payload,
+      ...(adicionalIds ? { adicionalIds } : {}),
+    })
+    if (res) return true
 
-      if (error) {
-        console.error("Erro ao atualizar produto:", error.message)
-        return false
-      }
-
-      return true
-    } catch (error) {
-      console.error("Erro inesperado ao atualizar produto:", error)
-      return false
+    // Fallback (API indisponivel): update direto, sujeito a RLS
+    const supabase = await getSupabase()
+    const row: Record<string, unknown> = {}
+    if (payload.name !== undefined) row.name = payload.name
+    if (payload.description !== undefined) row.description = payload.description
+    if (payload.price !== undefined) row.price = payload.price
+    if (payload.image !== undefined) row.image_url = payload.image
+    if (payload.category !== undefined) row.category = payload.category
+    if (payload.available !== undefined) row.available = payload.available
+    if (payload.originalPrice !== undefined) row.original_price = payload.originalPrice
+    if (payload.discountPercentage !== undefined) row.discount_percentage = payload.discountPercentage
+    if (payload.badgeText !== undefined) row.badge_text = payload.badgeText
+    if (payload.isFeatured !== undefined) row.is_featured = payload.isFeatured
+    if (Object.keys(row).length) {
+      const { error } = await supabase.from("products").update(row).eq("id", id)
+      if (error) throw new Error(`Erro ao atualizar produto: ${error.message}`)
     }
+    if (adicionalIds) await this.setProductAdicionais(id, adicionalIds)
+    return true
   }
 
   async deleteProduct(id: string): Promise<boolean> {
@@ -467,19 +537,21 @@ class ProductsManager {
     }
   }
 
-  async setProductAdicionais(productId: string, adicionalIds: string[]) {
-    try {
-      const supabase = await getSupabase()
-      await supabase.from("product_adicionais").delete().eq("product_id", productId)
-      if (adicionalIds.length) {
-        await supabase.from("product_adicionais").insert(
-          adicionalIds.map(id => ({ product_id: productId, adicional_id: id }))
-        )
-      }
-      return true
-    } catch {
-      return false
+  async setProductAdicionais(productId: string, adicionalIds: string[]): Promise<boolean> {
+    const res = await callAdminApi({ action: "setAdicionais", productId, adicionalIds })
+    if (res) return true
+
+    // Fallback (API indisponivel): direto, sujeito a RLS
+    const supabase = await getSupabase()
+    const { error: delErr } = await supabase.from("product_adicionais").delete().eq("product_id", productId)
+    if (delErr) throw new Error(`Erro ao limpar adicionais: ${delErr.message}`)
+    if (adicionalIds.length) {
+      const { error } = await supabase
+        .from("product_adicionais")
+        .insert(adicionalIds.map((id) => ({ product_id: productId, adicional_id: id })))
+      if (error) throw new Error(`Erro ao vincular adicionais: ${error.message}`)
     }
+    return true
   }
 
   async getMostRequestedProduct(): Promise<TopProductStats> {
