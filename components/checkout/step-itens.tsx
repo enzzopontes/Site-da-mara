@@ -12,7 +12,7 @@ import {
 } from "lucide-react"
 import { useCart, CartItem } from "@/lib/cart-context"
 import { CouponModal } from "@/components/coupons/coupon-modal"
-import { CouponProgressBar } from "@/components/coupons/coupon-progress-bar"
+import { CouponStatusCard } from "@/components/coupons/coupon-status-card"
 
 interface StepItensProps {
   items: CartItem[]
@@ -66,21 +66,14 @@ export function StepItens({
 }: StepItensProps) {
   const router = useRouter()
   const { activeTrackCoupon } = useCart()
+  // Cupom exibido: o do checkout (local) ou o da sacola (aplicado/pendente).
+  const displayCoupon = appliedCoupon ?? activeTrackCoupon
   const [isCouponModalOpen, setIsCouponModalOpen] = useState(false)
 
   // Filtra produtos recomendados que já estão na sacola
   const cartProductIds = new Set(items.map((i) => i.id.split("-")[0]))
   const filteredRecommendations = recommendedProducts.filter(
     (p) => !cartProductIds.has(String(p.id)) && p.available !== false
-  )
-
-  const isPercentage =
-    appliedCoupon?.discount_type === "percentage" ||
-    appliedCoupon?.discount_type === "percent" ||
-    appliedCoupon?.type === "percentage"
-
-  const discountVal = Number(
-    appliedCoupon?.discount_value ?? appliedCoupon?.discount ?? 0
   )
 
   return (
@@ -288,71 +281,33 @@ export function StepItens({
         </div>
       )}
 
-      {/* Barra de Progresso Gamificada do Cupom (se houver cupom ativo ou pendente) */}
-      {activeTrackCoupon && (
-        <CouponProgressBar subtotal={subtotal} targetCoupon={activeTrackCoupon} />
-      )}
-
-      {/* 4. Bloco de Cupom (Idêntico ao Aplicativo) */}
-      <div
-        onClick={() => {
-          if (!appliedCoupon) {
-            router.push("/cupons?from=cart")
-          }
-        }}
-        className={`flex items-center justify-between bg-white rounded-2xl p-3 border border-[#ECE7E0] shadow-xs ${
-          !appliedCoupon ? "cursor-pointer hover:border-[#E3A008]/50 transition-colors" : ""
-        }`}
-      >
-        <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
-          <div className="relative w-8 h-8 flex-shrink-0">
-            <Image
-              src="/assets/cuponpretobranco.png"
-              alt="Cupom"
-              fill
-              sizes="32px"
-              className="object-contain"
-            />
+      {/* 4. Cupom: card único (liberado/pendente) ou convite para ver cupons */}
+      {displayCoupon ? (
+        <CouponStatusCard subtotal={subtotal} coupon={displayCoupon} onRemove={onRemoveCoupon} />
+      ) : (
+        <div
+          onClick={() => router.push("/cupons?from=cart")}
+          className="flex items-center justify-between bg-white rounded-2xl p-3 border border-[#ECE7E0] shadow-xs cursor-pointer hover:border-[#E3A008]/50 transition-colors"
+        >
+          <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
+            <div className="relative w-8 h-8 flex-shrink-0">
+              <Image
+                src="/assets/cuponpretobranco.png"
+                alt="Cupom"
+                fill
+                sizes="32px"
+                className="object-contain"
+              />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-[#1F1B16] leading-tight">Nenhum cupom aplicado</p>
+              <p className="text-xs text-[#6B6157] mt-0.5">
+                {availableCouponsCount != null
+                  ? `${availableCouponsCount} disponível${availableCouponsCount === 1 ? "" : "is"}`
+                  : "1 disponível"}
+              </p>
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            {appliedCoupon ? (
-              <>
-                <p className="text-sm font-bold text-[#1F1B16] leading-tight truncate">
-                  {appliedCoupon.code}
-                </p>
-                <p className="text-xs text-[#6B6157] mt-0.5">
-                  {isPercentage
-                    ? `${discountVal}% de desconto`
-                    : `R$ ${discountVal.toFixed(2).replace(".", ",")} de desconto`}
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="text-sm font-bold text-[#1F1B16] leading-tight">
-                  Nenhum cupom aplicado
-                </p>
-                <p className="text-xs text-[#6B6157] mt-0.5">
-                  {availableCouponsCount != null
-                    ? `${availableCouponsCount} disponível${availableCouponsCount === 1 ? "" : "is"}`
-                    : "1 disponível"}
-                </p>
-              </>
-            )}
-          </div>
-        </div>
-
-        {appliedCoupon ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onRemoveCoupon()
-            }}
-            className="text-sm font-bold text-[#DC2626] hover:opacity-80 active:scale-95 transition-all px-2 py-1 cursor-pointer flex-shrink-0"
-          >
-            Remover
-          </button>
-        ) : (
           <button
             type="button"
             onClick={(e) => {
@@ -363,8 +318,8 @@ export function StepItens({
           >
             Ver cupons
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* 5. Resumo Financeiro */}
       <div className="bg-white rounded-3xl p-4 sm:p-5 border border-[#ECE7E0] shadow-xs space-y-3">

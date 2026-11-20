@@ -10,6 +10,7 @@ import { appToast } from "@/lib/app-toast"
 import { useCart } from "@/lib/cart-context"
 import { useAuth } from "@/lib/auth-context"
 import { couponsManager, type Coupon } from "@/lib/cupons-manager"
+import { evaluateCoupon, resolveCouponForCheckout } from "@/lib/coupon-rules"
 import { storeStatusManager, type StoreStatus } from "@/lib/store-status-manager"
 import { addressesManager, type Address } from "@/lib/addresses-manager"
 import { ordersManager } from "@/lib/orders-manager"
@@ -219,9 +220,9 @@ export default function CheckoutPage() {
 
   // ─── Cálculos Financeiros ──────────────────────────────────────────────────
   const subtotal = getTotalPrice()
-  const discountAmount = appliedCoupon
-    ? couponsManager.calculateDiscount(subtotal, appliedCoupon)
-    : 0
+  // Base oficial do mínimo: subtotal bruto dos itens (sem frete, sem desconto).
+  // Cupom pendente (abaixo do mínimo) não gera desconto nem trava o pedido.
+  const discountAmount = evaluateCoupon(appliedCoupon, subtotal).discount
   const currentDeliveryFee = deliveryType === "pickup" ? 0 : deliveryFee
   const finalTotal = Math.max(0, subtotal - discountAmount + currentDeliveryFee)
   const totalItemCount = items.reduce((sum, item) => sum + item.quantity, 0)
@@ -276,7 +277,8 @@ export default function CheckoutPage() {
     setValidandoCupom(true)
     setCouponError("")
     try {
-      const res = await couponsManager.validateCoupon(code, user?.id, subtotal)
+      // Sem total: o mínimo não invalida o cupom, ele só fica pendente (evaluateCoupon).
+      const res = await couponsManager.validateCoupon(code, user?.id)
       if (res.valid && res.coupon) {
         setAppliedCoupon(res.coupon)
         setCouponCode(res.coupon.code)
@@ -547,6 +549,9 @@ export default function CheckoutPage() {
           ? "dinheiro"
           : "cartao"
 
+      // Cupom pendente (subtotal_itens < mínimo) é ignorado: pedido segue sem desconto.
+      const couponResolution = resolveCouponForCheckout(appliedCoupon, subtotal)
+
       const orderPayload = {
         customerName: nome.trim(),
         customerPhone: telefone.trim(),
@@ -555,7 +560,7 @@ export default function CheckoutPage() {
         customerComplement: complementoFormatado,
         paymentMethod: mappedPaymentMethod,
         paymentOnline: isPaymentOnline,
-        couponCode: appliedCoupon?.code || null,
+        couponCode: couponResolution.couponCode,
         wantsCutlery: precisaTalheres === "sim",
         notes: `${observacoes ? `${observacoes}\n` : ""}Precisa de colher: ${precisaTalheres === "sim" ? "SIM" : "NÃO"}${formaPagamento === "dinheiro" && troco ? `\nTroco para: R$ ${troco}` : ""}`,
         deliveryType,
@@ -594,8 +599,8 @@ export default function CheckoutPage() {
       }
 
       // Validação antecipada do cupom antes de enviar ao backend
-      if (appliedCoupon?.code) {
-        const couponCheck = await couponsManager.validateCoupon(appliedCoupon.code, user?.id, subtotal)
+      if (couponResolution.couponCode) {
+        const couponCheck = await couponsManager.validateCoupon(couponResolution.couponCode, user?.id)
         if (!couponCheck.valid) {
           const msg = couponCheck.message || "O cupom selecionado atingiu o limite de usos ou não é mais válido."
           setCouponError(msg)

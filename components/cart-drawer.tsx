@@ -9,7 +9,7 @@ import { toast } from "sonner"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { useCart } from "@/lib/cart-context"
 import { ClearCartDialog } from "@/components/checkout/clear-cart-dialog"
-import { CouponProgressBar } from "@/components/coupons/coupon-progress-bar"
+import { CouponStatusCard } from "@/components/coupons/coupon-status-card"
 
 interface CartDrawerProps {
   open: boolean
@@ -35,6 +35,7 @@ export function CartDrawer({ open, onOpenChange }: CartDrawerProps) {
     pendingCoupon,
     activeTrackCoupon,
     discountAmount,
+    removeCoupon,
   } = useCart()
 
   const [showClearConfirm, setShowClearConfirm] = useState(false)
@@ -157,7 +158,7 @@ export function CartDrawer({ open, onOpenChange }: CartDrawerProps) {
             {/* BARRA DE PROGRESSO GAMIFICADA DO CUPOM (se houver cupom ativo ou pendente) */}
             {activeTrackCoupon && items.length > 0 && (
               <div className="px-5 pt-3.5 pb-1 shrink-0">
-                <CouponProgressBar subtotal={subtotal} targetCoupon={activeTrackCoupon} />
+                <CouponStatusCard subtotal={subtotal} coupon={activeTrackCoupon} onRemove={removeCoupon} />
               </div>
             )}
 
@@ -285,14 +286,8 @@ export function CartDrawer({ open, onOpenChange }: CartDrawerProps) {
             {items.length > 0 && (
               <footer className="shrink-0 bg-white border-t border-gray-100 p-4 sm:p-5 shadow-[0_-8px_20px_rgba(0,0,0,0.04)] space-y-3">
                 {/* Linha informativa de cupom ativo ou link para cupons */}
-                {appliedCoupon ? (
-                  <div className="flex items-center justify-between text-xs bg-emerald-50 text-emerald-800 px-3 py-1.5 rounded-xl border border-emerald-200">
-                    <span className="flex items-center gap-1.5 font-bold">
-                      <Tag className="w-3.5 h-3.5 text-emerald-600" /> Cupom {appliedCoupon.code}
-                    </span>
-                    <span className="font-black text-emerald-700">Ativo no pedido</span>
-                  </div>
-                ) : (
+                {/* Cupom ativo/pendente já aparece no card único no topo da sacola */}
+                {activeTrackCoupon ? null : (
                   <div className="flex items-center justify-between text-xs bg-[#FEF8EC] text-[#A16207] px-3 py-1.5 rounded-xl border border-[#E3A008]/20">
                     <span className="flex items-center gap-1.5 font-bold">
                       <Tag className="w-3.5 h-3.5 text-[#E3A008]" /> Tem cupom de desconto?

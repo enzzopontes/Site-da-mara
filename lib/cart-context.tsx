@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, useMemo, useCallback, type ReactNode } from "react"
+import { evaluateCoupon } from "@/lib/coupon-rules"
 
 export interface CartItem {
   id: string
@@ -75,18 +76,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   // Desconto dinâmico calculado somente quando appliedCoupon estiver ativo
   const discountAmount = useMemo(() => {
-    if (!appliedCoupon) return 0
-    const minVal = Number(
-      appliedCoupon.minOrderValue ?? appliedCoupon.min_order_value ?? appliedCoupon.minOrderVal ?? 0
-    )
-    if (subtotal < minVal) return 0
-
-    const discount = Number(appliedCoupon.discount ?? appliedCoupon.discount_value ?? 0)
-    const type = appliedCoupon.type ?? appliedCoupon.discount_type
-    if (type === "percentage" || type === "percent") {
-      return (subtotal * discount) / 100
-    }
-    return Math.min(discount, subtotal)
+    // Base oficial: subtotal bruto dos itens (sem frete). Pendente => desconto 0.
+    return evaluateCoupon(appliedCoupon, subtotal).discount
   }, [appliedCoupon, subtotal])
 
   const total = useMemo(() => {
@@ -111,10 +102,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       const savedCoupon = sessionStorage.getItem("batata top-coupon")
       if (savedCoupon) {
         const parsed = JSON.parse(savedCoupon)
-        const minVal = Number(
-          parsed.minOrderValue ?? parsed.min_order_value ?? parsed.minOrderVal ?? 0
-        )
-        if (initialSubtotal >= minVal) {
+        if (evaluateCoupon(parsed, initialSubtotal).status === "applied") {
           setAppliedCoupon(parsed)
           setPendingCouponState(null)
         } else {
@@ -145,19 +133,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
     if (!isInitialized) return
 
     if (appliedCoupon) {
-      const minVal = Number(
-        appliedCoupon.minOrderValue ?? appliedCoupon.min_order_value ?? appliedCoupon.minOrderVal ?? 0
-      )
-      if (subtotal < minVal) {
+      if (evaluateCoupon(appliedCoupon, subtotal).status === "pending") {
         // Se o subtotal caiu abaixo do valor mínimo, rebaixa para pendente imediatamente
         setPendingCouponState(appliedCoupon)
         setAppliedCoupon(null)
       }
     } else if (pendingCoupon) {
-      const minVal = Number(
-        pendingCoupon.minOrderValue ?? pendingCoupon.min_order_value ?? pendingCoupon.minOrderVal ?? 0
-      )
-      if (subtotal >= minVal) {
+      if (evaluateCoupon(pendingCoupon, subtotal).status === "applied") {
         // Se o subtotal atingiu o valor mínimo exigido, promove para cupom ativo
         setAppliedCoupon(pendingCoupon)
         setPendingCouponState(null)
@@ -190,11 +172,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    const minVal = Number(
-      newCoupon.minOrderValue ?? newCoupon.min_order_value ?? newCoupon.minOrderVal ?? 0
-    )
-
-    if (subtotal >= minVal) {
+    if (evaluateCoupon(newCoupon, subtotal).status === "applied") {
       setAppliedCoupon(newCoupon)
       setPendingCouponState(null)
     } else {
@@ -206,10 +184,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const setPendingCoupon = useCallback((newCoupon: any | null) => {
     setPendingCouponState(newCoupon)
     if (newCoupon) {
-      const minVal = Number(
-        newCoupon.minOrderValue ?? newCoupon.min_order_value ?? newCoupon.minOrderVal ?? 0
-      )
-      if (subtotal >= minVal) {
+      if (evaluateCoupon(newCoupon, subtotal).status === "applied") {
         setAppliedCoupon(newCoupon)
         setPendingCouponState(null)
       }
