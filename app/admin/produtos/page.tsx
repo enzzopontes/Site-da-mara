@@ -38,6 +38,7 @@ import { adicionaisManager } from "@/lib/adicionais-manager"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
+import { PhotoBankPicker } from "@/components/photo-bank-picker"
 
 const ADMIN_EMAILS = ["enzzobaraldo2008@gmail.com", "maraysis9010@gmail.com"]
 
@@ -737,7 +738,7 @@ export default function AdminProdutosPage() {
 
       {/* Dialog para Produtos */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-2xl rounded-3xl p-6 max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl rounded-3xl p-6 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl font-black text-gray-900">
               {editingProduct ? "Editar Produto" : "Novo Produto no Cardápio"}
@@ -749,7 +750,7 @@ export default function AdminProdutosPage() {
 
           <form onSubmit={handleSubmit} className="space-y-5 pt-2">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-3">
+              <div className="space-y-3 min-w-0">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold text-gray-700">Nome do Produto *</Label>
                   <Input
@@ -902,7 +903,7 @@ export default function AdminProdutosPage() {
 
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-3 min-w-0">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold text-gray-700">URL da Imagem</Label>
                   <Input
@@ -910,6 +911,11 @@ export default function AdminProdutosPage() {
                     onChange={(e) => setFormImage(e.target.value)}
                     placeholder="/products/nome.jpg ou https://..."
                     className="rounded-xl text-xs h-10 border-gray-200"
+                  />
+                  <PhotoBankPicker
+                    value={formImage}
+                    onSelect={setFormImage}
+                    enabled={isDialogOpen}
                   />
                 </div>
 

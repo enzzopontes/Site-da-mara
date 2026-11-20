@@ -242,6 +242,39 @@ class ImageUploadManager {
   }
 
   /**
+   * Lista todas as imagens cadastradas, propagando erros para o chamador
+   */
+  async listAllImages(): Promise<UploadedImage[]> {
+    const { data, error } = await this.supabase
+      .from("uploaded_images")
+      .select("*")
+      .order("uploaded_at", { ascending: false })
+
+    if (error) {
+      console.error("[ImageUploadManager] Error listing all images:", error)
+      throw new Error(error.message || "Erro ao carregar imagens do banco.")
+    }
+
+    return (data || []).map(
+      (img: {
+        id: string
+        name: string
+        data: string
+        mime_type: string
+        uploaded_at: string
+        category: UploadedImage["category"]
+      }) => ({
+        id: img.id,
+        name: img.name,
+        data: img.data,
+        mimeType: img.mime_type,
+        uploadedAt: img.uploaded_at,
+        category: img.category,
+      })
+    )
+  }
+
+  /**
    * Obtém todas as imagens de uma categoria
    */
   async getImagesByCategory(
