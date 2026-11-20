@@ -286,7 +286,7 @@ export function RestaurantHeaderCard({
                 </div>
 
                 {/* Indicador Numérico à Direita em tom dourado */}
-                <span className="text-xs sm:text-sm font-black text-[#D97706] shrink-0 font-mono tracking-tight">
+                <span className="text-xs sm:text-sm font-black text-[#D97706] shrink-0 font-sans tabular-nums tracking-tight">
                   {ordersCount}/{targetOrders}
                 </span>
               </div>
