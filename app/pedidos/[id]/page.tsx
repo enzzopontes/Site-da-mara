@@ -12,7 +12,6 @@ import { useCart } from "@/lib/cart-context"
 import { ordersManager, type Order } from "@/lib/orders-manager"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { PixPaymentBox } from "@/components/pix-payment-box"
-import { SlideDownPaymentBanner } from "@/components/slide-down-payment-banner"
 import { triggerPixConfettiCannons } from "@/lib/pix-confetti"
 import { FeedbackModal } from "@/components/feedback-modal"
 import { PedidoDetalheSkeleton } from "@/components/skeletons/pedido-detalhe-skeleton"
@@ -176,7 +175,6 @@ export default function DetalhesPedidoPage() {
   const [order, setOrder] = useState<Order | null>(null)
   const [initialLoading, setInitialLoading] = useState(true)
   const [cancelling, setCancelling] = useState(false)
-  const [showPaymentSuccessBanner, setShowPaymentSuccessBanner] = useState(false)
   const [feedbackModalVisible, setFeedbackModalVisible] = useState(false)
   const [isEvaluated, setIsEvaluated] = useState(false)
 
@@ -241,7 +239,7 @@ export default function DetalhesPedidoPage() {
   const handlePaymentApproved = useCallback(() => {
     if (!hasCelebratedRef.current) {
       hasCelebratedRef.current = true
-      setShowPaymentSuccessBanner(true)
+      appToast.success("Pagamento confirmado!", "Seu pedido já está sendo preparado.", { duration: 4000 })
       triggerPixConfettiCannons()
     }
     loadOrderRef.current(true)
@@ -489,12 +487,6 @@ export default function DetalhesPedidoPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F4EF]">
-      {/* Banner Verde Deslizante Superior de Sucesso no Pagamento */}
-      <SlideDownPaymentBanner
-        visible={showPaymentSuccessBanner}
-        onDismiss={() => setShowPaymentSuccessBanner(false)}
-      />
-
       <MinimalHeader
         orderNumber={num}
         onBack={() => router.push("/pedidos")}

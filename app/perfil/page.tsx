@@ -16,6 +16,7 @@ import { useAuth } from "@/lib/auth-context"
 import { addressesManager, type Address } from "@/lib/addresses-manager"
 import { couponsManager, type Coupon } from "@/lib/cupons-manager"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
+import { appToast } from "@/lib/app-toast"
 import {
   User,
   Mail,
@@ -190,8 +191,7 @@ export default function PerfilPage() {
   const { user, loading, signOut } = useAuth()
   const router = useRouter()
 
-  // Toast & Offline state
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
+  // Offline state
   const [isOffline, setIsOffline] = useState(false)
 
   // Admin & Profile Metadata
@@ -245,13 +245,6 @@ export default function PerfilPage() {
   const [isDeletingAccount, setIsDeletingAccount] = useState(false)
   const [deleteProtocol, setDeleteProtocol] = useState<string | null>(null)
   const [deleteModalError, setDeleteModalError] = useState<string | null>(null)
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg)
-    setTimeout(() => {
-      setToastMessage((current) => (current === msg ? null : current))
-    }, 3200)
-  }
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -400,7 +393,7 @@ export default function PerfilPage() {
         cep: "",
       })
       setShowAddressForm(false)
-      showToast("Endereço salvo com sucesso")
+      appToast.success("Endereço salvo com sucesso")
     } else {
       setAddressError("Erro ao adicionar endereço. Tente novamente.")
     }
@@ -411,7 +404,7 @@ export default function PerfilPage() {
     const success = await addressesManager.deleteAddress(id)
     if (success) {
       await loadAddresses()
-      showToast("Endereço removido")
+      appToast.success("Endereço removido")
     } else {
       setAddressError("Erro ao remover endereço. Tente novamente.")
     }
@@ -423,7 +416,7 @@ export default function PerfilPage() {
     const success = await addressesManager.setDefaultAddress(user.id, id)
     if (success) {
       await loadAddresses()
-      showToast("Endereço padrão atualizado")
+      appToast.success("Endereço padrão atualizado")
     } else {
       setAddressError("Erro ao definir endereço padrão.")
     }
@@ -491,7 +484,7 @@ export default function PerfilPage() {
           type: "success",
           message: "Dados pessoais atualizados com sucesso!",
         })
-        showToast("Dados atualizados com sucesso")
+        appToast.success("Dados atualizados com sucesso")
       }
     } catch {
       setProfileFeedback({
@@ -515,7 +508,7 @@ export default function PerfilPage() {
         keysToRemove.forEach((k) => localStorage.removeItem(k))
       }
     } catch {}
-    showToast("Histórico de busca limpo com sucesso")
+    appToast.success("Histórico de busca limpo com sucesso")
   }
 
   const handleToggleNotification = (type: "orders" | "promos") => {
@@ -525,7 +518,7 @@ export default function PerfilPage() {
       try {
         localStorage.setItem("bt_notif_orders", String(next))
       } catch {}
-      showToast(
+      appToast.info(
         next
           ? "Avisos de status do pedido ativados"
           : "Avisos de status do pedido silenciados"
@@ -536,7 +529,7 @@ export default function PerfilPage() {
       try {
         localStorage.setItem("bt_notif_promos", String(next))
       } catch {}
-      showToast(
+      appToast.info(
         next
           ? "Notificações de promoções ativadas"
           : "Notificações de promoções desativadas"
@@ -549,7 +542,7 @@ export default function PerfilPage() {
       navigator.clipboard.writeText(code)
     }
     setCopiedCode(code)
-    showToast(`Cupom ${code} copiado!`)
+    appToast.success(`Cupom ${code} copiado!`)
     setTimeout(() => setCopiedCode(null), 2500)
   }
 
@@ -606,14 +599,6 @@ export default function PerfilPage() {
   return (
     <div className="min-h-screen flex flex-col bg-white md:bg-[#F7F5F0] text-[#1A1A1A] antialiased">
       <HeaderWrapper />
-
-      {/* Toast Global de Feedback Tátil */}
-      {toastMessage && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full bg-[#1A1A1A] text-white text-xs sm:text-sm font-semibold shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
-          <CheckCircle2 className="h-4 w-4 text-[#22C55E] shrink-0" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
 
       <main className="flex-1 pb-24 lg:pb-12">
         <div className="max-w-2xl mx-auto md:py-8 md:px-4">

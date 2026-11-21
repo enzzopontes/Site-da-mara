@@ -18,7 +18,6 @@ import {
   Trash2,
   Calendar,
   Home,
-  CheckCircle2,
   Power,
   Sparkles,
   Gift,
@@ -318,7 +317,6 @@ export default function AdminCuponsPage() {
   const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [uploadingBanner, setUploadingBanner] = useState(false)
-  const [notice, setNotice] = useState<string | null>(null)
 
   // Biblioteca de imagens (idêntico ao App)
   const [libraryModalVisible, setLibraryModalVisible] = useState(false)
@@ -345,11 +343,6 @@ export default function AdminCuponsPage() {
   const [rulesText, setRulesText] = useState("")
   const [rulesEdited, setRulesEdited] = useState(false)
   const [templateOrigin, setTemplateOrigin] = useState("custom")
-
-  const showToast = (msg: string) => {
-    setNotice(msg)
-    setTimeout(() => setNotice(null), 3200)
-  }
 
   const loadCoupons = useCallback(async () => {
     const list = await couponsManager.getCoupons()
@@ -645,7 +638,7 @@ export default function AdminCuponsPage() {
 
         if (publicData?.publicUrl) {
           setBannerImageUrl(publicData.publicUrl)
-          showToast("Imagem do banner enviada com sucesso!")
+          appToast.success("Imagem do banner enviada com sucesso!")
           return
         }
       }
@@ -672,7 +665,7 @@ export default function AdminCuponsPage() {
       }
 
       setBannerImageUrl(base64DataUrl)
-      showToast("Imagem vinculada ao banner com sucesso!")
+      appToast.success("Imagem vinculada ao banner com sucesso!")
     } catch (err) {
       console.warn("Erro ao enviar imagem do banner:", err)
       appToast.error("Imagem inválida", "Não foi possível carregar a imagem selecionada.")
@@ -783,10 +776,10 @@ export default function AdminCuponsPage() {
 
       if (editingCoupon) {
         await couponsManager.updateCoupon(editingCoupon.id, payload)
-        showToast("Cupom atualizado com sucesso!")
+        appToast.success("Cupom atualizado com sucesso!")
       } else {
         await couponsManager.addCoupon(payload as any)
-        showToast("Cupom criado com sucesso!")
+        appToast.success("Cupom criado com sucesso!")
       }
 
       setIsModalOpen(false)
@@ -805,7 +798,7 @@ export default function AdminCuponsPage() {
       setCoupons((prev) =>
         prev.map((c) => (c.id === coupon.id ? { ...c, showOnHome: nextVal } : c))
       )
-      showToast(nextVal ? "Cupom destacado na vitrine da Home!" : "Cupom removido da vitrine.")
+      appToast.success(nextVal ? "Cupom destacado na vitrine da Home!" : "Cupom removido da vitrine.")
     } catch {
       appToast.error("Erro", "Não foi possível atualizar o destaque na Home.")
     }
@@ -825,7 +818,7 @@ export default function AdminCuponsPage() {
       setCoupons((prev) =>
         prev.map((c) => (c.id === coupon.id ? { ...c, isBannerHighlight: nextVal } : c))
       )
-      showToast(
+      appToast.success(
         nextVal
           ? "Banner ativado no carrossel da Home!"
           : "Banner removido do carrossel da Home."
@@ -852,7 +845,7 @@ export default function AdminCuponsPage() {
     try {
       await couponsManager.deleteCoupon(coupon.id)
       await loadCoupons()
-      showToast("Cupom excluído.")
+      appToast.success("Cupom excluído.")
     } catch {
       appToast.error("Erro", "Não foi possível excluir o cupom.")
     }
@@ -1075,14 +1068,6 @@ export default function AdminCuponsPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-6">
-      {/* Toast de Notificação */}
-      {notice && (
-        <div className="fixed top-4 right-4 z-50 bg-[#1F1B16] text-white px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 text-xs font-bold animate-in fade-in slide-in-from-top-2">
-          <CheckCircle2 className="h-4 w-4 text-[#27AE60]" />
-          <span>{notice}</span>
-        </div>
-      )}
-
       {/* Header Gestão de Cupons (Idêntico ao App) */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[#ECE7E0]">
         <div>
@@ -1842,7 +1827,7 @@ export default function AdminCuponsPage() {
                         onClick={() => {
                           setBannerImageUrl(img.url)
                           setLibraryModalVisible(false)
-                          showToast("Imagem vinculada ao banner!")
+                          appToast.success("Imagem vinculada ao banner!")
                         }}
                         className={`group relative rounded-xl border overflow-hidden cursor-pointer transition-all ${
                           isSelected

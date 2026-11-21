@@ -3,7 +3,7 @@
 import React, { useState } from "react"
 import Image from "next/image"
 import { Tag, X, XCircle, Check, Loader2 } from "lucide-react"
-import { toast } from "sonner"
+import { appToast } from "@/lib/app-toast"
 import { useCart } from "@/lib/cart-context"
 import { useCoupons } from "@/hooks/use-coupons"
 import { CouponCard } from "@/components/coupons/coupon-card"
@@ -39,12 +39,12 @@ export function CouponModal({ open, onOpenChange, onCouponApplied }: CouponModal
     setApplying(false)
 
     if (!result.valid) {
-      toast.error(result.reason || "Cupom inválido")
+      appToast.error(result.reason || "Cupom inválido")
       return
     }
 
     setCoupon(result.coupon)
-    toast.success("Cupom aplicado com sucesso!")
+    appToast.success("Cupom aplicado com sucesso!")
     onCouponApplied?.()
     onOpenChange(false)
   }
@@ -54,11 +54,11 @@ export function CouponModal({ open, onOpenChange, onCouponApplied }: CouponModal
     const nextCoupon = isSame ? null : coupon
     setCoupon(nextCoupon)
     if (nextCoupon) {
-      toast.success(`Cupom ${coupon.code} selecionado!`)
+      appToast.success(`Cupom ${coupon.code} selecionado!`)
       onCouponApplied?.()
       onOpenChange(false)
     } else {
-      toast.info("Cupom removido")
+      appToast.info("Cupom removido")
     }
   }
 

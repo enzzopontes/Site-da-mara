@@ -229,3 +229,83 @@
   animation: elastic-banner-out 0.45s cubic-bezier(0.6, -0.28, 0.735, 0.045) both;
   will-change: transform, opacity;
 }
+
+/* ThemedAlert - Animações idênticas ao Batatop-app (ThemedAlert.js) */
+@keyframes themed-alert-in {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -100px, 0) scale(0.92);
+  }
+  37% {
+    opacity: 1;
+  }
+  43% {
+    opacity: 1;
+    transform: translate3d(0, 12px, 0) scale(1.02);
+  }
+  68% {
+    opacity: 1;
+    transform: translate3d(0, -3px, 0) scale(0.995);
+  }
+  85% {
+    opacity: 1;
+    transform: translate3d(0, 1px, 0) scale(1);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes themed-alert-out {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  30% {
+    opacity: 1;
+    transform: translate3d(0, 8px, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, -140px, 0) scale(0.88);
+  }
+}
+
+.themed-alert-enter {
+  animation: themed-alert-in 460ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
+  will-change: transform, opacity;
+}
+
+.themed-alert-exit {
+  animation: themed-alert-out 300ms cubic-bezier(0.55, 0.055, 0.675, 0.19) both;
+  will-change: transform, opacity;
+}
+
+@keyframes themed-alert-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes themed-alert-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .themed-alert-enter {
+    animation: themed-alert-fade-in 150ms ease-out both;
+  }
+
+  .themed-alert-exit {
+    animation: themed-alert-fade-out 120ms ease-in both;
+  }
+}

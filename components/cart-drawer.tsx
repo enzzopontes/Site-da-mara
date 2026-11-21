@@ -5,7 +5,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { ShoppingBag, Minus, Plus, Trash2, ArrowRight, Tag, X } from "lucide-react"
-import { toast } from "sonner"
+import { appToast } from "@/lib/app-toast"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { useCart } from "@/lib/cart-context"
 import { ClearCartDialog } from "@/components/checkout/clear-cart-dialog"
@@ -56,10 +56,7 @@ export function CartDrawer({ open, onOpenChange }: CartDrawerProps) {
     setShowClearConfirm(false)
     onOpenChange(false)
     router.push("/")
-    toast("Sua sacola foi esvaziada. Escolha novos produtos!", {
-      duration: 3500,
-      position: "top-center",
-    })
+    appToast.info("Sua sacola foi esvaziada", "Escolha novos produtos!", { duration: 3500 })
   }, [clearCart, onOpenChange, router])
 
   // Remoção unitária com checagem de último item

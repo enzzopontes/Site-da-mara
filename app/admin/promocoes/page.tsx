@@ -86,7 +86,6 @@ export default function AdminPromocoesPage() {
   // Imagens disponíveis
   const [promoImages, setPromoImages] = useState<UploadedImage[]>([])
   const [loadingImages, setLoadingImages] = useState(true)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   // Modais de Configuração no padrão iFood Marketing
   const [isSuperPromoModalOpen, setIsSuperPromoModalOpen] = useState(false)
@@ -159,11 +158,6 @@ export default function AdminPromocoesPage() {
     }
   }
 
-  const showNotification = (msg: string) => {
-    setSuccessMessage(msg)
-    setTimeout(() => setSuccessMessage(null), 3000)
-  }
-
   const handleToggleSuperPromo = async () => {
     const newSuperPromo = { ...superPromo, isActive: !superPromo.isActive }
     setSuperPromo(newSuperPromo)
@@ -171,7 +165,7 @@ export default function AdminPromocoesPage() {
     setIsUpdatingPromo(true)
     try {
       await storeStatusManager.updateSuperPromo(newSuperPromo)
-      showNotification(newSuperPromo.isActive ? "Super Promoção ativada na loja!" : "Super Promoção desativada.")
+      appToast.success(newSuperPromo.isActive ? "Super Promoção ativada na loja!" : "Super Promoção desativada.")
     } catch (error) {
       console.error("Erro ao atualizar Super Promoção:", error)
       appToast.error("Erro", "Erro ao atualizar Super Promoção.")
@@ -193,7 +187,7 @@ export default function AdminPromocoesPage() {
     try {
       await storeStatusManager.updateItemPromo(newItemPromo)
       await storeStatusManager.updatePromoProducts(promoProducts)
-      showNotification(newItemPromo.isActive ? "Promoção de Itens ativada!" : "Promoção de Itens pausada.")
+      appToast.success(newItemPromo.isActive ? "Promoção de Itens ativada!" : "Promoção de Itens pausada.")
     } catch (error) {
       console.error("Erro ao atualizar Promoção de Itens:", error)
       appToast.error("Erro", "Erro ao atualizar Promoção de Itens.")
@@ -222,7 +216,7 @@ export default function AdminPromocoesPage() {
     setSuperPromo(newSuperPromo)
     try {
       await storeStatusManager.updateSuperPromo(newSuperPromo)
-      showNotification("Banner da Super Promoção atualizado!")
+      appToast.success("Banner da Super Promoção atualizado!")
     } catch (error) {
       console.error("Erro ao atualizar imagem:", error)
     }
@@ -253,7 +247,7 @@ export default function AdminPromocoesPage() {
     setSuperPromo(newSuperPromo)
     try {
       await storeStatusManager.updateSuperPromo(newSuperPromo)
-      showNotification("Banner removido!")
+      appToast.success("Banner removido!")
     } catch (error) {
       console.error("Erro ao remover imagem:", error)
     }
@@ -269,7 +263,7 @@ export default function AdminPromocoesPage() {
     setItemPromo(newItemPromo)
     try {
       await storeStatusManager.updateItemPromo(newItemPromo)
-      showNotification("Banner de Itens atualizado!")
+      appToast.success("Banner de Itens atualizado!")
     } catch (error) {
       console.error("Erro ao atualizar imagem:", error)
     }
@@ -300,7 +294,7 @@ export default function AdminPromocoesPage() {
     setItemPromo(newItemPromo)
     try {
       await storeStatusManager.updateItemPromo(newItemPromo)
-      showNotification("Banner removido!")
+      appToast.success("Banner removido!")
     } catch (error) {
       console.error("Erro ao remover imagem:", error)
     }
@@ -337,7 +331,7 @@ export default function AdminPromocoesPage() {
     try {
       await storeStatusManager.updatePromoProducts(promoProducts)
       await storeStatusManager.updateItemPromo(itemPromo)
-      showNotification("Configurações da Promoção salvas com sucesso!")
+      appToast.success("Configurações da Promoção salvas com sucesso!")
       setIsItemPromoModalOpen(false)
     } catch (error) {
       console.error("Erro ao salvar produtos:", error)
@@ -351,7 +345,7 @@ export default function AdminPromocoesPage() {
     setIsUpdatingPromo(true)
     try {
       await storeStatusManager.updateSuperPromo(superPromo)
-      showNotification("Super Promoção configurada com sucesso!")
+      appToast.success("Super Promoção configurada com sucesso!")
       setIsSuperPromoModalOpen(false)
     } catch (error) {
       console.error("Erro ao salvar Super Promoção:", error)
@@ -423,7 +417,7 @@ export default function AdminPromocoesPage() {
                   loadPromoStatus()
                   loadProducts()
                   loadImages()
-                  showNotification("Dados sincronizados com o servidor!")
+                  appToast.success("Dados sincronizados com o servidor!")
                 }}
                 className="h-10 px-3.5 rounded-xl border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-bold gap-2 text-xs shadow-xs"
               >
@@ -480,26 +474,6 @@ export default function AdminPromocoesPage() {
               <Megaphone className="w-80 h-80 text-white transform rotate-12 translate-x-12" />
             </div>
           </div>
-
-          {/* Toast Notification Alert */}
-          {successMessage && (
-            <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3 shadow-xs animate-in fade-in slide-in-from-top-2">
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 bg-emerald-500 rounded-xl flex items-center justify-center text-white font-bold text-sm">
-                  ✓
-                </div>
-                <p className="text-emerald-900 font-bold text-sm">{successMessage}</p>
-              </div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => setSuccessMessage(null)}
-                className="text-emerald-700 hover:text-emerald-900 h-8 w-8 p-0"
-              >
-                ✕
-              </Button>
-            </div>
-          )}
 
           {/* CAMPAIGN CARDS GRID */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">

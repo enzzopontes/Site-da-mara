@@ -5,7 +5,7 @@ import useEmblaCarousel from "embla-carousel-react"
 import { ChevronLeft, ChevronRight, Tag } from "lucide-react"
 import { bannersManager, isSafeImageUrl, type HomeBannerItem } from "@/lib/banners-manager"
 import { useCart } from "@/lib/cart-context"
-import { TopToast } from "@/components/top-toast"
+import { appToast } from "@/lib/app-toast"
 
 export function CampaignBanner() {
   const { setCoupon } = useCart()
@@ -15,12 +15,6 @@ export function CampaignBanner() {
   const [isPaused, setIsPaused] = useState(false)
   const [imgErrorMap, setImgErrorMap] = useState<Record<string, boolean>>({})
   const [aspectRatio, setAspectRatio] = useState<number>(2.4)
-
-
-  const [toastState, setToastState] = useState<{ open: boolean; message: string; subMessage?: string }>({
-    open: false,
-    message: "",
-  })
 
   // Carrega banners e escuta Realtime
   useEffect(() => {
@@ -170,11 +164,10 @@ export function CampaignBanner() {
         }
 
         // 5. Toast superior confirmando a ativação na sacola
-        setToastState({
-          open: true,
-          message: `Cupom "${coupon.code}" aplicado com sucesso!`,
-          subMessage: "Desconto ativado na sua sacola. O valor já foi reduzido!",
-        })
+        appToast.success(
+          `Cupom "${coupon.code}" aplicado com sucesso!`,
+          "Desconto ativado na sua sacola. O valor já foi reduzido!"
+        )
       }
     },
     [setCoupon, copyToClipboard]
@@ -214,12 +207,6 @@ export function CampaignBanner() {
 
     return (
       <>
-        <TopToast
-          isOpen={toastState.open}
-          message={toastState.message}
-          subMessage={toastState.subMessage}
-          onClose={() => setToastState((prev) => ({ ...prev, open: false }))}
-        />
         <section aria-label="Banner Promocional" className="w-full bg-[#F7F5F0] py-2 sm:py-3 select-none">
           <div className="w-[88%] sm:w-[82%] md:w-[76%] lg:w-[70%] max-w-[760px] mx-auto">
             <div
@@ -257,13 +244,6 @@ export function CampaignBanner() {
 
   return (
     <>
-      <TopToast
-        isOpen={toastState.open}
-        message={toastState.message}
-        subMessage={toastState.subMessage}
-        onClose={() => setToastState((prev) => ({ ...prev, open: false }))}
-      />
-
       <section
         aria-label="Campanhas e Banners Promocionais"
         className="w-full bg-[#F7F5F0] py-2 sm:py-3 select-none overflow-hidden"
