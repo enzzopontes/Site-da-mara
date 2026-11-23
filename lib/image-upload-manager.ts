@@ -107,21 +107,6 @@ class ImageUploadManager {
               mimeType = "image/jpeg"
             }
 
-            // GIF: canvas.toDataURL("image/gif") gera PNG em navegadores; preserva GIF original se couber ou converte para JPEG
-            if (mimeType === "image/gif") {
-              const rawBase64 = dataUrl.split(",")[1] || dataUrl
-              if (rawBase64.length <= MAX_BASE64_BYTES) {
-                resolve({
-                  base64: rawBase64,
-                  mimeType: "image/gif",
-                  blob: file,
-                  ext: "gif",
-                })
-                return
-              }
-              mimeType = "image/jpeg"
-            }
-
             const renderDataUrl = (w: number, h: number, mime: string, q: number): string => {
               canvas.width = w
               canvas.height = h
@@ -191,16 +176,7 @@ class ImageUploadManager {
         img.src = dataUrl
       })
     } catch (error: any) {
-      console.warn("[ImageUploadManager] Compressão falhou, verificando tamanho para fallback:", error)
-      const base64 = await this.fileToBase64(file)
-      if (base64.length > 2_750_000) {
-        throw new Error(
-          error?.message ||
-            "Não foi possível comprimir a imagem abaixo do limite de 2,75 MB do banco de dados."
-        )
-      }
-      const mimeType = file.type || "image/jpeg"
-      return { base64, mimeType, blob: file, ext: this.mimeToExt(mimeType) }
+      throw new Error(error?.message || "Não foi possível decodificar ou converter a imagem.")
     }
   }
 
@@ -227,10 +203,14 @@ class ImageUploadManager {
         else if (ext === 'png') detectedMime = 'image/png'
         else if (ext === 'webp') detectedMime = 'image/webp'
         else if (ext === 'gif') detectedMime = 'image/gif'
+        else if (ext === 'avif') detectedMime = 'image/avif'
+        else if (ext === 'bmp') detectedMime = 'image/bmp'
       } else if (detectedMime === 'image/jpg' || detectedMime === 'image/pjpeg' || detectedMime === 'image/jfif') {
         detectedMime = 'image/jpeg'
       } else if (detectedMime === 'image/x-png') {
         detectedMime = 'image/png'
+      } else if (detectedMime === 'image/x-ms-bmp') {
+        detectedMime = 'image/bmp'
       }
 
       // Compactação inteligente no cliente

@@ -127,10 +127,46 @@ export function validateImagePayload(mimeType: string, base64Data: string): { is
   // Validação de Magic Bytes no cabeçalho Base64
   const cleanBase64 = base64Data.replace(/^data:image\/[a-zA-Z0-9.+_-]+;base64,/, '').trim()
 
+  if (cleanMime === 'image/webp') {
+    if (cleanBase64.length < 16) {
+      return { isValid: false, error: 'Assinatura binária do arquivo não corresponde ao tipo declarado' }
+    }
+    try {
+      const headerB64 = cleanBase64.slice(0, 16)
+      let headerBytes: Uint8Array
+      if (typeof atob === 'function') {
+        const bin = atob(headerB64)
+        headerBytes = new Uint8Array(bin.length)
+        for (let i = 0; i < bin.length; i++) {
+          headerBytes[i] = bin.charCodeAt(i)
+        }
+      } else {
+        headerBytes = Uint8Array.from(Buffer.from(headerB64, 'base64'))
+      }
+      const isRiff =
+        headerBytes.length >= 12 &&
+        headerBytes[0] === 0x52 && // R
+        headerBytes[1] === 0x49 && // I
+        headerBytes[2] === 0x46 && // F
+        headerBytes[3] === 0x46 // F
+      const isWebp =
+        headerBytes.length >= 12 &&
+        headerBytes[8] === 0x57 && // W
+        headerBytes[9] === 0x45 && // E
+        headerBytes[10] === 0x42 && // B
+        headerBytes[11] === 0x50 // P
+      if (!isRiff || !isWebp) {
+        return { isValid: false, error: 'Assinatura binária do arquivo não corresponde ao tipo declarado' }
+      }
+    } catch {
+      return { isValid: false, error: 'Assinatura binária do arquivo não corresponde ao tipo declarado' }
+    }
+    return { isValid: true, normalizedMime: cleanMime }
+  }
+
   const magicHeaders: Record<string, string[]> = {
     'image/jpeg': ['/9j/'],
     'image/png': ['iVBORw0KGgo'],
-    'image/webp': ['UklGR'],
     'image/gif': ['R0lGOD'],
   }
 

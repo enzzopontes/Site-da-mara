@@ -178,7 +178,7 @@ export function PhotoBankPicker({
       if (uploadingRef.current) return
 
       if (!isAcceptedImageFile(file)) {
-        setUploadError("Formato inválido. Envie uma imagem JPG, PNG ou WebP.")
+        setUploadError("Formato inválido. Envie uma imagem JPG, PNG, WebP, BMP ou AVIF.")
         if (fileInputRef.current) fileInputRef.current.value = ""
         return
       }
@@ -323,7 +323,7 @@ export function PhotoBankPicker({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp,image/avif,image/bmp"
+          accept="image/jpeg,image/png,image/webp,image/avif,image/bmp,.jfif,image/jfif"
           onChange={handleFileChange}
           disabled={uploading}
           className="hidden"
