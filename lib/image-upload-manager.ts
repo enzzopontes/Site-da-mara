@@ -3,13 +3,32 @@ import { validateImagePayload, sanitizeFileName } from "./security-validation"
 
 export const STORAGE_BUCKET = "Products"
 
+export const IMAGE_CATEGORIES = ["product", "promo", "brand", "general"] as const
+export type ImageCategory = (typeof IMAGE_CATEGORIES)[number]
+
+export interface WebpConversionProgress {
+  current: number
+  total: number
+  currentName: string
+  converted: number
+  failed: number
+}
+
+export interface WebpConversionResult {
+  total: number
+  converted: number
+  failed: number
+  updatedRefs: number
+  errors: Array<{ id: string; name: string; error: string }>
+}
+
 export interface UploadedImage {
   id: string
   name: string
   data: string // Base64 encoded image data
   mimeType: string
   uploadedAt: string
-  category: "product" | "promo" | "general"
+  category: ImageCategory
   url?: string
   source?: "storage" | "database"
 }
@@ -19,6 +38,8 @@ export function getPublicUrl(image: UploadedImage): string {
 }
 
 class ImageUploadManager {
+  private isConvertingWebp = false
+
   private get supabase() {
     return getSupabaseBrowserClient()
   }
@@ -185,7 +206,7 @@ class ImageUploadManager {
    */
   async uploadImage(
     file: File,
-    category: "product" | "promo" | "general" = "general"
+    category: ImageCategory = "general"
   ): Promise<{ id: string; url: string; name: string }> {
     try {
       console.log(`[ImageUploadManager] Iniciando upload - Arquivo: ${file.name}, Categoria: ${category}`);
@@ -243,6 +264,30 @@ class ImageUploadManager {
           })
 
         if (!storageError) {
+          try {
+            const { error: metaError } = await this.supabase
+              .from("media_metadata")
+              .upsert(
+                {
+                  storage_path: storagePath,
+                  category,
+                  updated_at: new Date().toISOString(),
+                },
+                { onConflict: "storage_path" }
+              )
+            if (metaError) {
+              console.warn(
+                "[ImageUploadManager] Falha ao salvar categoria em media_metadata:",
+                metaError
+              )
+            }
+          } catch (metaErr) {
+            console.warn(
+              "[ImageUploadManager] Exceção ao salvar categoria em media_metadata:",
+              metaErr
+            )
+          }
+
           const { data: publicUrlData } = this.supabase.storage
             .from(STORAGE_BUCKET)
             .getPublicUrl(storagePath)
@@ -322,13 +367,91 @@ class ImageUploadManager {
     const ext = name.split(".").pop()?.toLowerCase()
     if (ext === "webp") return "image/webp"
     if (ext === "png") return "image/png"
+    if (ext === "jpg" || ext === "jpeg") return "image/jpeg"
     if (ext === "gif") return "image/gif"
     return "image/jpeg"
   }
 
+  private resolveStorageMimeType(metadataMime: unknown, fileName: string): string {
+    if (typeof metadataMime === "string") {
+      const normalized = metadataMime.toLowerCase().trim()
+      if (normalized === "image/webp") return "image/webp"
+      if (normalized === "image/png" || normalized === "image/x-png") return "image/png"
+      if (
+        normalized === "image/jpeg" ||
+        normalized === "image/jpg" ||
+        normalized === "image/pjpeg"
+      ) {
+        return "image/jpeg"
+      }
+      if (normalized === "image/gif") return "image/gif"
+    }
+    return this.inferMimeFromName(fileName)
+  }
+
+  private isValidCategory(value: unknown): value is ImageCategory {
+    return (
+      typeof value === "string" &&
+      (IMAGE_CATEGORIES as readonly string[]).includes(value)
+    )
+  }
+
+  private isStorageImage(image: Pick<UploadedImage, "id" | "source">): boolean {
+    if (image.source === "storage") return true
+    if (image.source === "database") return false
+    return image.id.includes("/") || /\.(webp|jpe?g|png|gif)$/i.test(image.id)
+  }
+
+  private supportsWebpCanvas(): boolean {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return false
+    }
+    try {
+      const canvas = document.createElement("canvas")
+      canvas.width = 1
+      canvas.height = 1
+      return canvas.toDataURL("image/webp").startsWith("data:image/webp")
+    } catch {
+      return false
+    }
+  }
+
+  private async fetchMediaMetadataMap(): Promise<Map<string, ImageCategory>> {
+    const map = new Map<string, ImageCategory>()
+    try {
+      const { data, error } = await this.supabase
+        .from("media_metadata")
+        .select("storage_path, category")
+
+      if (error) {
+        console.warn("[ImageUploadManager] Erro ao consultar media_metadata:", error)
+        return map
+      }
+
+      for (const row of data || []) {
+        if (
+          row &&
+          typeof row.storage_path === "string" &&
+          this.isValidCategory(row.category)
+        ) {
+          map.set(row.storage_path, row.category)
+        }
+      }
+    } catch (error) {
+      console.warn("[ImageUploadManager] Exceção ao consultar media_metadata:", error)
+    }
+    return map
+  }
+
   private async listStorageImages(): Promise<UploadedImage[]> {
     try {
-      const folders = ["", "uploads/product", "uploads/promo", "uploads/general"] as const
+      const folders = [
+        "",
+        "uploads/product",
+        "uploads/promo",
+        "uploads/brand",
+        "uploads/general",
+      ] as const
       const results = await Promise.all(
         folders.map(async (folder) => {
           try {
@@ -346,8 +469,10 @@ class ImageUploadManager {
               return [] as UploadedImage[]
             }
 
-            const category: UploadedImage["category"] =
-              folder === "uploads/promo"
+            const category: ImageCategory =
+              folder === "uploads/brand"
+                ? "brand"
+                : folder === "uploads/promo"
                 ? "promo"
                 : folder === "uploads/general"
                 ? "general"
@@ -366,8 +491,10 @@ class ImageUploadManager {
                 const { data: publicUrlData } = this.supabase.storage
                   .from(STORAGE_BUCKET)
                   .getPublicUrl(fullPath)
-                const mimeType =
-                  item.metadata?.mimetype || this.inferMimeFromName(item.name)
+                const mimeType = this.resolveStorageMimeType(
+                  item.metadata?.mimetype,
+                  item.name
+                )
 
                 return {
                   id: fullPath,
@@ -395,28 +522,45 @@ class ImageUploadManager {
     }
   }
 
+  private isMissingTableError(error: { code?: string | null } | null): boolean {
+    return error?.code === "42P01" || error?.code === "PGRST205"
+  }
+
   /**
    * Obtém todas as imagens cadastradas
    */
   async getAllImages(): Promise<UploadedImage[]> {
     try {
       console.log(`[ImageUploadManager] Buscando todas as imagens`)
-      const [storageImages, dbResult] = await Promise.all([
+      const [storageImages, dbResult, metadataMap] = await Promise.all([
         this.listStorageImages(),
         this.supabase
           .from("uploaded_images")
           .select("*")
           .order("uploaded_at", { ascending: false }),
+        this.fetchMediaMetadataMap(),
       ])
 
       const { data, error } = dbResult
 
       if (error) {
-        console.error(`[ImageUploadManager] Erro ao buscar todas as imagens:`, error)
-        throw error
+        if (this.isMissingTableError(error)) {
+          console.warn(
+            "[ImageUploadManager] Tabela uploaded_images indisponível; retornando apenas imagens do Storage:",
+            error
+          )
+        } else {
+          console.error(`[ImageUploadManager] Erro ao buscar todas as imagens:`, error)
+          throw error
+        }
       }
 
-      const dbImages: UploadedImage[] = (data || []).map((img: any) => ({
+      const mergedStorageImages: UploadedImage[] = storageImages.map((img) => {
+        const overrideCategory = metadataMap.get(img.id)
+        return overrideCategory ? { ...img, category: overrideCategory } : img
+      })
+
+      const dbImages: UploadedImage[] = (error ? [] : data || []).map((img: any) => ({
         id: img.id,
         name: img.name,
         data: img.data,
@@ -427,7 +571,7 @@ class ImageUploadManager {
         source: "database",
       }))
 
-      const combined = [...storageImages, ...dbImages].sort(
+      const combined = [...mergedStorageImages, ...dbImages].sort(
         (a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
       )
 
@@ -443,29 +587,42 @@ class ImageUploadManager {
    * Lista todas as imagens cadastradas, propagando erros para o chamador
    */
   async listAllImages(): Promise<UploadedImage[]> {
-    const [storageImages, dbResult] = await Promise.all([
+    const [storageImages, dbResult, metadataMap] = await Promise.all([
       this.listStorageImages(),
       this.supabase
         .from("uploaded_images")
         .select("*")
         .order("uploaded_at", { ascending: false }),
+      this.fetchMediaMetadataMap(),
     ])
 
     const { data, error } = dbResult
 
     if (error) {
-      console.error("[ImageUploadManager] Error listing all images:", error)
-      throw new Error(error.message || "Erro ao carregar imagens do banco.")
+      if (this.isMissingTableError(error)) {
+        console.warn(
+          "[ImageUploadManager] Tabela uploaded_images indisponível; retornando apenas imagens do Storage:",
+          error
+        )
+      } else {
+        console.error("[ImageUploadManager] Error listing all images:", error)
+        throw new Error(error.message || "Erro ao carregar imagens do banco.")
+      }
     }
 
-    const dbImages: UploadedImage[] = (data || []).map(
+    const mergedStorageImages: UploadedImage[] = storageImages.map((img) => {
+      const overrideCategory = metadataMap.get(img.id)
+      return overrideCategory ? { ...img, category: overrideCategory } : img
+    })
+
+    const dbImages: UploadedImage[] = (error ? [] : data || []).map(
       (img: {
         id: string
         name: string
         data: string
         mime_type: string
         uploaded_at: string
-        category: UploadedImage["category"]
+        category: ImageCategory
       }) => ({
         id: img.id,
         name: img.name,
@@ -478,7 +635,7 @@ class ImageUploadManager {
       })
     )
 
-    return [...storageImages, ...dbImages].sort(
+    return [...mergedStorageImages, ...dbImages].sort(
       (a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
     )
   }
@@ -487,7 +644,7 @@ class ImageUploadManager {
    * Obtém todas as imagens de uma categoria
    */
   async getImagesByCategory(
-    category: "product" | "promo" | "general"
+    category: ImageCategory
   ): Promise<UploadedImage[]> {
     try {
       console.log(`[ImageUploadManager] Buscando imagens da categoria: ${category}`);
@@ -558,6 +715,25 @@ class ImageUploadManager {
           .remove([id])
 
         if (error) throw error
+
+        try {
+          const { error: metaError } = await this.supabase
+            .from("media_metadata")
+            .delete()
+            .eq("storage_path", id)
+          if (metaError) {
+            console.warn(
+              "[ImageUploadManager] Falha ao remover media_metadata após exclusão no Storage:",
+              metaError
+            )
+          }
+        } catch (metaErr) {
+          console.warn(
+            "[ImageUploadManager] Exceção ao remover media_metadata após exclusão no Storage:",
+            metaErr
+          )
+        }
+
         return true
       }
 
@@ -572,6 +748,470 @@ class ImageUploadManager {
     } catch (error) {
       console.error("[ImageUploadManager] Error deleting image:", error)
       return false
+    }
+  }
+
+  /**
+   * Atualiza a categoria de uma imagem sem mover o arquivo nem alterar sua URL
+   */
+  async updateImageCategory(
+    image: UploadedImage,
+    newCategory: ImageCategory
+  ): Promise<void> {
+    if (!this.isValidCategory(newCategory)) {
+      throw new Error(`Categoria de imagem inválida: "${String(newCategory)}".`)
+    }
+
+    if (this.isStorageImage(image)) {
+      const { data, error } = await this.supabase
+        .from("media_metadata")
+        .upsert(
+          {
+            storage_path: image.id,
+            category: newCategory,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "storage_path" }
+        )
+        .select("storage_path")
+
+      if (error) {
+        throw new Error(
+          error.message || "Erro ao atualizar categoria da imagem no Storage."
+        )
+      }
+      if (!data || data.length === 0) {
+        throw new Error(
+          "Nenhuma linha atualizada em media_metadata (permissão RLS ou registro ausente)."
+        )
+      }
+      return
+    }
+
+    const { data, error } = await this.supabase
+      .from("uploaded_images")
+      .update({ category: newCategory })
+      .eq("id", image.id)
+      .select("id")
+
+    if (error) {
+      throw new Error(
+        error.message || "Erro ao atualizar categoria da imagem no banco."
+      )
+    }
+    if (!data || data.length === 0) {
+      throw new Error(
+        "Nenhuma imagem atualizada em uploaded_images (permissão RLS ou registro ausente)."
+      )
+    }
+  }
+
+  private async convertBlobToWebp(
+    blob: Blob,
+    maxBase64Bytes?: number
+  ): Promise<{ base64: string; blob: Blob }> {
+    const objectUrl = URL.createObjectURL(blob)
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image()
+        el.onload = () => resolve(el)
+        el.onerror = () =>
+          reject(new Error("Falha ao decodificar imagem para conversão WebP."))
+        el.src = objectUrl
+      })
+
+      const width = img.naturalWidth || img.width
+      const height = img.naturalHeight || img.height
+      if (!width || !height) {
+        throw new Error("Dimensões inválidas ao decodificar imagem.")
+      }
+
+      const canvas = document.createElement("canvas")
+      const ctx = canvas.getContext("2d")
+      if (!ctx) {
+        throw new Error("Contexto 2D indisponível")
+      }
+
+      const renderWebp = (w: number, h: number, quality: number): string => {
+        canvas.width = w
+        canvas.height = h
+        ctx.clearRect(0, 0, w, h)
+        ctx.drawImage(img, 0, 0, w, h)
+        const dataUrl = canvas.toDataURL("image/webp", quality)
+        if (!dataUrl.startsWith("data:image/webp")) {
+          throw new Error("Navegador não suportou exportação em image/webp.")
+        }
+        return dataUrl.split(",")[1] || dataUrl
+      }
+
+      let base64 = renderWebp(width, height, 0.82)
+
+      if (typeof maxBase64Bytes === "number") {
+        const qualitySteps = [0.72, 0.65, 0.55, 0.45, 0.35]
+        for (const q of qualitySteps) {
+          if (base64.length <= maxBase64Bytes) break
+          base64 = renderWebp(width, height, q)
+        }
+
+        let scale = 0.85
+        while (base64.length > maxBase64Bytes && scale >= 0.25) {
+          const nextW = Math.max(160, Math.round(width * scale))
+          const nextH = Math.max(160, Math.round(height * scale))
+          base64 = renderWebp(nextW, nextH, 0.4)
+          scale -= 0.15
+        }
+
+        if (base64.length > maxBase64Bytes) {
+          throw new Error(
+            "A imagem convertida para WebP excede o limite de 2,75 MB do banco."
+          )
+        }
+      }
+
+      return {
+        base64,
+        blob: this.base64ToBlob(base64, "image/webp"),
+      }
+    } finally {
+      URL.revokeObjectURL(objectUrl)
+    }
+  }
+
+  /**
+   * Converte em lote imagens legadas (JPG/PNG) para WebP atualizando referências
+   */
+  async convertLegacyImagesToWebp(
+    onProgress?: (progress: WebpConversionProgress) => void
+  ): Promise<WebpConversionResult> {
+    if (this.isConvertingWebp) {
+      throw new Error("Uma conversão de imagens para WebP já está em andamento.")
+    }
+
+    if (!this.supportsWebpCanvas()) {
+      throw new Error(
+        "Conversão para WebP requer um navegador com suporte a WebP no Canvas."
+      )
+    }
+
+    this.isConvertingWebp = true
+    try {
+      const allImages = await this.listAllImages()
+      const seenKeys = new Set<string>()
+      const seenUrls = new Set<string>()
+      const legacyImages = allImages.filter((img) => {
+        const mime = (img.mimeType || "").toLowerCase().trim()
+        if (mime === "image/webp") return false
+        const isLegacyMime =
+          mime === "image/jpeg" ||
+          mime === "image/jpg" ||
+          mime === "image/pjpeg" ||
+          mime === "image/png" ||
+          mime === "image/x-png"
+        const isLegacyExt =
+          /\.(jpe?g|png)$/i.test(img.name || "") ||
+          /\.(jpe?g|png)$/i.test(img.id || "")
+        if (!isLegacyMime && !isLegacyExt) return false
+
+        const dedupeKey = `${img.source || "unknown"}:${img.id}`
+        const oldUrl = getPublicUrl(img)
+        if (seenKeys.has(dedupeKey) || seenUrls.has(oldUrl)) return false
+        seenKeys.add(dedupeKey)
+        seenUrls.add(oldUrl)
+        return true
+      })
+
+      const total = legacyImages.length
+      let converted = 0
+      let failed = 0
+      let updatedRefs = 0
+      const errors: Array<{ id: string; name: string; error: string }> = []
+      const MAX_BASE64_BYTES = 2_750_000
+
+      for (let i = 0; i < legacyImages.length; i++) {
+        const image = legacyImages[i]
+        const current = i + 1
+
+        onProgress?.({
+          current,
+          total,
+          currentName: image.name,
+          converted,
+          failed,
+        })
+
+        try {
+          if (this.isStorageImage(image)) {
+            const oldUrl = getPublicUrl(image)
+            const response = await fetch(oldUrl, { cache: "no-store" })
+            if (!response.ok) {
+              throw new Error(
+                `Falha ao baixar imagem original (${response.status} ${response.statusText}).`
+              )
+            }
+            const originalBlob = await response.blob()
+            const webp = await this.convertBlobToWebp(originalBlob)
+
+            const baseWebpPath = /\.(jpe?g|png)$/i.test(image.id)
+              ? image.id.replace(/\.(jpe?g|png)$/i, ".webp")
+              : `${image.id}.webp`
+
+            let newStoragePath = baseWebpPath
+            let { error: uploadError } = await this.supabase.storage
+              .from(STORAGE_BUCKET)
+              .upload(newStoragePath, webp.blob, {
+                contentType: "image/webp",
+                cacheControl: "31536000",
+                upsert: false,
+              })
+
+            if (uploadError) {
+              const errMsg = (uploadError.message || "").toLowerCase()
+              const statusCode = String((uploadError as any).statusCode ?? "")
+              const isCollision =
+                statusCode === "409" ||
+                errMsg.includes("already exists") ||
+                errMsg.includes("duplicate") ||
+                errMsg.includes("resource already exists")
+
+              if (isCollision) {
+                const randSuffix = Math.random().toString(36).slice(2, 6)
+                newStoragePath = baseWebpPath.replace(
+                  /\.webp$/i,
+                  `-${Date.now()}-${randSuffix}.webp`
+                )
+                const retryRes = await this.supabase.storage
+                  .from(STORAGE_BUCKET)
+                  .upload(newStoragePath, webp.blob, {
+                    contentType: "image/webp",
+                    cacheControl: "31536000",
+                    upsert: false,
+                  })
+                uploadError = retryRes.error
+              }
+            }
+
+            if (uploadError) {
+              throw new Error(
+                uploadError.message ||
+                  "Falha ao enviar versão WebP para o Storage."
+              )
+            }
+
+            const { data: newPublicUrlData } = this.supabase.storage
+              .from(STORAGE_BUCKET)
+              .getPublicUrl(newStoragePath)
+            const newUrl = newPublicUrlData.publicUrl
+
+            try {
+              const { error: metaUpsertError } = await this.supabase
+                .from("media_metadata")
+                .upsert(
+                  {
+                    storage_path: newStoragePath,
+                    category: image.category,
+                    updated_at: new Date().toISOString(),
+                  },
+                  { onConflict: "storage_path" }
+                )
+              if (metaUpsertError) {
+                console.warn(
+                  "[ImageUploadManager] Falha ao salvar media_metadata na conversão WebP:",
+                  metaUpsertError
+                )
+              }
+            } catch (metaErr) {
+              console.warn(
+                "[ImageUploadManager] Exceção ao salvar media_metadata na conversão WebP:",
+                metaErr
+              )
+            }
+
+            let refsDelta = 0
+            try {
+              const { data: sessionData } = await this.supabase.auth.getSession()
+              const accessToken = sessionData?.session?.access_token
+              const headers: Record<string, string> = {
+                "Content-Type": "application/json",
+              }
+              if (accessToken) {
+                headers.Authorization = `Bearer ${accessToken}`
+              }
+
+              const migrateRes = await fetch(
+                "/api/admin/images/migrate-webp-refs",
+                {
+                  method: "POST",
+                  headers,
+                  body: JSON.stringify({ oldUrl, newUrl }),
+                }
+              )
+
+              const migrateBody = await migrateRes.json().catch(() => null)
+              if (!migrateRes.ok || migrateBody?.ok !== true) {
+                throw new Error(
+                  migrateBody?.error ||
+                    `Erro ao migrar referências (${migrateRes.status}).`
+                )
+              }
+
+              refsDelta = Number(migrateBody?.updated?.total ?? 0)
+            } catch (migrateErr) {
+              // Rollback: remove novo arquivo e metadata sem remover o arquivo original
+              try {
+                const { error: rbStorageError } = await this.supabase.storage
+                  .from(STORAGE_BUCKET)
+                  .remove([newStoragePath])
+                if (rbStorageError) {
+                  console.warn(
+                    "[ImageUploadManager] Falha no rollback do Storage:",
+                    rbStorageError
+                  )
+                }
+              } catch (rbStorageErr) {
+                console.warn(
+                  "[ImageUploadManager] Falha no rollback do Storage:",
+                  rbStorageErr
+                )
+              }
+              try {
+                const { error: rbMetaError } = await this.supabase
+                  .from("media_metadata")
+                  .delete()
+                  .eq("storage_path", newStoragePath)
+                if (rbMetaError) {
+                  console.warn(
+                    "[ImageUploadManager] Falha no rollback de media_metadata:",
+                    rbMetaError
+                  )
+                }
+              } catch (rbMetaErr) {
+                console.warn(
+                  "[ImageUploadManager] Falha no rollback de media_metadata:",
+                  rbMetaErr
+                )
+              }
+              throw migrateErr
+            }
+
+            const { data: removedOldFiles, error: removeOldError } =
+              await this.supabase.storage
+                .from(STORAGE_BUCKET)
+                .remove([image.id])
+            if (
+              removeOldError ||
+              !removedOldFiles ||
+              removedOldFiles.length === 0
+            ) {
+              const removeReason =
+                removeOldError?.message ||
+                "nenhum arquivo removido (permissão RLS ou arquivo ausente)"
+              console.warn(
+                "[ImageUploadManager] Falha ao remover arquivo legado do Storage após migração:",
+                removeOldError || removedOldFiles
+              )
+              updatedRefs += refsDelta
+              failed += 1
+              errors.push({
+                id: image.id,
+                name: image.name,
+                error: `Imagem convertida e referências migradas, mas falha ao remover arquivo legado: ${removeReason}.`,
+              })
+            } else {
+              try {
+                const { error: deleteOldMetaError } = await this.supabase
+                  .from("media_metadata")
+                  .delete()
+                  .eq("storage_path", image.id)
+                if (deleteOldMetaError) {
+                  console.warn(
+                    "[ImageUploadManager] Falha ao remover media_metadata legado:",
+                    deleteOldMetaError
+                  )
+                }
+              } catch (deleteOldMetaErr) {
+                console.warn(
+                  "[ImageUploadManager] Exceção ao remover media_metadata legado:",
+                  deleteOldMetaErr
+                )
+              }
+
+              updatedRefs += refsDelta
+              converted += 1
+            }
+          } else {
+            let sourceBlob: Blob
+            if (image.data) {
+              sourceBlob = this.base64ToBlob(
+                image.data,
+                image.mimeType || "image/jpeg"
+              )
+            } else {
+              const response = await fetch(getPublicUrl(image), {
+                cache: "no-store",
+              })
+              if (!response.ok) {
+                throw new Error(
+                  `Falha ao baixar imagem do banco (${response.status} ${response.statusText}).`
+                )
+              }
+              sourceBlob = await response.blob()
+            }
+
+            const webp = await this.convertBlobToWebp(
+              sourceBlob,
+              MAX_BASE64_BYTES
+            )
+
+            const { data: updatedRows, error: updateError } =
+              await this.supabase
+                .from("uploaded_images")
+                .update({
+                  data: webp.base64,
+                  mime_type: "image/webp",
+                })
+                .eq("id", image.id)
+                .select("id")
+
+            if (updateError) {
+              throw new Error(
+                updateError.message || "Falha ao atualizar imagem WebP no banco."
+              )
+            }
+            if (!updatedRows || updatedRows.length === 0) {
+              throw new Error(
+                "Nenhuma imagem atualizada em uploaded_images (permissão RLS ou registro ausente)."
+              )
+            }
+
+            converted += 1
+          }
+        } catch (err: any) {
+          failed += 1
+          errors.push({
+            id: image.id,
+            name: image.name,
+            error: err?.message || "Erro desconhecido ao converter imagem.",
+          })
+        } finally {
+          onProgress?.({
+            current,
+            total,
+            currentName: image.name,
+            converted,
+            failed,
+          })
+        }
+      }
+
+      return {
+        total,
+        converted,
+        failed,
+        updatedRefs,
+        errors,
+      }
+    } finally {
+      this.isConvertingWebp = false
     }
   }
 
