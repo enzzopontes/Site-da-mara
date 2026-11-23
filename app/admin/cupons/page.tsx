@@ -3,7 +3,7 @@
 import { appToast } from "@/lib/app-toast"
 
 import type React from "react"
-import { useEffect, useState, useMemo, useCallback, useRef } from "react"
+import { useEffect, useState, useMemo, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
 import { AdminTableSkeleton } from "@/components/skeletons/admin-skeleton"
+import { PhotoBankPicker } from "@/components/photo-bank-picker"
 import {
   Ticket,
   Plus,
@@ -31,13 +32,23 @@ import {
   Copy,
   Check,
   Image as ImageIcon,
-  Upload,
   Users,
   ShoppingCart,
+  X,
 } from "lucide-react"
 import { couponsManager, type Coupon } from "@/lib/cupons-manager"
 import { isAdmin as checkIsAdmin } from "@/lib/supabase/admin"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
+
+function isSafeBannerUrl(url: string): boolean {
+  const trimmed = url.trim()
+  if (!trimmed) return false
+  if (/[\u0000-\u001F\u007F]/.test(trimmed)) return false
+  if (trimmed.includes("..")) return false
+  if (/^https?:\/\//i.test(trimmed)) return true
+  if (trimmed.startsWith("/") && !trimmed.startsWith("//")) return true
+  return false
+}
 
 // Helpers idênticos ao App Mobile (c:\Dev\batata-top\app\admin\cupons.js)
 function formatBR(value: string | number): string {
@@ -299,7 +310,6 @@ interface LibraryImageItem {
 export default function AdminCuponsPage() {
   const { user, loading } = useAuth()
   const router = useRouter()
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const [isAdmin, setIsAdmin] = useState(false)
   const [checkingAuth, setCheckingAuth] = useState(true)
@@ -316,7 +326,6 @@ export default function AdminCuponsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null)
   const [isSaving, setIsSaving] = useState(false)
-  const [uploadingBanner, setUploadingBanner] = useState(false)
 
   // Biblioteca de imagens (idêntico ao App)
   const [libraryModalVisible, setLibraryModalVisible] = useState(false)
@@ -338,6 +347,7 @@ export default function AdminCuponsPage() {
   const [showOnHome, setShowOnHome] = useState(false)
   const [homePriority, setHomePriority] = useState("0")
   const [bannerImageUrl, setBannerImageUrl] = useState("")
+  const [bannerPreviewError, setBannerPreviewError] = useState(false)
   const [isBannerHighlight, setIsBannerHighlight] = useState(false)
   const [restrictedCategories, setRestrictedCategories] = useState<string[]>([])
   const [rulesText, setRulesText] = useState("")
@@ -469,6 +479,10 @@ export default function AdminCuponsPage() {
       }
     })
   }, [user, loading, router, loadCoupons, loadCategories])
+
+  useEffect(() => {
+    setBannerPreviewError(false)
+  }, [bannerImageUrl])
 
   // Atualiza regras automaticamente se o admin não tiver editado manualmente
   useEffect(() => {
@@ -613,50 +627,13 @@ export default function AdminCuponsPage() {
     }
   }
 
-  // Upload de imagem do computador/celular direto para o banner (igual ao handlePickBannerImage do App)
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    setUploadingBanner(true)
-    try {
-      const supabase = getSupabaseBrowserClient()
-      const ext = file.name.split(".").pop() || "jpg"
-      const fileName = `banner-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${ext}`
-
-      // 1. Tenta upload direto no bucket coupon-banners
-      const { error: storageErr } = await supabase.storage
-        .from("coupon-banners")
-        .upload(fileName, file, {
-          contentType: file.type || "image/jpeg",
-          upsert: true,
-        })
-
-      if (!storageErr) {
-        const { data: publicData } = supabase.storage
-          .from("coupon-banners")
-          .getPublicUrl(fileName)
-
-        if (publicData?.publicUrl) {
-          setBannerImageUrl(publicData.publicUrl)
-          appToast.success("Imagem do banner enviada com sucesso!")
-          return
-        }
-      }
-
-      // 2. Fallback seguro via imageUploadManager (comprime <= 2.75MB e grava URL /api/images/{id}, nunca base64 bruto)
-      const { imageUploadManager } = await import("@/lib/image-upload-manager")
-      const uploaded = await imageUploadManager.uploadImage(file, "promo")
-      setBannerImageUrl(uploaded.url)
-      appToast.success("Imagem vinculada ao banner com sucesso!")
-    } catch (err: any) {
-      console.warn("Erro ao enviar imagem do banner:", err)
-      appToast.error("Imagem inválida", err?.message || "Não foi possível carregar a imagem selecionada.")
-    } finally {
-      setUploadingBanner(false)
-      if (fileInputRef.current) fileInputRef.current.value = ""
-    }
-  }
+  const usedBannerUrls = useMemo(
+    () =>
+      coupons
+        .filter((c) => c.id !== editingCoupon?.id && Boolean(c.bannerImageUrl))
+        .map((c) => c.bannerImageUrl as string),
+    [coupons, editingCoupon?.id]
+  )
 
   // Preview em tempo real idêntico ao App
   const preview = useMemo(() => {
@@ -731,8 +708,8 @@ export default function AdminCuponsPage() {
       const maxUsageVal = maxUsage.trim() ? parseInt(maxUsage, 10) : null
       const maxPerUserVal = maxUsagePerUser.trim() ? parseInt(maxUsagePerUser, 10) : null
       const cleanBannerUrl = bannerImageUrl.trim() || null
-      if (cleanBannerUrl && cleanBannerUrl.startsWith("data:")) {
-        appToast.error("Banner inválido", "Faça upload da imagem do banner para obter uma URL válida.")
+      if (cleanBannerUrl && !isSafeBannerUrl(cleanBannerUrl)) {
+        appToast.error("Banner inválido", "Informe uma URL http(s) ou caminho interno válido para o banner.")
         setIsSaving(false)
         return
       }
@@ -1470,88 +1447,92 @@ export default function AdminCuponsPage() {
                   💡 Proporção recomendada: 16:9 (ex: 1920×1080 ou 1080×608). O carrossel da Home no App e no Site se adapta automaticamente e aplica o cupom ao clicar.
                 </p>
 
+                <div className="space-y-2.5">
+                  <Label className="text-xs font-bold text-[#1F1B16] block">
+                    Imagem do Banner *
+                  </Label>
+
+                  <PhotoBankPicker
+                    value={bannerImageUrl}
+                    onSelect={setBannerImageUrl}
+                    enabled={isModalOpen && isBannerHighlight}
+                    usedUrls={usedBannerUrls}
+                    category="promo"
+                    emptyUsedMessage="Todas as fotos do banco já estão em uso em outros cupons."
+                    hidePreview
+                  />
+
+                  <div>
+                    <Label className="text-[11px] font-semibold text-[#6B6157] mb-1 block">
+                      Ou cole uma URL manualmente
+                    </Label>
+                    <Input
+                      value={bannerImageUrl}
+                      onChange={(e) => setBannerImageUrl(e.target.value)}
+                      placeholder="https://... ou /api/images/..."
+                      className="h-9 rounded-xl border-[#ECE7E0] bg-white text-xs"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      loadLibraryImages()
+                      setLibraryModalVisible(true)
+                    }}
+                    className="h-10 px-3 rounded-xl border border-[#FCD34D] bg-[#FEF3C7]/60 hover:bg-[#FEF3C7] text-[#C1440E] text-xs font-bold inline-flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    <span>Abrir biblioteca completa</span>
+                  </button>
+                </div>
+
                 <div>
                   <Label className="text-xs font-bold text-[#1F1B16] mb-1 block">
-                    URL da Imagem do Banner *
+                    Prioridade na Home (0 a 100)
                   </Label>
                   <Input
-                    value={bannerImageUrl}
-                    onChange={(e) => setBannerImageUrl(e.target.value)}
-                    placeholder="https://... ou escolha do banco/galeria abaixo"
+                    type="number"
+                    value={homePriority}
+                    onChange={(e) => setHomePriority(e.target.value)}
+                    placeholder="0"
                     className="h-10 rounded-xl border-[#ECE7E0] bg-white text-xs"
                   />
-
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        loadLibraryImages()
-                        setLibraryModalVisible(true)
-                      }}
-                      className="h-9 px-3 rounded-xl border border-[#FCD34D] bg-[#FEF3C7]/60 hover:bg-[#FEF3C7] text-[#C1440E] text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
-                    >
-                      <ImageIcon className="w-4 h-4" />
-                      <span>Banco de Imagens</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={uploadingBanner}
-                      onClick={() => fileInputRef.current?.click()}
-                      className="h-9 px-3 rounded-xl border border-[#FCD34D] bg-[#FEF3C7]/60 hover:bg-[#FEF3C7] text-[#C1440E] text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition-colors disabled:opacity-50"
-                    >
-                      <Upload className="w-4 h-4" />
-                      <span>{uploadingBanner ? "Enviando..." : "Subir da Galeria"}</span>
-                    </button>
-                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs font-bold text-[#1F1B16] mb-1 block">
-                      Selo / Badge (opcional)
-                    </Label>
-                    <Input
-                      value={badgeLabel}
-                      onChange={(e) => setBadgeLabel(e.target.value.toUpperCase())}
-                      placeholder="Ex: MAIS PEDIDA, 50% OFF"
-                      className="h-10 rounded-xl border-[#ECE7E0] bg-white text-xs"
-                    />
-                  </div>
-
-                  <div>
-                    <Label className="text-xs font-bold text-[#1F1B16] mb-1 block">
-                      Prioridade na Home (0 a 100)
-                    </Label>
-                    <Input
-                      type="number"
-                      value={homePriority}
-                      onChange={(e) => setHomePriority(e.target.value)}
-                      placeholder="0"
-                      className="h-10 rounded-xl border-[#ECE7E0] bg-white text-xs"
-                    />
-                  </div>
-                </div>
-
-                {Boolean(bannerImageUrl) && (
+                {Boolean(bannerImageUrl.trim()) && (
                   <div className="pt-1">
-                    <Label className="text-xs font-bold text-[#1F1B16] mb-1.5 block">
-                      Pré-visualização do Banner
-                    </Label>
-                    <div className="relative w-full aspect-[16/9] rounded-xl overflow-hidden border border-[#ECE7E0] bg-stone-100">
-                      <img
-                        src={bannerImageUrl}
-                        alt="Preview do Banner"
-                        className="w-full h-full object-cover"
-                      />
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <Label className="text-xs font-bold text-[#1F1B16]">
+                        Pré-visualização do Banner
+                      </Label>
+                      <button
+                        type="button"
+                        onClick={() => setBannerImageUrl("")}
+                        className="inline-flex items-center gap-1 rounded-md border border-[#ECE7E0] bg-white min-h-[32px] px-2.5 py-1 text-[11px] font-semibold text-[#6B6157] hover:border-red-200 hover:bg-red-50 hover:text-red-700 transition-colors cursor-pointer shrink-0"
+                      >
+                        <X className="h-3 w-3" aria-hidden="true" />
+                        <span>Remover</span>
+                      </button>
+                    </div>
+                    <div className="relative w-full aspect-[16/9] rounded-xl overflow-hidden border border-[#ECE7E0] bg-stone-100 flex items-center justify-center">
+                      {!isSafeBannerUrl(bannerImageUrl) || bannerPreviewError ? (
+                        <div className="flex flex-col items-center justify-center gap-1.5 p-4 text-center text-stone-400">
+                          <ImageIcon className="h-6 w-6" aria-hidden="true" />
+                          <span className="text-xs font-medium text-stone-500">
+                            {!isSafeBannerUrl(bannerImageUrl)
+                              ? "URL inválida para pré-visualização"
+                              : "Não foi possível carregar a imagem do banner"}
+                          </span>
+                        </div>
+                      ) : (
+                        <img
+                          src={bannerImageUrl.trim()}
+                          alt="Preview do Banner"
+                          onError={() => setBannerPreviewError(true)}
+                          className="w-full h-full object-cover"
+                        />
+                      )}
                       {Boolean(badgeLabel) && (
                         <div className="absolute top-2.5 left-2.5 bg-black/75 text-white text-[10px] font-black px-2.5 py-1 rounded-full">
                           {badgeLabel}

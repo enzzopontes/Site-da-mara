@@ -20,6 +20,7 @@ interface PhotoBankPickerProps {
   usedUrls?: string[]
   category?: "product" | "promo" | "general"
   emptyUsedMessage?: string
+  hidePreview?: boolean
 }
 
 const ACCEPTED_MIME_TYPES = new Set([
@@ -32,7 +33,8 @@ const ACCEPTED_MIME_TYPES = new Set([
 ])
 
 const ACCEPTED_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"])
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+const ALLOWED_CATEGORIES = new Set(["product", "promo", "general"] as const)
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 
 function isAcceptedImageFile(file: File): boolean {
   const mime = (file.type || "").toLowerCase().trim()
@@ -102,6 +104,7 @@ export function PhotoBankPicker({
   usedUrls = [],
   category = "product",
   emptyUsedMessage = "Todas as fotos do banco já estão em uso em outros produtos.",
+  hidePreview = false,
 }: PhotoBankPickerProps) {
   const [photos, setPhotos] = useState<UploadedImage[]>([])
   const [loading, setLoading] = useState(false)
@@ -183,7 +186,7 @@ export function PhotoBankPicker({
       }
 
       if (file.size > MAX_UPLOAD_BYTES) {
-        setUploadError("Imagem muito grande. O tamanho máximo permitido é 10MB.")
+        setUploadError("Imagem muito grande. O tamanho máximo permitido é 5MB.")
         if (fileInputRef.current) fileInputRef.current.value = ""
         return
       }
@@ -193,7 +196,8 @@ export function PhotoBankPicker({
       setUploadError(null)
 
       try {
-        const uploaded = await imageUploadManager.uploadImage(file, category)
+        const safeCategory = ALLOWED_CATEGORIES.has(category) ? category : "product"
+        const uploaded = await imageUploadManager.uploadImage(file, safeCategory)
         if (!isMountedRef.current) return
         onSelect(uploaded.url || `/api/images/${uploaded.id}`)
         await loadPhotos()
@@ -278,8 +282,8 @@ export function PhotoBankPicker({
   }, [photos, selectedKeySet, usedKeySet])
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-gray-50/70 p-2.5 space-y-2.5">
-      {normalized.length > 0 && (
+    <div className="rounded-xl border border-[#ECE7E0] bg-gray-50/70 p-2.5 space-y-2.5">
+      {!hidePreview && normalized.length > 0 && (
         <div className="flex items-center gap-2.5 rounded-lg border border-gray-200 bg-white p-2">
           <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md border border-gray-100 bg-gray-100 flex items-center justify-center">
             {previewFailed || !isSafeImageUrl(normalized) ? (
@@ -303,7 +307,7 @@ export function PhotoBankPicker({
             type="button"
             onClick={() => onSelect("")}
             disabled={uploading}
-            className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] font-semibold text-gray-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] focus-visible:ring-offset-1 transition-colors shrink-0"
+            className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white min-h-[36px] px-2.5 py-1 text-[11px] font-semibold text-gray-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] focus-visible:ring-offset-1 transition-colors shrink-0"
           >
             <X className="h-3 w-3" aria-hidden="true" />
             <span>Remover</span>
@@ -384,7 +388,7 @@ export function PhotoBankPicker({
           disabled={loading || uploading}
           aria-label="Atualizar banco de fotos"
           title="Atualizar banco de fotos"
-          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200/70 hover:text-gray-900 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] focus-visible:ring-offset-1 transition-colors"
+          className="inline-flex items-center gap-1 rounded-md shrink-0 min-h-[36px] px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200/70 hover:text-gray-900 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] focus-visible:ring-offset-1 transition-colors"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
           <span>Atualizar</span>
