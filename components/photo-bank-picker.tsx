@@ -27,12 +27,16 @@ const ACCEPTED_MIME_TYPES = new Set([
   "image/jpeg",
   "image/jpg",
   "image/pjpeg",
+  "image/jfif",
   "image/png",
   "image/x-png",
   "image/webp",
+  "image/avif",
+  "image/bmp",
+  "image/x-ms-bmp",
 ])
 
-const ACCEPTED_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"])
+const ACCEPTED_EXTENSIONS = new Set(["jpg", "jpeg", "jfif", "png", "webp", "avif", "bmp"])
 const ALLOWED_CATEGORIES = new Set(["product", "promo", "general"] as const)
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 
@@ -319,7 +323,7 @@ export function PhotoBankPicker({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept="image/jpeg,image/png,image/webp,image/avif,image/bmp"
           onChange={handleFileChange}
           disabled={uploading}
           className="hidden"
@@ -354,7 +358,7 @@ export function PhotoBankPicker({
                 Arraste a foto aqui ou clique para enviar
               </span>
               <span className="text-[11px] text-gray-500">
-                JPG ou PNG — convertido automaticamente para WebP
+                JPG, PNG, BMP ou AVIF — convertido automaticamente para WebP
               </span>
             </>
           )}
