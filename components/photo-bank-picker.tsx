@@ -1,28 +1,123 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
-import { AlertCircle, Check, Image as ImageIcon, RefreshCw } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import type React from "react"
+import {
+  AlertCircle,
+  Check,
+  Image as ImageIcon,
+  Loader2,
+  RefreshCw,
+  Upload,
+  X,
+} from "lucide-react"
 import { imageUploadManager, type UploadedImage } from "@/lib/image-upload-manager"
 
 interface PhotoBankPickerProps {
   value: string
   onSelect: (url: string) => void
   enabled?: boolean
+  usedUrls?: string[]
+  category?: "product" | "promo" | "general"
+  emptyUsedMessage?: string
+}
+
+const ACCEPTED_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/pjpeg",
+  "image/png",
+  "image/x-png",
+  "image/webp",
+])
+
+const ACCEPTED_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"])
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+
+function isAcceptedImageFile(file: File): boolean {
+  const mime = (file.type || "").toLowerCase().trim()
+  if (mime) return ACCEPTED_MIME_TYPES.has(mime)
+  const ext = file.name.split(".").pop()?.toLowerCase() || ""
+  return ACCEPTED_EXTENSIONS.has(ext)
+}
+
+function isSafeImageUrl(url: string): boolean {
+  const trimmed = url.trim()
+  if (!trimmed) return false
+  if (/[\u0000-\u001F\u007F]/.test(trimmed)) return false
+  if (trimmed.includes("..")) return false
+  if (/^https?:\/\//i.test(trimmed)) return true
+  if (trimmed.startsWith("/") && !trimmed.startsWith("//")) return true
+  return false
+}
+
+function getNormalizedImageKeys(rawUrl: string): string[] {
+  const trimmed = rawUrl.trim()
+  if (!trimmed) return []
+
+  const lower = trimmed.toLowerCase()
+  const keys = new Set<string>([lower])
+
+  const withoutQuery = lower.split(/[?#]/)[0]
+  if (withoutQuery) {
+    keys.add(withoutQuery)
+  }
+
+  let decoded = withoutQuery
+  try {
+    decoded = decodeURIComponent(withoutQuery)
+    if (decoded) keys.add(decoded)
+  } catch {
+    // ignore malformed URI sequences
+  }
+
+  const apiMatch = decoded.match(/(\/api\/images\/[^/]+)$/)
+  if (apiMatch) {
+    keys.add(apiMatch[1])
+  }
+
+  const productsMatch = decoded.match(/(?:^|\/)products\/(.+)$/)
+  if (productsMatch && productsMatch[1]) {
+    const relPath = productsMatch[1].replace(/^\/+/, "")
+    if (relPath) {
+      keys.add(`products:${relPath}`)
+    }
+  }
+
+  const couponBannersMatch = decoded.match(/(?:^|\/)coupon-banners\/(.+)$/)
+  if (couponBannersMatch && couponBannersMatch[1]) {
+    const relPath = couponBannersMatch[1].replace(/^\/+/, "")
+    if (relPath) {
+      keys.add(`coupon-banners:${relPath}`)
+    }
+  }
+
+  return Array.from(keys)
 }
 
 export function PhotoBankPicker({
   value,
   onSelect,
   enabled = true,
+  usedUrls = [],
+  category = "product",
+  emptyUsedMessage = "Todas as fotos do banco já estão em uso em outros produtos.",
 }: PhotoBankPickerProps) {
   const [photos, setPhotos] = useState<UploadedImage[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [hasLoaded, setHasLoaded] = useState(false)
   const [failedIds, setFailedIds] = useState<Record<string, boolean>>({})
+  const [previewFailed, setPreviewFailed] = useState(false)
+
+  const [uploading, setUploading] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   const isMountedRef = useRef(true)
   const requestIdRef = useRef(0)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const uploadingRef = useRef(false)
 
   useEffect(() => {
     isMountedRef.current = true
@@ -30,6 +125,12 @@ export function PhotoBankPicker({
       isMountedRef.current = false
     }
   }, [])
+
+  const normalized = (value ?? "").trim()
+
+  useEffect(() => {
+    setPreviewFailed(false)
+  }, [normalized])
 
   const loadPhotos = useCallback(async () => {
     const currentRequestId = ++requestIdRef.current
@@ -65,25 +166,222 @@ export function PhotoBankPicker({
     void loadPhotos()
   }, [enabled, loadPhotos])
 
-  const normalized = value.trim()
+  const handleUploadFile = useCallback(
+    async (file: File) => {
+      if (uploadingRef.current) return
+
+      if (!isAcceptedImageFile(file)) {
+        setUploadError("Formato inválido. Envie uma imagem JPG, PNG ou WebP.")
+        if (fileInputRef.current) fileInputRef.current.value = ""
+        return
+      }
+
+      if (file.size <= 0) {
+        setUploadError("Arquivo de imagem vazio.")
+        if (fileInputRef.current) fileInputRef.current.value = ""
+        return
+      }
+
+      if (file.size > MAX_UPLOAD_BYTES) {
+        setUploadError("Imagem muito grande. O tamanho máximo permitido é 10MB.")
+        if (fileInputRef.current) fileInputRef.current.value = ""
+        return
+      }
+
+      uploadingRef.current = true
+      setUploading(true)
+      setUploadError(null)
+
+      try {
+        const uploaded = await imageUploadManager.uploadImage(file, category)
+        if (!isMountedRef.current) return
+        onSelect(uploaded.url || `/api/images/${uploaded.id}`)
+        await loadPhotos()
+      } catch (err) {
+        if (!isMountedRef.current) return
+        const message =
+          err instanceof Error && err.message
+            ? err.message
+            : "Não foi possível enviar a imagem."
+        setUploadError(message)
+      } finally {
+        uploadingRef.current = false
+        if (isMountedRef.current) {
+          setUploading(false)
+        }
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ""
+        }
+      }
+    },
+    [onSelect, loadPhotos, category]
+  )
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      void handleUploadFile(file)
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent<HTMLButtonElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!uploading) {
+      setIsDragging(true)
+    }
+  }
+
+  const handleDragLeave = (e: React.DragEvent<HTMLButtonElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget as Node)) {
+      return
+    }
+    setIsDragging(false)
+  }
+
+  const handleDrop = (e: React.DragEvent<HTMLButtonElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+    if (uploading || uploadingRef.current) return
+    const file = e.dataTransfer.files?.[0]
+    if (file) {
+      void handleUploadFile(file)
+    }
+  }
+
+  const usedKeySet = useMemo(() => {
+    const set = new Set<string>()
+    for (const url of usedUrls) {
+      for (const key of getNormalizedImageKeys(url)) {
+        set.add(key)
+      }
+    }
+    return set
+  }, [usedUrls])
+
+  const selectedKeySet = useMemo(() => {
+    return new Set(getNormalizedImageKeys(normalized))
+  }, [normalized])
+
+  const availablePhotos = useMemo(() => {
+    return photos.filter((image) => {
+      const photoUrl = image.url || `/api/images/${image.id}`
+      const keys = getNormalizedImageKeys(photoUrl)
+      const isSelected = keys.some((k) => selectedKeySet.has(k))
+      if (isSelected) return true
+      const isUsedByOther = keys.some((k) => usedKeySet.has(k))
+      return !isUsedByOther
+    })
+  }, [photos, selectedKeySet, usedKeySet])
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50/70 p-2.5 space-y-2">
+    <div className="rounded-xl border border-gray-200 bg-gray-50/70 p-2.5 space-y-2.5">
+      {normalized.length > 0 && (
+        <div className="flex items-center gap-2.5 rounded-lg border border-gray-200 bg-white p-2">
+          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md border border-gray-100 bg-gray-100 flex items-center justify-center">
+            {previewFailed || !isSafeImageUrl(normalized) ? (
+              <ImageIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+            ) : (
+              <img
+                src={normalized}
+                alt="Imagem selecionada"
+                onError={() => setPreviewFailed(true)}
+                className="h-full w-full object-cover"
+              />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold text-gray-800">Imagem selecionada</p>
+            <p className="text-[11px] text-gray-500 truncate" title={normalized}>
+              {normalized}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onSelect("")}
+            disabled={uploading}
+            className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] font-semibold text-gray-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] focus-visible:ring-offset-1 transition-colors shrink-0"
+          >
+            <X className="h-3 w-3" aria-hidden="true" />
+            <span>Remover</span>
+          </button>
+        </div>
+      )}
+
+      <div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={handleFileChange}
+          disabled={uploading}
+          className="hidden"
+        />
+        <button
+          type="button"
+          onClick={() => !uploading && fileInputRef.current?.click()}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          disabled={uploading}
+          className={`w-full flex flex-col items-center justify-center gap-1 rounded-lg border border-dashed px-3 py-3 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-70 ${
+            isDragging
+              ? "border-[#E3A008] bg-amber-50/70"
+              : "border-gray-300 bg-white hover:border-[#E3A008] hover:bg-amber-50/30"
+          }`}
+        >
+          {uploading ? (
+            <>
+              <Loader2
+                className="h-4 w-4 animate-spin text-[#8A6100]"
+                aria-hidden="true"
+              />
+              <span className="text-xs font-semibold text-gray-800">
+                Convertendo e enviando...
+              </span>
+            </>
+          ) : (
+            <>
+              <Upload className="h-4 w-4 text-[#8A6100]" aria-hidden="true" />
+              <span className="text-xs font-semibold text-gray-800">
+                Arraste a foto aqui ou clique para enviar
+              </span>
+              <span className="text-[11px] text-gray-500">
+                JPG ou PNG — convertido automaticamente para WebP
+              </span>
+            </>
+          )}
+        </button>
+
+        {uploadError && (
+          <div
+            role="alert"
+            className="mt-1.5 flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] text-red-700"
+          >
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span>{uploadError}</span>
+          </div>
+        )}
+      </div>
+
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="text-xs font-semibold text-gray-800">
-            Banco de Fotos
+            Banco de fotos disponíveis
           </span>
           {hasLoaded && !loading && !error && (
             <span className="text-[11px] text-gray-500">
-              ({photos.length})
+              ({availablePhotos.length})
             </span>
           )}
         </div>
         <button
           type="button"
           onClick={() => void loadPhotos()}
-          disabled={loading}
+          disabled={loading || uploading}
           aria-label="Atualizar banco de fotos"
           title="Atualizar banco de fotos"
           className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200/70 hover:text-gray-900 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] focus-visible:ring-offset-1 transition-colors"
@@ -97,7 +395,7 @@ export function PhotoBankPicker({
         <div role="status" aria-live="polite">
           <span className="sr-only">Carregando banco de fotos...</span>
           <div className="grid grid-cols-4 gap-2 p-1">
-            {Array.from({ length: 10 }).map((_, index) => (
+            {Array.from({ length: 8 }).map((_, index) => (
               <div
                 key={index}
                 className="aspect-square rounded-md bg-gray-200 animate-pulse"
@@ -129,40 +427,62 @@ export function PhotoBankPicker({
             Nenhuma foto cadastrada no banco de fotos.
           </p>
         </div>
+      ) : availablePhotos.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-1.5 rounded-md border border-dashed border-gray-300 bg-white px-3 py-5 text-center">
+          <ImageIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+          <p className="text-xs text-gray-500">
+            {emptyUsedMessage}
+          </p>
+        </div>
       ) : (
         <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto p-1">
-          {photos.map((image) => {
+          {availablePhotos.map((image) => {
             const photoUrl = image.url || `/api/images/${image.id}`
+            const photoKeys = getNormalizedImageKeys(photoUrl)
             const isSelected =
               normalized.length > 0 &&
-              (normalized === photoUrl || normalized.endsWith(photoUrl))
-            const imgSrc = image.data
-              ? image.data.startsWith("data:")
-                ? image.data
-                : `data:${image.mimeType || "image/jpeg"};base64,${image.data}`
-              : photoUrl
+              (normalized === photoUrl ||
+                photoKeys.some((k) => selectedKeySet.has(k)))
+            const rawMime = (image.mimeType || "").toLowerCase().trim()
+            let safeThumbSrc: string | null = null
+            if (image.data) {
+              if (ACCEPTED_MIME_TYPES.has(rawMime)) {
+                if (image.data.startsWith("data:")) {
+                  const dataMimeMatch = image.data.match(/^data:([^;,]+)[;,]/i)
+                  const dataMime = (dataMimeMatch?.[1] || "").toLowerCase().trim()
+                  if (ACCEPTED_MIME_TYPES.has(dataMime)) {
+                    safeThumbSrc = image.data
+                  }
+                } else {
+                  safeThumbSrc = `data:${rawMime};base64,${image.data}`
+                }
+              }
+            } else if (isSafeImageUrl(photoUrl)) {
+              safeThumbSrc = photoUrl
+            }
 
             return (
               <button
                 key={image.id}
                 type="button"
                 onClick={() => onSelect(photoUrl)}
+                disabled={uploading}
                 aria-pressed={isSelected}
                 aria-label={`Selecionar foto ${image.name}`}
                 title={image.name}
-                className={`relative aspect-square overflow-hidden rounded-md border bg-gray-100 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] focus-visible:ring-offset-1 ${
+                className={`relative aspect-square overflow-hidden rounded-md border bg-gray-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] focus-visible:ring-offset-1 ${
                   isSelected
                     ? "ring-2 ring-[#E3A008] ring-offset-1 border-[#E3A008]"
                     : "border-gray-200 hover:border-gray-400"
                 }`}
               >
-                {failedIds[image.id] ? (
+                {failedIds[image.id] || !safeThumbSrc ? (
                   <span className="flex h-full w-full items-center justify-center">
                     <ImageIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
                   </span>
                 ) : (
                   <img
-                    src={imgSrc}
+                    src={safeThumbSrc}
                     alt={image.name}
                     loading="lazy"
                     decoding="async"

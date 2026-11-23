@@ -295,6 +295,22 @@ export default function AdminProdutosPage() {
 
     const badgeText = formBadgeText.trim() || null
     const isFeatured = formIsFeatured
+    const trimmedImage = formImage.trim()
+
+    if (trimmedImage) {
+      const isValidImageUrl =
+        !trimmedImage.includes("..") &&
+        !/[\u0000-\u001F\u007F]/.test(trimmedImage) &&
+        (/^https?:\/\//i.test(trimmedImage) ||
+          (trimmedImage.startsWith("/") && !trimmedImage.startsWith("//")))
+      if (!isValidImageUrl) {
+        appToast.error(
+          "URL de imagem inválida",
+          "A URL da imagem deve começar com https://, http:// ou / (sem // ou ..).",
+        )
+        return
+      }
+    }
 
     const productPayload = {
       name: formName.trim(),
@@ -308,7 +324,7 @@ export default function AdminProdutosPage() {
       badge_text: badgeText,
       isFeatured,
       is_featured: isFeatured,
-      image: formImage.trim() || "/placeholder.svg?height=300&width=300&query=" + encodeURIComponent(formName),
+      image: trimmedImage || "/placeholder.svg?height=300&width=300&query=" + encodeURIComponent(formName),
       category: formCategory,
     }
 
@@ -461,6 +477,12 @@ export default function AdminProdutosPage() {
       adicionais: adicionais.length,
     }
   }, [products, adicionais])
+
+  const usedImageUrls = useMemo(() => {
+    return products
+      .filter((p) => Boolean(p.image?.trim()) && p.id !== editingProduct?.id)
+      .map((p) => p.image.trim())
+  }, [products, editingProduct?.id])
 
   if (loading || !isAdmin) {
     return <AdminTableSkeleton rows={8} />
@@ -945,19 +967,26 @@ export default function AdminProdutosPage() {
               </div>
 
               <div className="space-y-3 min-w-0">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-gray-700">URL da Imagem</Label>
-                  <Input
-                    value={formImage}
-                    onChange={(e) => setFormImage(e.target.value)}
-                    placeholder="/products/nome.jpg ou https://..."
-                    className="rounded-xl text-xs h-10 border-gray-200"
-                  />
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-gray-700">Imagem do Produto</Label>
                   <PhotoBankPicker
                     value={formImage}
                     onSelect={setFormImage}
                     enabled={isDialogOpen}
+                    usedUrls={usedImageUrls}
                   />
+                  <div className="space-y-1 pt-0.5">
+                    <Label htmlFor="product-image-url" className="text-[11px] font-medium text-gray-500">
+                      Ou cole uma URL manualmente
+                    </Label>
+                    <Input
+                      id="product-image-url"
+                      value={formImage}
+                      onChange={(e) => setFormImage(e.target.value)}
+                      placeholder="/products/nome.jpg ou https://..."
+                      className="rounded-lg text-xs h-8 border-gray-200 bg-gray-50/50 text-gray-600 focus:bg-white"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-1.5">
