@@ -171,23 +171,33 @@ export default function AdminLayout({
   const pendingBarkOrdersRef = useRef<Map<string, { attempts: number; lastSent: number }>>(new Map())
 
   const triggerBarkPendingOrder = async (orderId: string) => {
+    const item = pendingBarkOrdersRef.current.get(orderId)
+    if (item) {
+      item.lastSent = Date.now()
+    }
     try {
       const res = await fetch("/api/bark", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({ action: "notify", orderId }),
       })
       const data = await res.json().catch(() => ({}))
-      if (data.skipped || data.attempt >= 5) {
+      const nextAttempts = Math.max((item?.attempts || 0) + 1, Number(data.attempt || 0))
+      if (data.skipped || nextAttempts >= 5 || res.status === 401 || res.status === 403 || res.status === 404) {
         pendingBarkOrdersRef.current.delete(orderId)
-      } else if (data.attempt) {
-        const item = pendingBarkOrdersRef.current.get(orderId)
-        if (item) {
-          item.attempts = data.attempt
-          item.lastSent = Date.now()
-        }
+      } else if (item) {
+        item.attempts = nextAttempts
+        item.lastSent = Date.now()
       }
     } catch (err) {
+      if (item) {
+        item.attempts = (item.attempts || 0) + 1
+        item.lastSent = Date.now()
+        if (item.attempts >= 5) {
+          pendingBarkOrdersRef.current.delete(orderId)
+        }
+      }
       console.warn("[BarkWatchdog] Falha ao disparar Bark para pedido pendente:", orderId, err)
     }
   }

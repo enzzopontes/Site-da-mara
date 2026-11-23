@@ -9,6 +9,32 @@ export interface Adicional {
   name: string
   price: number
   available?: boolean
+  adicional_categoria?: string | null
+  category?: string | null
+}
+
+async function callAdminAdicionalApi<T = any>(body: Record<string, unknown>): Promise<T | null> {
+  let res: Response
+  try {
+    res = await fetch("/api/admin/products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify(body),
+    })
+  } catch {
+    return null
+  }
+  if (res.status === 404) return null
+
+  let json: any = null
+  try {
+    json = await res.json()
+  } catch {}
+  if (!res.ok || !json?.success) {
+    throw new Error(json?.error || `Falha na API (HTTP ${res.status}).`)
+  }
+  return json.data as T
 }
 
 class AdicionaisManagerClient {
@@ -52,45 +78,54 @@ class AdicionaisManagerClient {
   }
 
   async addAdicional(adicional: Omit<Adicional, "id">): Promise<Adicional | null> {
-    console.log("--- TENTANDO ADICIONAR NOVO ADICIONAL ---")
-    console.log("Dados recebidos:", adicional)
-    
     try {
+      const apiRes = await callAdminAdicionalApi<{ adicional: Adicional }>({
+        action: "createAdicional",
+        adicional: {
+          name: adicional.name,
+          price: adicional.price,
+          available: adicional.available ?? true,
+          adicional_categoria: adicional.adicional_categoria ?? null,
+          category: adicional.category ?? null,
+        },
+      })
+      if (apiRes?.adicional) return apiRes.adicional
+
       const supabase = createBrowserClient()
-      
-      // Tentativa de inserção
-      const { data, error, status, statusText } = await supabase
+      const { data, error } = await supabase
         .from("adicionais")
         .insert([{
           name: adicional.name,
           price: adicional.price,
-          available: adicional.available ?? true
+          available: adicional.available ?? true,
+          ...(adicional.adicional_categoria ? { adicional_categoria: adicional.adicional_categoria } : {}),
         }])
         .select()
         .single()
 
       if (error) {
-        console.error("❌ ERRO NO SUPABASE AO ADICIONAR:")
-        console.error("Mensagem:", error.message)
-        console.error("Status HTTP:", status)
-        console.error("Status Text:", statusText)
         appToast.error("Erro ao salvar", error.message)
         return null
       }
 
-      console.log("✅ SUCESSO AO ADICIONAR:", data)
       return data
     } catch (error: any) {
-      console.error("❌ ERRO INESPERADO AO ADICIONAR:", error)
-      appToast.error("Erro inesperado", error.message)
+      appToast.error("Erro ao salvar adicional", error?.message || "Erro inesperado")
       return null
     }
   }
 
   async updateAdicional(id: string, updates: Partial<Adicional>): Promise<Adicional | null> {
     try {
-      const supabase = createBrowserClient()
       const { id: _, ...dataToUpdate } = updates as any
+      const apiRes = await callAdminAdicionalApi<{ adicional: Adicional }>({
+        action: "updateAdicional",
+        adicionalId: id,
+        updates: dataToUpdate,
+      })
+      if (apiRes?.adicional) return apiRes.adicional
+
+      const supabase = createBrowserClient()
       const { data, error } = await supabase
         .from("adicionais")
         .update(dataToUpdate)
@@ -99,38 +134,47 @@ class AdicionaisManagerClient {
         .single()
 
       if (error) {
-        console.error("[Supabase] Erro ao atualizar:", error.message)
+        appToast.error("Erro ao atualizar adicional", error.message)
         return null
       }
       return data
-    } catch (error) {
+    } catch (error: any) {
+      appToast.error("Erro ao atualizar adicional", error?.message || "Erro inesperado")
       return null
     }
   }
 
   async deleteAdicional(id: string): Promise<boolean> {
     try {
+      const apiRes = await callAdminAdicionalApi<{ deleted: boolean }>({
+        action: "deleteAdicional",
+        adicionalId: id,
+      })
+      if (apiRes?.deleted) return true
+
       const supabase = createBrowserClient()
-      
-      // Primeiro removemos os vínculos na tabela product_adicionais
-      await supabase
+      const { error: relErr } = await supabase
         .from("product_adicionais")
         .delete()
         .eq("adicional_id", id)
 
-      // Depois deletamos o adicional
+      if (relErr) {
+        appToast.error("Erro ao desvincular adicional", relErr.message)
+        return false
+      }
+
       const { error } = await supabase
         .from("adicionais")
         .delete()
         .eq("id", id)
 
       if (error) {
-        console.error("[Supabase] Erro ao deletar adicional:", error.message)
+        appToast.error("Erro ao excluir adicional", error.message)
         return false
       }
       return true
-    } catch (error) {
-      console.error("[Supabase] Erro inesperado ao deletar adicional:", error)
+    } catch (error: any) {
+      appToast.error("Erro ao excluir adicional", error?.message || "Erro inesperado")
       return false
     }
   }

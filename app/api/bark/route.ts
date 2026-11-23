@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { createServerClient } from "@/lib/supabase/server"
+import { isSecureAdminCheck } from "@/lib/security-auth"
 import { sendBarkNotification, sendBarkTestNotification } from "@/lib/bark-service"
 
 function getSupabaseAdmin() {
@@ -8,17 +10,59 @@ function getSupabaseAdmin() {
   if (!url || !key) {
     throw new Error("Supabase URL ou SERVICE_ROLE_KEY não configuradas")
   }
-  return createClient(url, key)
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
 }
 
-const FALLBACK_ADMIN_EMAILS = ["enzzobaraldo2008@gmail.com", "maraysis9010@gmail.com"]
+async function resolveAuthenticatedUser(req: NextRequest, service: ReturnType<typeof getSupabaseAdmin>) {
+  const authHeader = req.headers.get("authorization") || ""
+  const bearerToken = authHeader.replace(/^Bearer\s+/i, "").trim()
+
+  if (bearerToken) {
+    const { data, error } = await service.auth.getUser(bearerToken)
+    if (!error && data?.user) return data.user
+  }
+
+  try {
+    const serverClient = await createServerClient()
+    const { data, error } = await serverClient.auth.getUser()
+    if (!error && data?.user) return data.user
+  } catch {}
+
+  return null
+}
+
+async function checkIsAdminUser(user: any, service: ReturnType<typeof getSupabaseAdmin>): Promise<boolean> {
+  const { data: profile } = await service
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle()
+
+  if (profile?.role === "admin") return true
+
+  const allowedEmails =
+    process.env.ADMIN_EMAILS ||
+    process.env.NEXT_PUBLIC_ADMIN_EMAILS ||
+    ""
+  return isSecureAdminCheck(user, allowedEmails)
+}
 
 export async function POST(req: NextRequest) {
   try {
+    const supabase = getSupabaseAdmin()
+    const user = await resolveAuthenticatedUser(req, supabase)
+    if (!user) {
+      return NextResponse.json({ success: false, error: "Não autenticado" }, { status: 401 })
+    }
+
+    const isAdmin = await checkIsAdminUser(user, supabase)
     const body = await req.json().catch(() => ({}))
     const { action = "test", orderId } = body
 
     if (action === "test") {
+      if (!isAdmin) {
+        return NextResponse.json({ success: false, error: "Acesso restrito a administradores" }, { status: 403 })
+      }
       const result = await sendBarkTestNotification()
       if (!result.success) {
         return NextResponse.json({ success: false, error: result.error }, { status: 400 })
@@ -27,14 +71,13 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "notify") {
-      if (!orderId) {
+      if (!orderId || typeof orderId !== "string") {
         return NextResponse.json({ success: false, error: "orderId obrigatório" }, { status: 400 })
       }
 
-      const supabase = getSupabaseAdmin()
       const { data: order, error } = await supabase
         .from("orders")
-        .select("id, order_number, customer_name, total_amount, payment_method, status, metadata")
+        .select("id, user_id, order_number, customer_name, total_amount, payment_method, status, metadata")
         .eq("id", orderId)
         .maybeSingle()
 
@@ -42,12 +85,16 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: "Pedido não encontrado" }, { status: 404 })
       }
 
-      // Interrompe imediatamente se o pedido não estiver mais 'pending'
-      if (order.status !== "pending") {
+      if (!isAdmin && order.user_id !== user.id) {
+        return NextResponse.json({ success: false, error: "Acesso negado ao pedido" }, { status: 403 })
+      }
+
+      // Interrompe imediatamente se o pedido não estiver em estado notificável ('pending' ou recém-aprovado 'preparing')
+      if (order.status !== "pending" && order.status !== "preparing") {
         return NextResponse.json({
           success: false,
           skipped: true,
-          message: `Pedido não está mais pendente (status atual: ${order.status})`,
+          message: "Pedido não elegível para notificação",
         })
       }
 
@@ -68,24 +115,20 @@ export async function POST(req: NextRequest) {
         payment_method: order.payment_method,
       })
 
-      if (result.success) {
-        // Atualiza metadata com incremento de tentativa
-        const existingMeta = order.metadata || {}
-        await supabase
-          .from("orders")
-          .update({
-            metadata: {
-              ...existingMeta,
-              bark_attempts: attempts + 1,
-              bark_last_sent_at: new Date().toISOString(),
-            },
-          })
-          .eq("id", orderId)
-      }
+      // NEW-08 FIX: Incrementa bark_attempts atomicamente via merge_order_metadata mesmo em falha para evitar loop infinito
+      const nextAttempt = attempts + 1
+      await supabase.rpc("merge_order_metadata", {
+        order_id: orderId,
+        patch: {
+          bark_attempts: nextAttempt,
+          bark_last_sent_at: new Date().toISOString(),
+          ...(result.success ? {} : { bark_last_error: result.error || "failed" }),
+        },
+      })
 
       return NextResponse.json({
         success: result.success,
-        attempt: attempts + 1,
+        attempt: nextAttempt,
         error: result.error,
       })
     }

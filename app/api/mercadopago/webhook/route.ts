@@ -165,19 +165,17 @@ export async function POST(req: NextRequest) {
 
     const action = result.action || '';
 
-    // Respostas sem push
+    // Respostas sem push (NEW-08: se action === 'already_processed' em pagamento aprovado, ainda checa admin_push_sent/bark)
     if (
       !result.success ||
-      action === 'already_processed' ||
       action === 'ignored_stale_payment_event' ||
       action === 'order_not_found'
     ) {
       return NextResponse.json({ received: true, action }, { status: 200 });
     }
 
-    // Buscar tokens de admin se precisar enviar push
     const needsReview = !!result.needs_review || action.startsWith('flagged_') || action.startsWith('held_');
-    const isApproved = action === 'order_approved';
+    const isApproved = action === 'order_approved' || (action === 'already_processed' && mpStatus === 'approved');
 
     if (isApproved || needsReview) {
       try {
@@ -189,50 +187,27 @@ export async function POST(req: NextRequest) {
           ...new Set((tokenRows || []).map((t: any) => t.expo_push_token).filter(Boolean)),
         ] as string[];
 
-        if (uniqueTokens.length > 0) {
-          if (isApproved) {
-            // Push de novo pedido aprovado
-            const { data: orderData } = await supabase
-              .from('orders')
-              .select(`
-                id, order_number, customer_name, customer_phone,
-                delivery_type, customer_address, customer_complement, customer_neighborhood,
-                payment_method, total_amount, notes,
-                order_items (id, product_name, quantity, product_price, adicionais)
-              `)
-              .eq('id', externalRef)
-              .maybeSingle();
+        if (isApproved) {
+          const { data: orderData } = await supabase
+            .from('orders')
+            .select(`
+              id, order_number, customer_name, customer_phone, metadata,
+              delivery_type, customer_address, customer_complement, customer_neighborhood,
+              payment_method, total_amount, notes,
+              order_items (id, product_name, quantity, product_price, adicionais)
+            `)
+            .eq('id', externalRef)
+            .maybeSingle();
 
-            if (orderData) {
+          if (orderData) {
+            const alreadyPushSent = Boolean(orderData.metadata?.admin_push_sent);
+            const alreadyBarkSent = Number(orderData.metadata?.bark_attempts || 0) > 0;
+
+            if (!alreadyPushSent && uniqueTokens.length > 0) {
               const content = buildNewOrderPushContent(orderData, orderData.order_items || []);
               const messages = buildExpoPushMessages(uniqueTokens, content);
               await sendExpoPush(messages);
 
-              // Disparo imediato do alarme crítico via Bark (iOS)
-              (async () => {
-                try {
-                  const barkRes = await sendBarkNotification({
-                    id: orderData.id,
-                    order_number: orderData.order_number,
-                    customer_name: orderData.customer_name,
-                    total_amount: orderData.total_amount,
-                    payment_method: orderData.payment_method,
-                  });
-                  if (barkRes.success) {
-                    await supabase.rpc('merge_order_metadata', {
-                      order_id: externalRef,
-                      patch: {
-                        bark_attempts: 1,
-                        bark_last_sent_at: new Date().toISOString(),
-                      },
-                    });
-                  }
-                } catch (err: any) {
-                  console.warn('[webhook] Bark push fail-safe:', err?.message || err);
-                }
-              })();
-
-              // Marca como notificado via rpc merge_order_metadata para a rota manual não duplicar
               await supabase.rpc('merge_order_metadata', {
                 order_id: externalRef,
                 patch: {
@@ -241,29 +216,51 @@ export async function POST(req: NextRequest) {
                 },
               });
             }
+
+            // NEW-08 FIX: Bark desacoplado de uniqueTokens.length > 0 e aguardado com await antes de encerrar a resposta HTTP
+            if (!alreadyBarkSent) {
+              try {
+                const barkRes = await sendBarkNotification({
+                  id: orderData.id,
+                  order_number: orderData.order_number,
+                  customer_name: orderData.customer_name,
+                  total_amount: orderData.total_amount,
+                  payment_method: orderData.payment_method,
+                });
+                await supabase.rpc('merge_order_metadata', {
+                  order_id: externalRef,
+                  patch: {
+                    bark_attempts: 1,
+                    bark_last_sent_at: new Date().toISOString(),
+                    ...(barkRes.success ? {} : { bark_last_error: barkRes.error || 'failed' }),
+                  },
+                });
+              } catch (err: any) {
+                console.warn('[webhook] Bark push fail-safe:', err?.message || err);
+              }
+            }
           }
+        }
 
-          if (needsReview) {
-            // Push de pedido que requer revisão pelo admin via buildExpoPushMessages
-            const orderNumLabel = result.order_number
-              ? `#${result.order_number}`
-              : `#${externalRef.slice(-4).toUpperCase()}`;
-            const reason = result.review_reason || action || 'Pagamento requer atenção';
+        if (needsReview && uniqueTokens.length > 0) {
+          const orderNumLabel = result.order_number
+            ? `#${result.order_number}`
+            : `#${externalRef.slice(-4).toUpperCase()}`;
+          const reason = result.review_reason || action || 'Pagamento requer atenção';
 
-            const reviewContent = {
-              title: `⚠️ Pedido ${orderNumLabel} requer revisão`,
-              subtitle: 'Atenção necessária',
-              body: `Motivo: ${reason}`,
-              data: {
-                orderId: externalRef,
-                screen: 'admin/pedidos',
-                url: '/admin/pedidos',
-              },
-            };
+          const reviewContent = {
+            title: `⚠️ Pedido ${orderNumLabel} requer revisão`,
+            subtitle: 'Atenção necessária',
+            body: `Motivo: ${reason}`,
+            data: {
+              orderId: externalRef,
+              screen: 'admin/pedidos',
+              url: '/admin/pedidos',
+            },
+          };
 
-            const reviewMessages = buildExpoPushMessages(uniqueTokens, reviewContent as any);
-            await sendExpoPush(reviewMessages);
-          }
+          const reviewMessages = buildExpoPushMessages(uniqueTokens, reviewContent as any);
+          await sendExpoPush(reviewMessages);
         }
       } catch (pushErr: any) {
         console.error('[webhook] Falha não-bloqueante ao disparar push:', pushErr?.message);

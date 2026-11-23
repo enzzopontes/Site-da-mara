@@ -136,7 +136,8 @@ function ActiveOrderCard({
 }) {
   const num = String(order.orderNumber || order.id.slice(-4).toUpperCase())
   const awaitingPix = isOrderAwaitingPix(order)
-  const deliveryTypeLabel = order.deliveryType === "pickup" ? "Retirada" : "Delivery"
+  const isPickup = order.deliveryType === "pickup" || (order.deliveryType as string) === "retirada"
+  const deliveryTypeLabel = isPickup ? "Retirada" : "Delivery"
   const paymentLabel =
     order.paymentMethod === "pix"
       ? "Pix"
@@ -144,13 +145,14 @@ function ActiveOrderCard({
       ? "Cartão"
       : "Dinheiro"
 
+  const rawFrete = order.metadata?.delivery_fee ?? order.metadata?.deliveryFee
   const freteText =
-    order.deliveryType === "pickup"
+    isPickup
       ? "Grátis"
-      : order.metadata?.deliveryFee != null
-      ? Number(order.metadata.deliveryFee) === 0
+      : rawFrete != null
+      ? Number(rawFrete) === 0
         ? "Grátis"
-        : `R$ ${Number(order.metadata.deliveryFee).toFixed(2).replace(".", ",")}`
+        : `R$ ${Number(rawFrete).toFixed(2).replace(".", ",")}`
       : "Grátis"
 
   return (
@@ -289,7 +291,8 @@ function CompletedOrderCard({
 }) {
   const isCancelled = order.status === "cancelled"
   const num = String(order.orderNumber || order.id.slice(-4).toUpperCase())
-  const deliveryTypeLabel = order.deliveryType === "pickup" ? "Retirada" : "Delivery"
+  const isPickup = order.deliveryType === "pickup" || (order.deliveryType as string) === "retirada"
+  const deliveryTypeLabel = isPickup ? "Retirada" : "Delivery"
   const paymentLabel =
     order.paymentMethod === "pix"
       ? "Pix"
@@ -297,13 +300,14 @@ function CompletedOrderCard({
       ? "Cartão"
       : "Dinheiro"
 
+  const rawFrete = order.metadata?.delivery_fee ?? order.metadata?.deliveryFee
   const freteText =
-    order.deliveryType === "pickup"
+    isPickup
       ? "Grátis"
-      : order.metadata?.deliveryFee != null
-      ? Number(order.metadata.deliveryFee) === 0
+      : rawFrete != null
+      ? Number(rawFrete) === 0
         ? "Grátis"
-        : `R$ ${Number(order.metadata.deliveryFee).toFixed(2).replace(".", ",")}`
+        : `R$ ${Number(rawFrete).toFixed(2).replace(".", ",")}`
       : "Grátis"
 
   const formattedTime = useMemo(() => {

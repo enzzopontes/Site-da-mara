@@ -182,7 +182,7 @@ class OrdersManager {
     const { data } = await sb
       .from("orders")
       .select(`*, order_items (*)`)
-      .in("status", ["pending", "preparing", "ready"])
+      .in("status", ["pending", "preparing", "ready", "out_for_delivery"])
       .order("created_at", { ascending: false })
     return data?.map((o: any) => this.mapOrderData(o)) || []
   }
@@ -222,7 +222,9 @@ class OrdersManager {
 
     const history: Record<string, DailySales> = {}
     data?.forEach((o: any) => {
-      const date = new Date(o.created_at).toISOString().split('T')[0]
+      const date = new Date(o.created_at).toLocaleDateString("en-CA", {
+        timeZone: "America/Sao_Paulo",
+      })
       if (!history[date]) history[date] = { date, total: 0, count: 0 }
       history[date].total += Number(o.total_amount)
       history[date].count += 1
@@ -244,29 +246,40 @@ class OrdersManager {
 
   async updateOrderStatus(orderId: string, status: Order["status"]): Promise<void> {
     const sb = this.supabase
-        const { data: existingOrder } = await sb
+    const { data: existingOrder, error: readErr } = await sb
       .from("orders")
-      .select("metadata, user_id, created_at")
+      .select("metadata, user_id, created_at, coupon_code")
       .eq("id", orderId)
       .maybeSingle()
 
-    const existingMetadata = existingOrder?.metadata || {}
-    await sb.from("orders").update({ 
-      status,
-      metadata: { ...existingMetadata, statusUpdatedAt: new Date().toISOString() }
-    }).eq("id", orderId)
+    if (readErr) {
+      throw new Error(readErr.message || "Erro ao consultar pedido antes da atualização.")
+    }
 
-    if (status === "delivered") {
+    const existingMetadata = existingOrder?.metadata || {}
+    const { error: updateErr } = await sb
+      .from("orders")
+      .update({
+        status,
+        metadata: { ...existingMetadata, statusUpdatedAt: new Date().toISOString() },
+      })
+      .eq("id", orderId)
+
+    if (updateErr) {
+      throw new Error(updateErr.message || "Não foi possível atualizar o status do pedido.")
+    }
+
+    // NEW-13 FIX: Ao cancelar pedido pelo admin, estorna uso de cupom via API server-side
+    if (status === "cancelled" && existingOrder?.coupon_code) {
       try {
-        const { loyaltyManager } = await import("./loyalty-manager")
-        await loyaltyManager.incrementFromOrder({
-          orderId,
-          orderCreatedAt: existingOrder?.created_at || new Date().toISOString(),
-          orderStatus: status,
-          userId: existingOrder?.user_id,
+        await fetch("/api/admin/coupons", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ action: "refundOrderCoupon", orderId }),
         })
       } catch (err) {
-        console.warn("Fidelidade:", err)
+        console.warn("[OrdersManager] Falha ao estornar cupom no cancelamento:", err)
       }
     }
   }

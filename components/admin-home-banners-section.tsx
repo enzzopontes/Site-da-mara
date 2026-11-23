@@ -109,15 +109,11 @@ export function AdminHomeBannersSection() {
         }
       }
 
-      const base64DataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(String(reader.result))
-        reader.onerror = reject
-        reader.readAsDataURL(file)
-      })
-      setImageUrl(base64DataUrl)
-    } catch {
-      appToast.error("Imagem inválida", "Não foi possível carregar a imagem selecionada.")
+      const { imageUploadManager } = await import("@/lib/image-upload-manager")
+      const uploaded = await imageUploadManager.uploadImage(file, "promo")
+      setImageUrl(uploaded.url)
+    } catch (err: any) {
+      appToast.error("Imagem inválida", err?.message || "Não foi possível carregar a imagem selecionada.")
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ""

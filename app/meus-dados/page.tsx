@@ -67,6 +67,18 @@ export default function MeusDadosPage() {
       })
 
       if (error) throw error
+
+      if (user?.id) {
+        const { error: profileErr } = await supabase
+          .from("profiles")
+          .update({
+            full_name: formData.full_name.trim(),
+            phone: formData.phone.trim() || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", user.id)
+        if (profileErr) throw profileErr
+      }
       
       appToast.success("Dados atualizados!", "Suas informações foram salvas com sucesso.")
     } catch (error) {

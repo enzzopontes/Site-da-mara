@@ -77,8 +77,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // Desconto dinâmico calculado somente quando appliedCoupon estiver ativo
   const discountAmount = useMemo(() => {
     // Base oficial: subtotal bruto dos itens (sem frete). Pendente => desconto 0.
-    return evaluateCoupon(appliedCoupon, subtotal).discount
-  }, [appliedCoupon, subtotal])
+    return evaluateCoupon(appliedCoupon, subtotal, items).discount
+  }, [appliedCoupon, subtotal, items])
 
   const total = useMemo(() => {
     return Math.max(0, subtotal - discountAmount)
@@ -102,7 +102,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       const savedCoupon = sessionStorage.getItem("batata top-coupon")
       if (savedCoupon) {
         const parsed = JSON.parse(savedCoupon)
-        if (evaluateCoupon(parsed, initialSubtotal).status === "applied") {
+        if (evaluateCoupon(parsed, initialSubtotal, initialItems).status === "applied") {
           setAppliedCoupon(parsed)
           setPendingCouponState(null)
         } else {
@@ -133,19 +133,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
     if (!isInitialized) return
 
     if (appliedCoupon) {
-      if (evaluateCoupon(appliedCoupon, subtotal).status === "pending") {
+      if (evaluateCoupon(appliedCoupon, subtotal, items).status === "pending") {
         // Se o subtotal caiu abaixo do valor mínimo, rebaixa para pendente imediatamente
         setPendingCouponState(appliedCoupon)
         setAppliedCoupon(null)
       }
     } else if (pendingCoupon) {
-      if (evaluateCoupon(pendingCoupon, subtotal).status === "applied") {
+      if (evaluateCoupon(pendingCoupon, subtotal, items).status === "applied") {
         // Se o subtotal atingiu o valor mínimo exigido, promove para cupom ativo
         setAppliedCoupon(pendingCoupon)
         setPendingCouponState(null)
       }
     }
-  }, [subtotal, appliedCoupon, pendingCoupon, isInitialized])
+  }, [subtotal, items, appliedCoupon, pendingCoupon, isInitialized])
 
   // Sincronizar cupom de sessão única em sessionStorage
   useEffect(() => {
@@ -172,24 +172,24 @@ export function CartProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    if (evaluateCoupon(newCoupon, subtotal).status === "applied") {
+    if (evaluateCoupon(newCoupon, subtotal, items).status === "applied") {
       setAppliedCoupon(newCoupon)
       setPendingCouponState(null)
     } else {
       setAppliedCoupon(null)
       setPendingCouponState(newCoupon)
     }
-  }, [subtotal])
+  }, [subtotal, items])
 
   const setPendingCoupon = useCallback((newCoupon: any | null) => {
     setPendingCouponState(newCoupon)
     if (newCoupon) {
-      if (evaluateCoupon(newCoupon, subtotal).status === "applied") {
+      if (evaluateCoupon(newCoupon, subtotal, items).status === "applied") {
         setAppliedCoupon(newCoupon)
         setPendingCouponState(null)
       }
     }
-  }, [subtotal])
+  }, [subtotal, items])
 
   const removeCoupon = useCallback(() => {
     setAppliedCoupon(null)

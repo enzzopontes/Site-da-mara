@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { authenticateRequestUser } from '@/lib/supabase/route-auth';
 import { sendBarkNotification } from '@/lib/bark-service';
 
 import {
@@ -53,20 +54,9 @@ export async function POST(req: NextRequest) {
   const corsHeaders = { 'Access-Control-Allow-Origin': corsOrigin };
 
   try {
-    const authHeader = req.headers.get('authorization') || '';
-    const userJwt = authHeader.replace(/^Bearer\s+/i, '');
-
-    if (!userJwt) {
-      return NextResponse.json(
-        { success: false, error: 'Token de autenticação obrigatório' },
-        { status: 401, headers: corsHeaders },
-      );
-    }
-
     const supabase = getSupabaseAdmin();
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser(userJwt);
-    if (authError || !user) {
+    const user = await authenticateRequestUser(req, supabase);
+    if (!user) {
       return NextResponse.json(
         { success: false, error: 'Usuário não autenticado' },
         { status: 401, headers: corsHeaders },
@@ -236,29 +226,27 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Disparo imediato do alarme sonoro crítico via Bark (iOS)
-    (async () => {
-      try {
-        const barkRes = await sendBarkNotification({
-          id: order.id,
-          order_number: order.order_number,
-          customer_name: order.customer_name,
-          total_amount: order.total_amount,
-          payment_method: order.payment_method,
+    // NEW-08 FIX: Aguarda envio do Bark antes de encerrar a função serverless (evita corte por freeze da Vercel)
+    try {
+      const barkRes = await sendBarkNotification({
+        id: order.id,
+        order_number: order.order_number,
+        customer_name: order.customer_name,
+        total_amount: order.total_amount,
+        payment_method: order.payment_method,
+      });
+      if (barkRes.success) {
+        await supabase.rpc('merge_order_metadata', {
+          order_id: order.id,
+          patch: {
+            bark_attempts: 1,
+            bark_last_sent_at: new Date().toISOString(),
+          },
         });
-        if (barkRes.success) {
-          await supabase.rpc('merge_order_metadata', {
-            order_id: order.id,
-            patch: {
-              bark_attempts: 1,
-              bark_last_sent_at: new Date().toISOString(),
-            },
-          });
-        }
-      } catch (err: any) {
-        console.warn('[notify-new-order] Bark push fail-safe:', err?.message || err);
       }
-    })();
+    } catch (err: any) {
+      console.warn('[notify-new-order] Bark push fail-safe:', err?.message || err);
+    }
 
     return NextResponse.json(
       {

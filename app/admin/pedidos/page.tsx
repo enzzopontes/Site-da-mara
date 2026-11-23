@@ -40,9 +40,14 @@ import { storeStatusManager } from "@/lib/store-status-manager"
 import { adicionaisManager, type Adicional } from "@/lib/adicionais-manager"
 import Link from "next/link"
 
-const ADMIN_EMAILS = ["enzzobaraldo2008@gmail.com", "maraysis9010@gmail.com"]
+import { isAdmin as checkIsAdminRole } from "@/lib/supabase/admin"
 
 type ExtendedStatus = Order["status"] | "out_for_delivery"
+
+const isPickupOrder = (deliveryType?: string | null): boolean => {
+  const normalized = (deliveryType || "").trim().toLowerCase()
+  return normalized === "pickup" || normalized === "retirada"
+}
 
 const statusConfig: Record<
   string,
@@ -208,16 +213,30 @@ export default function AdminPedidosPage() {
     if (!loading) {
       if (!user) {
         router.push("/login")
-      } else if (user.email && ADMIN_EMAILS.includes(user.email)) {
-        setIsAdmin(true)
-        loadOrders(true)
-        const interval = setInterval(() => {
-          loadOrders()
-        }, 10000)
-        return () => clearInterval(interval)
       } else {
-        appToast.error("Acesso negado", "Você não tem permissão para acessar esta página.")
-        router.push("/")
+        let active = true
+        let interval: ReturnType<typeof setInterval> | null = null
+        checkIsAdminRole(user.id)
+          .then((allowed) => {
+            if (!active) return
+            if (allowed) {
+              setIsAdmin(true)
+              loadOrders(true)
+              interval = setInterval(() => {
+                loadOrders()
+              }, 10000)
+            } else {
+              appToast.error("Acesso negado", "Você não tem permissão para acessar esta página.")
+              router.push("/")
+            }
+          })
+          .catch(() => {
+            if (active) router.push("/")
+          })
+        return () => {
+          active = false
+          if (interval) clearInterval(interval)
+        }
       }
     }
   }, [user, loading, router])
@@ -317,14 +336,14 @@ export default function AdminPedidosPage() {
               {new Date(receiptOrder.createdAt).toLocaleDateString("pt-BR")} - {new Date(receiptOrder.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
             </p>
             <div className="mt-1 font-bold text-xs uppercase px-2 py-0.5 border border-black inline-block">
-              {receiptOrder.deliveryType === "pickup" ? ">>> RETIRADA NO BALCÃO <<<" : ">>> ENTREGA EM DOMICÍLIO <<<"}
+              {isPickupOrder(receiptOrder.deliveryType) ? ">>> RETIRADA NO BALCÃO <<<" : ">>> ENTREGA EM DOMICÍLIO <<<"}
             </div>
           </div>
 
           <div className="py-2 border-b border-dashed border-black space-y-1">
             <p><span className="font-bold">CLIENTE:</span> {receiptOrder.customerName}</p>
             <p><span className="font-bold">TELEFONE:</span> {receiptOrder.customerPhone}</p>
-            {receiptOrder.deliveryType !== "pickup" && (
+            {!isPickupOrder(receiptOrder.deliveryType) && (
               <p><span className="font-bold">ENDEREÇO:</span> {receiptOrder.address}</p>
             )}
           </div>
@@ -401,9 +420,9 @@ export default function AdminPedidosPage() {
               (sum, it) => sum + getItemTotal(it),
               0
             )
-            const receiptDeliveryFee = receiptOrder.deliveryType === "pickup"
+            const receiptDeliveryFee = isPickupOrder(receiptOrder.deliveryType)
               ? 0
-              : Number(receiptOrder.metadata?.deliveryFee ?? Math.max(0, (receiptOrder.total || 0) - receiptItemsSubtotal + (receiptOrder.discountAmount || 0)))
+              : Number(receiptOrder.metadata?.delivery_fee ?? receiptOrder.metadata?.deliveryFee ?? Math.max(0, (receiptOrder.total || 0) - receiptItemsSubtotal + (receiptOrder.discountAmount || 0)))
 
             return (
               <div className="pt-2 text-right space-y-0.5">
@@ -595,7 +614,7 @@ export default function AdminPedidosPage() {
                 const currentStatus = (order.status as any) || "pending"
                 const cfg = statusConfig[currentStatus] || statusConfig.pending
                 const StatusIcon = cfg.icon
-                const isDelivery = order.deliveryType !== "pickup"
+                const isDelivery = !isPickupOrder(order.deliveryType)
                 const wantsCutlery = Boolean(
                   order.metadata?.wantsCutlery ?? (order as any).wantsCutlery ?? (order as any).wants_cutlery
                 )
@@ -954,9 +973,9 @@ export default function AdminPedidosPage() {
                               (sum, it) => sum + getItemTotal(it),
                               0
                             )
-                            const deliveryFee = order.deliveryType === "pickup"
+                            const deliveryFee = isPickupOrder(order.deliveryType)
                               ? 0
-                              : Number(order.metadata?.deliveryFee ?? Math.max(0, order.total - itemsSubtotal + (order.discountAmount || 0)))
+                              : Number(order.metadata?.delivery_fee ?? order.metadata?.deliveryFee ?? Math.max(0, order.total - itemsSubtotal + (order.discountAmount || 0)))
                             const hasCoupon = Boolean(order.couponCode || (order.discountAmount ?? 0) > 0)
 
                             return (
@@ -989,7 +1008,7 @@ export default function AdminPedidosPage() {
 
                                   <div className="flex items-center justify-between text-xs">
                                     <span className="text-gray-500 font-semibold">
-                                      {order.deliveryType === "pickup" ? "Retirada no Balcão" : "Taxa de Entrega"}
+                                      {isPickupOrder(order.deliveryType) ? "Retirada no Balcão" : "Taxa de Entrega"}
                                     </span>
                                     <span className="font-bold text-gray-900">
                                       {deliveryFee > 0 ? `R$ ${deliveryFee.toFixed(2).replace('.', ',')}` : "Grátis"}

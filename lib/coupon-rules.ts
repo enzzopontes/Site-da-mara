@@ -44,22 +44,50 @@ function computeDiscountCents(coupon: any, subtotalCents: number): number {
   return Math.min(subtotalCents, toCents(value))
 }
 
-export function evaluateCoupon(coupon: any, itemsSubtotal: number): CouponEvaluation {
+function getRestrictedCategories(coupon: any): string[] {
+  const raw = coupon?.restrictedCategories ?? coupon?.restricted_categories
+  if (!Array.isArray(raw)) return []
+  return raw.map((c) => String(c || "").trim()).filter(Boolean)
+}
+
+function computeEligibleCents(coupon: any, subtotalCents: number, items?: any[]): number {
+  const restricted = getRestrictedCategories(coupon)
+  if (restricted.length === 0 || !Array.isArray(items) || items.length === 0) {
+    return subtotalCents
+  }
+  let sumCents = 0
+  for (const item of items) {
+    const cat = String(item?.category || "").trim()
+    if (!restricted.includes(cat)) continue
+    const qty = Math.max(1, Math.floor(Number(item?.quantity) || 1))
+    const basePrice = Number(item?.price ?? item?.product_price ?? 0)
+    const addons = Array.isArray(item?.adicionais) ? item.adicionais : []
+    const addonsSum = addons.reduce(
+      (acc: number, a: any) => acc + Number(a?.price ?? a?.preco ?? 0) * Math.max(1, Math.floor(Number(a?.quantity) || 1)),
+      0
+    )
+    sumCents += toCents((basePrice + addonsSum) * qty)
+  }
+  return Math.max(0, Math.min(subtotalCents, sumCents))
+}
+
+export function evaluateCoupon(coupon: any, itemsSubtotal: number, items?: any[]): CouponEvaluation {
   if (!coupon || !coupon.code) {
     return { status: "none", code: null, minOrder: 0, discount: 0, missing: 0, progress: 0 }
   }
 
   const subtotalCents = Math.max(0, toCents(itemsSubtotal))
   const minCents = toCents(getCouponMinOrder(coupon))
-  const unlocked = subtotalCents >= minCents
+  const eligibleCents = computeEligibleCents(coupon, subtotalCents, items)
+  const unlocked = subtotalCents >= minCents && eligibleCents > 0
   const progress = minCents > 0 ? Math.min(1, subtotalCents / minCents) : 1
 
   return {
     status: unlocked ? "applied" : "pending",
     code: String(coupon.code),
     minOrder: minCents / 100,
-    discount: unlocked ? computeDiscountCents(coupon, subtotalCents) / 100 : 0,
-    missing: unlocked ? 0 : (minCents - subtotalCents) / 100,
+    discount: unlocked ? computeDiscountCents(coupon, eligibleCents) / 100 : 0,
+    missing: subtotalCents >= minCents ? 0 : (minCents - subtotalCents) / 100,
     progress,
   }
 }
@@ -75,8 +103,12 @@ export interface CheckoutCouponResolution {
  * Etapa final: cupom pendente é ignorado graciosamente (pedido segue sem
  * desconto e sem enviar o código ao backend), eliminando erro surpresa.
  */
-export function resolveCouponForCheckout(coupon: any, itemsSubtotal: number): CheckoutCouponResolution {
-  const evaluation = evaluateCoupon(coupon, itemsSubtotal)
+export function resolveCouponForCheckout(
+  coupon: any,
+  itemsSubtotal: number,
+  items?: any[]
+): CheckoutCouponResolution {
+  const evaluation = evaluateCoupon(coupon, itemsSubtotal, items)
   if (evaluation.status !== "applied") {
     return { couponCode: null, discount: 0, status: evaluation.status }
   }

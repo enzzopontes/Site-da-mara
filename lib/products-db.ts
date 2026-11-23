@@ -318,7 +318,7 @@ const DEFAULT_BEBIDAS: Product[] = [
 ]
 
 class ProductsManager {
-  async getProducts(): Promise<Product[]> {
+  async getProducts(options?: { strict?: boolean }): Promise<Product[]> {
     try {
       const supabase = await getSupabase()
       const { data, error } = await supabase
@@ -326,7 +326,13 @@ class ProductsManager {
         .select(`*, product_adicionais ( adicional_id, adicionais (*) )`)
         .order("name", { ascending: true })
 
-      if (error || !data || data.length === 0) return [...DEFAULT_PRODUCTS, ...DEFAULT_BEBIDAS]
+      if (error) {
+        if (options?.strict) throw new Error(error.message)
+        return [...DEFAULT_PRODUCTS, ...DEFAULT_BEBIDAS]
+      }
+      if (!data || data.length === 0) {
+        return options?.strict ? [] : [...DEFAULT_PRODUCTS, ...DEFAULT_BEBIDAS]
+      }
 
       return data.map((p: any) => ({
         id: p.id,
@@ -355,7 +361,8 @@ class ProductsManager {
         createdAt: new Date(p.created_at),
         updatedAt: new Date(p.updated_at),
       }))
-    } catch {
+    } catch (err) {
+      if (options?.strict) throw err
       return [...DEFAULT_PRODUCTS, ...DEFAULT_BEBIDAS]
     }
   }
@@ -527,14 +534,16 @@ class ProductsManager {
   }
 
   async deleteProduct(id: string): Promise<boolean> {
-    try {
-      const supabase = await getSupabase()
-      await supabase.from("product_adicionais").delete().eq("product_id", id)
-      const { error } = await supabase.from("products").delete().eq("id", id)
-      return !error
-    } catch {
-      return false
-    }
+    const res = await callAdminApi<{ deleted: boolean }>({ action: "deleteProduct", productId: id })
+    if (res?.deleted) return true
+
+    // Fallback (API indisponivel): delete direto sujeito a RLS (trigger no banco desvincula order_items)
+    const supabase = await getSupabase()
+    const { error: relErr } = await supabase.from("product_adicionais").delete().eq("product_id", id)
+    if (relErr) throw new Error(`Erro ao remover vínculos do produto: ${relErr.message}`)
+    const { error } = await supabase.from("products").delete().eq("id", id)
+    if (error) throw new Error(`Erro ao excluir produto: ${error.message}`)
+    return true
   }
 
   async setProductAdicionais(productId: string, adicionalIds: string[]): Promise<boolean> {

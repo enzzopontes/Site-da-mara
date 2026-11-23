@@ -24,8 +24,7 @@ import {
 } from "lucide-react"
 import { imageUploadManager, UploadedImage } from "@/lib/image-upload-manager"
 import Link from "next/link"
-
-const ADMIN_EMAILS = ["enzzobaraldo2008@gmail.com", "maraysis9010@gmail.com"]
+import { isAdmin as checkIsAdminRole } from "@/lib/supabase/admin"
 
 const CATEGORIES = [
   { key: "all", label: "Todas", color: "bg-neutral-900 text-white" },
@@ -61,12 +60,25 @@ export default function AdminImagensPage() {
     if (!loading) {
       if (!user) {
         router.push("/login")
-      } else if (user.email && ADMIN_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase())) {
-        setIsAdmin(true)
-        loadImages()
       } else {
-        appToast.error("Acesso negado", "Você não tem permissão para acessar esta página.")
-        router.push("/")
+        let active = true
+        checkIsAdminRole(user.id)
+          .then((allowed) => {
+            if (!active) return
+            if (allowed) {
+              setIsAdmin(true)
+              loadImages()
+            } else {
+              appToast.error("Acesso negado", "Você não tem permissão para acessar esta página.")
+              router.push("/")
+            }
+          })
+          .catch(() => {
+            if (active) router.push("/")
+          })
+        return () => {
+          active = false
+        }
       }
     }
   }, [user, loading, router])

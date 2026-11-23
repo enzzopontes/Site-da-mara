@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { authenticateRequestUser } from '@/lib/supabase/route-auth';
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -42,16 +43,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'config: Supabase não configurado' }, { status: 500 });
     }
 
-    // 1. Extrair e validar Bearer token
-    const authHeader = req.headers.get('authorization') || '';
-    const bearerToken = authHeader.replace(/^Bearer\s+/i, '');
-    if (!bearerToken) {
-      return NextResponse.json({ success: false, error: 'Token de autenticação ausente' }, { status: 401 });
-    }
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser(bearerToken);
-    if (authError || !user) {
-      return NextResponse.json({ success: false, error: 'Token inválido ou expirado' }, { status: 401 });
+    // 1. Autenticar via Authorization: Bearer (App Mobile) ou cookie SSR (Web)
+    const user = await authenticateRequestUser(req, supabase);
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Token inválido, ausente ou expirado' }, { status: 401 });
     }
 
     // 2. Ler orderId do body
@@ -136,23 +131,39 @@ export async function POST(req: NextRequest) {
       const qrCodeBase64 = data.point_of_interaction?.transaction_data?.qr_code_base64;
       const ticketUrl = data.point_of_interaction?.transaction_data?.ticket_url;
 
-      // 8. Gravar metadata.pix + pix_attempts via merge_order_metadata
+      // 8. APP-10: Persistência autoritativa server-side via service_role (dispensa escrita client-side em merge_order_metadata)
+      const pixPatch = {
+        pix_attempts: pixN,
+        pix: {
+          payment_id: String(data.id),
+          qr_code: qrCode,
+          qr_code_base64: qrCodeBase64,
+          ticket_url: ticketUrl,
+          expiration_date: data.date_of_expiration || expirationDate,
+        },
+      };
+
       const { error: mergeError } = await supabase.rpc('merge_order_metadata', {
         order_id: orderId,
-        patch: {
-          pix_attempts: pixN,
-          pix: {
-            payment_id: String(data.id),
-            qr_code: qrCode,
-            qr_code_base64: qrCodeBase64,
-            ticket_url: ticketUrl,
-            expiration_date: data.date_of_expiration || expirationDate,
-          },
-        },
+        patch: pixPatch,
       });
 
       if (mergeError) {
-        console.error('[pix] Erro ao gravar metadata:', mergeError.message);
+        console.error('[pix] Erro em merge_order_metadata, aplicando fallback service_role:', mergeError.message);
+        const { error: fallbackErr } = await supabase
+          .from('orders')
+          .update({
+            metadata: { ...(order.metadata || {}), ...pixPatch },
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', orderId);
+        if (fallbackErr) {
+          console.error('[pix] Falha crítica ao persistir QR Code no servidor:', fallbackErr.message);
+          return NextResponse.json(
+            { success: false, error: 'Erro ao salvar dados do Pix no pedido' },
+            { status: 500 }
+          );
+        }
       }
 
       return NextResponse.json({
@@ -169,12 +180,18 @@ export async function POST(req: NextRequest) {
 
     console.error('[pix] Erro Mercado Pago:', data.message);
 
-    return NextResponse.json({
-      success: false,
-      error: data.message || 'Erro ao gerar pagamento PIX no Mercado Pago',
-    });
+    return NextResponse.json(
+      {
+        success: false,
+        error: data.message || 'Erro ao gerar pagamento PIX no Mercado Pago',
+      },
+      { status: mpRes.status || 400 }
+    );
   } catch (err: any) {
     console.error('[pix] Exceção:', err?.message);
-    return NextResponse.json({ success: false, error: err?.message || 'Erro de conexão com o Mercado Pago' });
+    return NextResponse.json(
+      { success: false, error: err?.message || 'Erro de conexão com o Mercado Pago' },
+      { status: 500 }
+    );
   }
 }

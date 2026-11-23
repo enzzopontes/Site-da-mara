@@ -70,34 +70,62 @@ class ImageUploadManager {
               throw new Error("Contexto 2D indisponível")
             }
 
+            const MAX_BASE64_BYTES = 2_750_000
             let mimeType = (file.type || "image/jpeg").toLowerCase().trim()
             if (mimeType === "image/jpg" || mimeType === "image/pjpeg" || mimeType === "image/jfif") {
               mimeType = "image/jpeg"
             }
 
-            if (mimeType === "image/jpeg") {
-              ctx.fillStyle = "#FFFFFF"
-              ctx.fillRect(0, 0, width, height)
-            }
-
-            ctx.drawImage(img, 0, 0, width, height)
-
-            let quality = 0.82
-            let resultDataUrl = canvas.toDataURL(mimeType, quality)
-            let base64 = resultDataUrl.split(",")[1] || resultDataUrl
-
-            if (mimeType === "image/png" && base64.length > 700000) {
+            // GIF: canvas.toDataURL("image/gif") gera PNG em navegadores; preserva GIF original se couber ou converte para JPEG
+            if (mimeType === "image/gif") {
+              const rawBase64 = dataUrl.split(",")[1] || dataUrl
+              if (rawBase64.length <= MAX_BASE64_BYTES) {
+                resolve({ base64: rawBase64, mimeType: "image/gif" })
+                return
+              }
               mimeType = "image/jpeg"
-              ctx.fillStyle = "#FFFFFF"
-              ctx.fillRect(0, 0, width, height)
-              ctx.drawImage(img, 0, 0, width, height)
-              resultDataUrl = canvas.toDataURL("image/jpeg", 0.8)
-              base64 = resultDataUrl.split(",")[1] || resultDataUrl
             }
 
-            if (base64.length > 700000) {
-              resultDataUrl = canvas.toDataURL(mimeType, 0.65)
-              base64 = resultDataUrl.split(",")[1] || resultDataUrl
+            const renderAt = (w: number, h: number, mime: string, q: number): string => {
+              canvas.width = w
+              canvas.height = h
+              if (mime === "image/jpeg") {
+                ctx.fillStyle = "#FFFFFF"
+                ctx.fillRect(0, 0, w, h)
+              } else {
+                ctx.clearRect(0, 0, w, h)
+              }
+              ctx.drawImage(img, 0, 0, w, h)
+              const url = canvas.toDataURL(mime, q)
+              return url.split(",")[1] || url
+            }
+
+            let base64 = renderAt(width, height, mimeType, 0.82)
+
+            if (mimeType === "image/png" && base64.length > 700_000) {
+              mimeType = "image/jpeg"
+              base64 = renderAt(width, height, mimeType, 0.8)
+            }
+
+            const qualitySteps = [0.72, 0.65, 0.55, 0.45, 0.35]
+            for (const q of qualitySteps) {
+              if (base64.length <= 700_000) break
+              base64 = renderAt(width, height, mimeType, q)
+            }
+
+            // BUG-08 FIX: Redução iterativa de dimensões até respeitar estritamente o limite de 2.750.000 bytes do banco
+            let scale = 0.85
+            while (base64.length > MAX_BASE64_BYTES && scale >= 0.25) {
+              mimeType = "image/jpeg"
+              const nextW = Math.max(160, Math.round(width * scale))
+              const nextH = Math.max(160, Math.round(height * scale))
+              base64 = renderAt(nextW, nextH, mimeType, 0.4)
+              scale -= 0.15
+            }
+
+            if (base64.length > MAX_BASE64_BYTES) {
+              reject(new Error("A imagem é complexa demais e excede o limite de 2,75 MB após compressão."))
+              return
             }
 
             resolve({ base64, mimeType })
@@ -108,9 +136,15 @@ class ImageUploadManager {
         img.onerror = (err) => reject(err)
         img.src = dataUrl
       })
-    } catch (error) {
-      console.warn("[ImageUploadManager] Compressão falhou, usando fallback:", error)
+    } catch (error: any) {
+      console.warn("[ImageUploadManager] Compressão falhou, verificando tamanho para fallback:", error)
       const base64 = await this.fileToBase64(file)
+      if (base64.length > 2_750_000) {
+        throw new Error(
+          error?.message ||
+            "Não foi possível comprimir a imagem abaixo do limite de 2,75 MB do banco de dados."
+        )
+      }
       return { base64, mimeType: file.type || "image/jpeg" }
     }
   }
@@ -146,6 +180,9 @@ class ImageUploadManager {
 
       // Compactação inteligente no cliente
       const { base64: base64Data, mimeType: compressedMime } = await this.compressImage(file)
+      if (base64Data.length > 2_750_000) {
+        throw new Error("A imagem comprimida excede o limite de 2,75 MB do banco. Escolha uma imagem menor.")
+      }
       const effectiveMimeCandidate = compressedMime || detectedMime
 
       // Validação profunda de assinatura binária (magic bytes) e bloqueio de SVG/scripts

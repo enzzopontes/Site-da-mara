@@ -132,99 +132,17 @@ class LoyaltyManager {
     const { orderId, orderCreatedAt, orderStatus, userId } = params
 
     // Apenas pedidos criados a partir de agora
-    const createdAtMs = new Date(orderCreatedAt).getTime()
-    const cutoffMs = new Date(LOYALTY_CUTOFF_DATE).getTime()
-    if (createdAtMs < cutoffMs) {
-      return this.getLocalState()
-    }
-
-    // Apenas status entregue/concluído
-    const normalizedStatus = String(orderStatus).toLowerCase()
-    const isCompleted = ["delivered", "concluido", "concluído"].includes(normalizedStatus)
-    if (!isCompleted) {
-      return this.getLocalState()
-    }
-
-    if (userId) {
-      try {
-        const { data, error } = await this.supabase.rpc("process_order_loyalty", {
-          p_order_id: orderId,
-        })
-        if (!error && data?.success) {
-          return this.getLoyaltyState(userId)
-        }
-      } catch (e) {
-        console.warn("RPC indisponível, fallback local ativo:", e)
-      }
-    }
-
-    // Fallback idempotente
-    const current = this.getLocalState()
-    const alreadyCountedKey = `counted_order_${orderId}`
-    if (typeof window !== "undefined" && localStorage.getItem(alreadyCountedKey)) {
-      return current
-    }
-
-    const nextCount = Math.min(LOYALTY_TARGET_ORDERS, current.ordersCount + 1)
-    const hasReward = nextCount >= LOYALTY_TARGET_ORDERS
-    const generatedCode = hasReward ? `BATATA-TOP-${Math.random().toString(36).substring(2, 8).toUpperCase()}` : null
-
-    const updated: LoyaltyState = {
-      ...current,
-      ordersCount: nextCount,
-      remainingOrders: Math.max(0, LOYALTY_TARGET_ORDERS - nextCount),
-      hasRewardAvailable: hasReward,
-      activeRewardCode: generatedCode || current.activeRewardCode,
-    }
-
-    if (typeof window !== "undefined") {
-      localStorage.setItem(alreadyCountedKey, "1")
-    }
-
-    this.saveLocalState(updated)
-    return updated
+    // NEW-07 FIX: Infraestrutura de fidelidade (process_order_loyalty / profiles.loyalty_orders_count) não está ativa no banco.
+    // Evita chamar RPC inexistente e remove fallback que corrompia localStorage no navegador do admin.
+    void orderId
+    void orderCreatedAt
+    void orderStatus
+    void userId
+    return this.getLocalState()
   }
 
-  async redeemReward(userId?: string | null): Promise<{ couponCode: string; newState: LoyaltyState }> {
-    const current = this.getLocalState()
-    const couponCode = current.activeRewardCode || "BATATA-GRATIS-10"
-
-    const newState: LoyaltyState = {
-      ordersCount: 0,
-      targetOrders: LOYALTY_TARGET_ORDERS,
-      remainingOrders: LOYALTY_TARGET_ORDERS,
-      hasRewardAvailable: false,
-      rewardsClaimedCount: current.rewardsClaimedCount + 1,
-      activeRewardCode: null,
-      history: [
-        {
-          id: Math.random().toString(36).substring(2, 9),
-          code: couponCode,
-          claimed: true,
-          claimedAt: new Date().toISOString(),
-          createdAt: new Date().toISOString(),
-        },
-        ...current.history,
-      ],
-    }
-
-    if (userId) {
-      try {
-        await this.supabase
-          .from("profiles")
-          .update({
-            loyalty_orders_count: 0,
-            loyalty_rewards_claimed: newState.rewardsClaimedCount,
-            loyalty_last_reward_at: new Date().toISOString(),
-          })
-          .eq("id", userId)
-      } catch (e) {
-        console.warn("Erro ao sincronizar resgate no banco:", e)
-      }
-    }
-
-    this.saveLocalState(newState)
-    return { couponCode, newState }
+  async redeemReward(_userId?: string | null): Promise<{ couponCode: string; newState: LoyaltyState }> {
+    throw new Error("O programa de fidelidade está temporariamente indisponível para resgate automático.")
   }
 
   setTestCount(count: number) {

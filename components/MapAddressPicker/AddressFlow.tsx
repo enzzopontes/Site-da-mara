@@ -253,6 +253,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
   const [semComplemento, setSemComplemento] = useState<boolean>(false);
   const [pontoReferencia, setPontoReferencia] = useState<string>("");
   const [labelFavorito, setLabelFavorito] = useState<"Casa" | "Trabalho" | null>("Casa");
+  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
   // Lista de Endereços Salvos
@@ -575,12 +576,17 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
     const addr = menuAddress;
     setMenuAddress(null);
 
-    // Preenche os campos para edição
+    // NEW-12 FIX: Preserva ID do endereço em edição, coordenadas, referência e label compatível com addresses_label_check
+    setEditingAddressId(addr.id);
     setSelectedStreet(addr.street);
     setSelectedNeighborhood(addr.neighborhood);
     setSelectedCity(addr.city);
     setSelectedState(addr.state);
     setSelectedCep(addr.cep);
+
+    if (addr.latitude != null && addr.longitude != null) {
+      setMapCoords({ lat: Number(addr.latitude), lng: Number(addr.longitude) });
+    }
 
     if (addr.number === "S/N") {
       setSemNumero(true);
@@ -598,8 +604,11 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
       setComplemento(addr.complement);
     }
 
-    setPontoReferencia("");
-    setLabelFavorito("Casa");
+    setPontoReferencia(addr.reference_point || "");
+    const normalizedLabel = String(addr.label || "").toLowerCase();
+    setLabelFavorito(
+      normalizedLabel === "trabalho" ? "Trabalho" : normalizedLabel === "casa" ? "Casa" : null
+    );
 
     // Abre direto na tela de detalhes
     setStep("details");
@@ -622,6 +631,9 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
 
     setIsSaving(true);
     try {
+      const dbLabel: "casa" | "trabalho" | null =
+        labelFavorito === "Casa" ? "casa" : labelFavorito === "Trabalho" ? "trabalho" : null;
+
       const addressData: Omit<Address, "id"> = {
         user_id: user ? user.id : "guest",
         street: selectedStreet || "Endereço selecionado",
@@ -632,18 +644,31 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
         state: selectedState || "SP",
         cep: selectedCep || "17150-000",
         is_default: true,
+        label: dbLabel,
+        reference_point: pontoReferencia.trim() || null,
+        latitude: mapCoords?.lat ?? null,
+        longitude: mapCoords?.lng ?? null,
       };
 
       let saved: Address | null = null;
       if (user) {
-        saved = await addressesManager.addAddress(addressData);
+        if (editingAddressId) {
+          saved = await addressesManager.updateAddress(editingAddressId, addressData);
+        } else {
+          saved = await addressesManager.addAddress(addressData);
+        }
       } else {
         saved = { id: "guest-default", ...addressData };
         localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(saved));
       }
 
+      if (!saved) {
+        throw new Error("Não foi possível persistir o endereço.");
+      }
+
+      setEditingAddressId(null);
       window.dispatchEvent(new Event("address-changed"));
-      appToast.success("Endereço salvo com sucesso!", `${saved?.street}, ${saved?.number}`);
+      appToast.success("Endereço salvo com sucesso!", `${saved.street}, ${saved.number}`);
 
       if (onSuccess && saved) onSuccess(saved);
       if (onClose) onClose();

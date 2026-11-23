@@ -1,9 +1,14 @@
 import { getSupabaseBrowserClient } from "./client"
 import { isSecureAdminCheck } from "../security-auth"
 
+const OWNER_FALLBACK_EMAILS = "enzzobaraldo2008@gmail.com,maraysis9010@gmail.com"
+
 export function isAdminUser(user: any): boolean {
   if (!user) return false
-  const adminEmails = process.env.ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAILS || ""
+  const adminEmails =
+    process.env.ADMIN_EMAILS ||
+    process.env.NEXT_PUBLIC_ADMIN_EMAILS ||
+    OWNER_FALLBACK_EMAILS
   return isSecureAdminCheck(user, adminEmails)
 }
 

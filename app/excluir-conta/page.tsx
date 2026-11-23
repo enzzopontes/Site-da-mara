@@ -63,15 +63,20 @@ export default function ExcluirContaPage() {
       const res = await fetch("/api/user/delete-data", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({ identifier, reason })
       })
-      const data = await res.json()
-      setProtocol(data.protocol || `BT-${Math.floor(100000 + Math.random() * 900000)}`)
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.success || !data?.protocol) {
+        alert(data?.error || "Não foi possível processar sua solicitação. Faça login e tente novamente.")
+        return
+      }
+      setProtocol(data.protocol)
+      setSubmitted(true)
     } catch {
-      setProtocol(`BT-${Math.floor(100000 + Math.random() * 900000)}`)
+      alert("Falha de comunicação ao enviar solicitação de exclusão. Tente novamente.")
     } finally {
       setLoading(false)
-      setSubmitted(true)
     }
   }
 

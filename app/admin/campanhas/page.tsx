@@ -177,7 +177,16 @@ export default function AdminCampanhasPage() {
   }, [user, authLoading, router])
 
   // 2. Carga de Dados
+  const CAMPAIGNS_INFRA_READY = false
+
   const loadData = useCallback(async () => {
+    if (!CAMPAIGNS_INFRA_READY) {
+      setTokenCount(0)
+      setCampaigns([])
+      setLoading(false)
+      setRefreshing(false)
+      return
+    }
     try {
       setLoading(true)
 
@@ -235,6 +244,13 @@ export default function AdminCampanhasPage() {
 
   const handleSaveCampaign = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!CAMPAIGNS_INFRA_READY) {
+      appToast.warning(
+        "Módulo em preparação",
+        "A infraestrutura de campanhas push (tabela campaigns e Edge Function) ainda está pendente de implantação."
+      )
+      return
+    }
     if (!title.trim() || !body.trim()) {
       appToast.error("Campos Obrigatórios", "Informe título e mensagem da notificação.")
       return
@@ -369,6 +385,29 @@ export default function AdminCampanhasPage() {
 
   if (authLoading || checking || !isAdmin) {
     return <AdminTableSkeleton />
+  }
+
+  if (!CAMPAIGNS_INFRA_READY) {
+    return (
+      <div className="p-4 md:p-8 max-w-4xl mx-auto">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-6 md:p-8 space-y-3 shadow-sm">
+          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#C1440E] bg-amber-100 px-3 py-1 rounded-full border border-amber-200">
+            <Megaphone className="h-3.5 w-3.5" />
+            Módulo em preparação
+          </div>
+          <h1 className="text-2xl font-black text-stone-900">
+            Campanhas Push em Massa — Infraestrutura Pendente
+          </h1>
+          <p className="text-sm text-stone-600 leading-relaxed">
+            Este módulo foi temporariamente desabilitado para evitar falhas de banco de dados até que a tabela{" "}
+            <code className="px-1.5 py-0.5 rounded bg-amber-100/80 text-stone-800 text-xs">public.campaigns</code>{" "}
+            e a Edge Function{" "}
+            <code className="px-1.5 py-0.5 rounded bg-amber-100/80 text-stone-800 text-xs">dispatch-campaign-push</code>{" "}
+            sejam implantadas no projeto Supabase.
+          </p>
+        </div>
+      </div>
+    )
   }
 
   const scheduledCampaigns = campaigns.filter((c) =>

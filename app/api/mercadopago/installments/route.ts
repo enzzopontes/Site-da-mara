@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { authenticateRequestUser } from '@/lib/supabase/route-auth';
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -22,14 +23,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'config: Supabase não configurado' }, { status: 500 });
     }
 
-    const authHeader = req.headers.get('authorization') || '';
-    const bearerToken = authHeader.replace(/^Bearer\s+/i, '');
-    if (!bearerToken) {
-      return NextResponse.json({ success: false, error: 'Token de autenticação ausente' }, { status: 401 });
-    }
-    const { data: { user }, error: authError } = await supabase.auth.getUser(bearerToken);
-    if (authError || !user) {
-      return NextResponse.json({ success: false, error: 'Token inválido ou expirado' }, { status: 401 });
+    const user = await authenticateRequestUser(req, supabase);
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Token inválido, ausente ou expirado' }, { status: 401 });
     }
 
     const { amount, savedCardId, bin } = await req.json();

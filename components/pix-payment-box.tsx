@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Copy, Check, QrCode, Clock, CheckCircle2, AlertCircle, ExternalLink } from "lucide-react"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
@@ -13,13 +13,6 @@ interface PixPaymentBoxProps {
 }
 
 export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPaymentApproved }: PixPaymentBoxProps) {
-  const [copied, setCopied] = useState(false)
-  const [pix, setPix] = useState<any>(initialPixData || null)
-  const [loading, setLoading] = useState(!initialPixData?.qrCode && !initialPixData?.qr_code)
-  const [error, setError] = useState<string | null>(null)
-  const [isApproved, setIsApproved] = useState(false)
-  const [timeLeft, setTimeLeft] = useState<string>("")
-
   // Helper de extração multichaves idêntico ao app mobile
   const extractKeys = (data: any) => {
     if (!data) return { qrCode: "", qrCodeBase64: "", ticketUrl: "", expirationDate: null }
@@ -52,23 +45,47 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
     return { qrCode, qrCodeBase64, ticketUrl, expirationDate }
   }
 
-  // Sincroniza pix se initialPixData mudar
+  const isPixStillValid = (data: any): boolean => {
+    if (!data?.qrCode && !data?.qr_code && !data?.pix_qr_code) return false
+    const exp = data?.expirationDate ?? data?.expiration_date ?? data?.date_of_expiration
+    if (!exp) return true
+    const expMs = new Date(exp).getTime()
+    return Number.isFinite(expMs) && expMs - Date.now() > 60 * 1000
+  }
+
+  const [copied, setCopied] = useState(false)
+  const [pix, setPix] = useState<any>(() => {
+    if (!initialPixData) return null
+    const parsed = extractKeys(initialPixData)
+    return isPixStillValid(parsed) ? parsed : null
+  })
+  const [loading, setLoading] = useState(() => {
+    if (!initialPixData) return true
+    return !isPixStillValid(extractKeys(initialPixData))
+  })
+  const [error, setError] = useState<string | null>(null)
+  const [isApproved, setIsApproved] = useState(false)
+  const [timeLeft, setTimeLeft] = useState<string>("")
+  const regenAttemptedRef = useRef(false)
+
+  // Sincroniza pix se initialPixData mudar (NEW-13: ignora QR expirado para permitir regeneração automática)
   useEffect(() => {
     if (initialPixData) {
       const parsed = extractKeys(initialPixData)
-      if (parsed.qrCode || parsed.qrCodeBase64) {
+      if (isPixStillValid(parsed)) {
+        regenAttemptedRef.current = false
         setPix(parsed)
         setLoading(false)
       }
     }
   }, [initialPixData])
 
-  // Carrega os dados do Pix da API caso não tenham vindo no pedido inicialmente
+  // Carrega os dados do Pix da API caso não tenham vindo no pedido inicialmente ou estejam expirados
   useEffect(() => {
     let isMounted = true
 
     async function fetchPix() {
-      if (pix?.qrCode || pix?.qr_code) return
+      if (isPixStillValid(pix) || (pix && regenAttemptedRef.current)) return
       setLoading(true)
       setError(null)
       try {
@@ -96,6 +113,7 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
 
         if (data.success) {
           const parsed = extractKeys(data)
+          regenAttemptedRef.current = !isPixStillValid(parsed)
           setPix(parsed)
         } else {
           setError(data.error || "Não foi possível carregar o código Pix.")
@@ -112,19 +130,26 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
     return () => {
       isMounted = false
     }
-  }, [orderId, pix?.qrCode])
+  }, [orderId, pix?.qrCode, pix?.qr_code])
 
   // Temporizador de expiração (30 min ou da API)
   useEffect(() => {
-    const expTimeStr = pix?.expirationDate
-    const expTime = expTimeStr
-      ? new Date(expTimeStr).getTime()
-      : Date.now() + 30 * 60 * 1000
+    if (!pix || isApproved) return
+
+    const expTimeStr = pix?.expirationDate ?? pix?.expiration_date ?? pix?.date_of_expiration
+    const parsedExp = expTimeStr ? new Date(expTimeStr).getTime() : NaN
+    const expTime = Number.isFinite(parsedExp) ? parsedExp : Date.now() + 30 * 60 * 1000
+    let timer: ReturnType<typeof setInterval> | undefined
 
     const updateTimer = () => {
       const diff = expTime - Date.now()
       if (diff <= 0) {
         setTimeLeft("Tempo expirado")
+        if (timer) clearInterval(timer)
+        if (!regenAttemptedRef.current) {
+          regenAttemptedRef.current = true
+          setPix(null)
+        }
         return
       }
       const minutes = Math.floor(diff / 60000)
@@ -133,9 +158,13 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
     }
 
     updateTimer()
-    const timer = setInterval(updateTimer, 1000)
-    return () => clearInterval(timer)
-  }, [pix?.expirationDate])
+    if (expTime - Date.now() > 0) {
+      timer = setInterval(updateTimer, 1000)
+    }
+    return () => {
+      if (timer) clearInterval(timer)
+    }
+  }, [pix, isApproved])
 
   // Monitora mudança de status em tempo real via Supabase + Polling HTTP
   useEffect(() => {

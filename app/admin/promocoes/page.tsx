@@ -34,7 +34,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 
-const ADMIN_EMAILS = ["enzzobaraldo2008@gmail.com", "maraysis9010@gmail.com"]
+import { isAdmin as checkIsAdminRole } from "@/lib/supabase/admin"
 
 interface PromoProduct {
   productId: string
@@ -97,14 +97,27 @@ export default function AdminPromocoesPage() {
     if (!loading) {
       if (!user) {
         router.push("/login")
-      } else if (user.email && ADMIN_EMAILS.includes(user.email)) {
-        setIsAdmin(true)
-        loadPromoStatus()
-        loadProducts()
-        loadImages()
       } else {
-        appToast.error("Acesso negado", "Você não tem permissão para acessar esta página.")
-        router.push("/")
+        let active = true
+        checkIsAdminRole(user.id)
+          .then((allowed) => {
+            if (!active) return
+            if (allowed) {
+              setIsAdmin(true)
+              loadPromoStatus()
+              loadProducts()
+              loadImages()
+            } else {
+              appToast.error("Acesso negado", "Você não tem permissão para acessar esta página.")
+              router.push("/")
+            }
+          })
+          .catch(() => {
+            if (active) router.push("/")
+          })
+        return () => {
+          active = false
+        }
       }
     }
   }, [user, loading, router])

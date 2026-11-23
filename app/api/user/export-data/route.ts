@@ -16,12 +16,20 @@ export async function GET() {
       )
     }
 
-    // Busca dados associados ao titular
+    // Busca dados associados ao titular (NEW-02: colunas reais total_amount e order_items)
     const [profileRes, ordersRes, addressesRes] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
-      supabase.from("orders").select("id, created_at, status, total, payment_method, items").eq("user_id", user.id),
-      supabase.from("addresses").select("*").eq("user_id", user.id)
+      supabase
+        .from("orders")
+        .select("id, order_number, created_at, status, total_amount, discount_amount, coupon_code, payment_method, delivery_type, order_items(*)")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false }),
+      supabase.from("addresses").select("*").eq("user_id", user.id),
     ])
+
+    if (ordersRes.error) {
+      console.error("[export-data] Erro ao buscar pedidos:", ordersRes.error.message)
+    }
 
     const exportPayload = {
       termo: "Relatório de Portabilidade de Dados Pessoais - LGPD (Lei nº 13.709/2018 - Art. 18, V)",

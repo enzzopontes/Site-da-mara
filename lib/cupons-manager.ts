@@ -115,11 +115,12 @@ class CouponsManager {
 
   private async syncCouponBannerWithHomeBanners(coupon: Coupon): Promise<void> {
     try {
-      const { data: existing } = await this.supabase
+      const { data: existingList } = await this.supabase
         .from("home_banners")
         .select("id")
         .eq("coupon_id", coupon.id)
-        .maybeSingle()
+        .limit(1)
+      const existing = Array.isArray(existingList) ? existingList[0] : null
 
       if (coupon.isBannerHighlight && coupon.bannerImageUrl) {
         if (existing?.id) {
@@ -174,7 +175,10 @@ class CouponsManager {
         show_code_in_title: !!coupon.showCodeInTitle,
         show_on_home: !!coupon.showOnHome,
         home_priority: coupon.homePriority || 0,
-        banner_image_url: coupon.bannerImageUrl || null,
+        banner_image_url:
+          coupon.bannerImageUrl && !coupon.bannerImageUrl.startsWith("data:")
+            ? coupon.bannerImageUrl
+            : null,
         badge_label: coupon.badgeLabel || null,
         is_banner_highlight: !!coupon.isBannerHighlight,
         template_origin: coupon.templateOrigin || "custom",
@@ -185,10 +189,10 @@ class CouponsManager {
 
     if (error) {
       console.error("Error adding coupon:", error.message)
-      return null
+      throw new Error(error.message || "Erro ao criar cupom.")
     }
 
-    if (!data) return null
+    if (!data) throw new Error("Cupom não retornado após criação.")
 
     const mapped = mapRowToCoupon(data)
     await this.syncCouponBannerWithHomeBanners(mapped)
@@ -217,7 +221,12 @@ class CouponsManager {
     if (updates.showCodeInTitle !== undefined) updateData.show_code_in_title = updates.showCodeInTitle
     if (updates.showOnHome !== undefined) updateData.show_on_home = updates.showOnHome
     if (updates.homePriority !== undefined) updateData.home_priority = updates.homePriority
-    if (updates.bannerImageUrl !== undefined) updateData.banner_image_url = updates.bannerImageUrl
+    if (updates.bannerImageUrl !== undefined) {
+      if (updates.bannerImageUrl && updates.bannerImageUrl.startsWith("data:")) {
+        throw new Error("Formato de imagem inválido: faça upload para obter uma URL válida em vez de base64 bruto.")
+      }
+      updateData.banner_image_url = updates.bannerImageUrl
+    }
     if (updates.badgeLabel !== undefined) updateData.badge_label = updates.badgeLabel
     if (updates.isBannerHighlight !== undefined) updateData.is_banner_highlight = updates.isBannerHighlight
     if (updates.templateOrigin !== undefined) updateData.template_origin = updates.templateOrigin
@@ -231,7 +240,7 @@ class CouponsManager {
 
     if (error) {
       console.error("Error updating coupon:", error.message)
-      return false
+      throw new Error(error.message || "Erro ao atualizar cupom.")
     }
 
     if (data) {
@@ -253,8 +262,31 @@ class CouponsManager {
   }
 
   async deleteCoupon(id: string): Promise<boolean> {
+    try {
+      const res = await fetch("/api/admin/coupons", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ action: "deleteCoupon", couponId: id }),
+      })
+      if (res.status !== 404) {
+        const json = await res.json().catch(() => null)
+        if (!res.ok || !json?.success) {
+          throw new Error(json?.error || `Erro ao excluir cupom (HTTP ${res.status}).`)
+        }
+        return true
+      }
+    } catch (err: any) {
+      if (err instanceof Error && !err.message.includes("Failed to fetch")) {
+        throw err
+      }
+    }
+
     const { error } = await this.supabase.from("coupons").delete().eq("id", id)
-    return !error
+    if (error) {
+      throw new Error(error.message || "Não foi possível excluir o cupom.")
+    }
+    return true
   }
 
   async validateCoupon(
@@ -293,6 +325,7 @@ class CouponsManager {
 
     if (coupon.maxUsage != null && coupon.usageCount >= coupon.maxUsage) {
       return { valid: false, message: "Limite de usos atingido" }
+    }
 
     // 1. Regra de Primeiro Pedido (Boas-vindas para novos clientes cadastrados)
     if (coupon.templateOrigin === "first_order" || coupon.code?.startsWith("BEMVINDO")) {
@@ -318,20 +351,18 @@ class CouponsManager {
         return { valid: false, message: "Exclusivo para clientes cadastrados. Faça login!" }
       }
     }
-    }
 
     if (coupon.maxUsagePerUser != null && userId) {
       let count = 0
       try {
-        const { count: orderCount, error: countError } = await this.supabase
-          .from("orders")
+        const { count: usageCount, error: countError } = await this.supabase
+          .from("user_coupon_uses")
           .select("*", { count: "exact", head: true })
           .eq("user_id", userId)
-          .eq("coupon_code", coupon.code)
-          .neq("status", "cancelled")
+          .eq("coupon_id", coupon.id)
 
-        if (!countError && orderCount !== null) {
-          count = orderCount
+        if (!countError && usageCount !== null) {
+          count = usageCount
         }
       } catch {}
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { authenticateRequestUser, isValidCpfDigits } from '@/lib/supabase/route-auth';
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -9,12 +10,7 @@ function getSupabaseAdmin() {
 }
 
 async function authenticateUser(req: NextRequest, supabase: any) {
-  const authHeader = req.headers.get('authorization') || '';
-  const token = authHeader.replace(/^Bearer\s+/i, '');
-  if (!token) return null;
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) return null;
-  return user;
+  return authenticateRequestUser(req, supabase);
 }
 
 // POST: Salvar cartão no Mercado Pago e registrar no banco
@@ -44,7 +40,7 @@ export async function POST(req: NextRequest) {
 
     if (doc_number) {
       const cleanDoc = String(doc_number).replace(/\D/g, '');
-      if (cleanDoc.length === 11) {
+      if (isValidCpfDigits(cleanDoc)) {
         try {
           await supabase.from('profiles').update({ cpf: cleanDoc }).eq('id', user.id);
         } catch {}

@@ -483,7 +483,7 @@ export function AuthContainer({
     const trimmedName = `${firstName.trim()} ${lastName.trim()}`.trim()
     try {
       const supabase = getSupabaseBrowserClient()
-      const { error } = await supabase.auth.updateUser({
+      const { data: updatedUserData, error } = await supabase.auth.updateUser({
         data: {
           full_name: trimmedName,
           ...(cpfDigits && { cpf: cpfDigits }),
@@ -493,6 +493,17 @@ export function AuthContainer({
       if (error) {
         appToast.error("Não foi possível salvar os dados. Tente novamente.")
         return
+      }
+
+      if (updatedUserData?.user?.id) {
+        await supabase
+          .from("profiles")
+          .update({
+            full_name: trimmedName,
+            ...(cpfDigits ? { cpf: cpfDigits } : {}),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", updatedUserData.user.id)
       }
 
       finishSuccessLogin(trimmedName)

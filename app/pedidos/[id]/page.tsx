@@ -472,7 +472,8 @@ export default function DetalhesPedidoPage() {
     }
   })()
 
-  const deliveryTypeLabel = order.deliveryType === "pickup" ? "Retirada na Loja" : "Entrega Delivery"
+  const isPickup = order.deliveryType === "pickup" || (order.deliveryType as string) === "retirada"
+  const deliveryTypeLabel = isPickup ? "Retirada na Loja" : "Entrega Delivery"
   const paymentLabel =
     order.paymentMethod === "pix"
       ? "Pix"
@@ -480,8 +481,9 @@ export default function DetalhesPedidoPage() {
       ? "Cartão"
       : "Dinheiro"
 
-  const freteValue = order.metadata?.deliveryFee != null ? Number(order.metadata.deliveryFee) : 0
-  const freteText = order.deliveryType === "pickup" ? "Grátis" : freteValue === 0 ? "Grátis" : `R$ ${freteValue.toFixed(2).replace(".", ",")}`
+  const rawFrete = order.metadata?.delivery_fee ?? order.metadata?.deliveryFee
+  const freteValue = rawFrete != null ? Number(rawFrete) : 0
+  const freteText = isPickup ? "Grátis" : freteValue === 0 ? "Grátis" : `R$ ${freteValue.toFixed(2).replace(".", ",")}`
 
   const isCancellable = ["awaiting_payment", "pending"].includes(order.status)
 

@@ -405,13 +405,14 @@ export default function AdminCuponsPage() {
 
       if (Array.isArray(dbImages)) {
         dbImages.forEach((img: any) => {
+          const imageUrlPath = `/api/images/${img.id}`
           const previewUri = img.data
             ? `data:${img.mime_type || "image/jpeg"};base64,${img.data}`
-            : `/api/images/${img.id}`
+            : imageUrlPath
           list.push({
             id: `upload-${img.id}`,
             name: img.name || "Galeria de Mídia",
-            url: previewUri,
+            url: imageUrlPath,
             previewUri,
             category: "banners",
             categoryLabel: "GALERIA",
@@ -643,32 +644,14 @@ export default function AdminCuponsPage() {
         }
       }
 
-      // 2. Fallback para base64 + uploaded_images
-      const base64DataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(String(reader.result))
-        reader.onerror = reject
-        reader.readAsDataURL(file)
-      })
-
-      const rawBase64 = base64DataUrl.split(",")[1]
-      if (rawBase64) {
-        const id = `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
-        await supabase.from("uploaded_images").insert({
-          id,
-          name: file.name || fileName,
-          data: rawBase64,
-          mime_type: file.type || "image/jpeg",
-          category: "promo",
-          uploaded_at: new Date().toISOString(),
-        })
-      }
-
-      setBannerImageUrl(base64DataUrl)
+      // 2. Fallback seguro via imageUploadManager (comprime <= 2.75MB e grava URL /api/images/{id}, nunca base64 bruto)
+      const { imageUploadManager } = await import("@/lib/image-upload-manager")
+      const uploaded = await imageUploadManager.uploadImage(file, "promo")
+      setBannerImageUrl(uploaded.url)
       appToast.success("Imagem vinculada ao banner com sucesso!")
-    } catch (err) {
+    } catch (err: any) {
       console.warn("Erro ao enviar imagem do banner:", err)
-      appToast.error("Imagem inválida", "Não foi possível carregar a imagem selecionada.")
+      appToast.error("Imagem inválida", err?.message || "Não foi possível carregar a imagem selecionada.")
     } finally {
       setUploadingBanner(false)
       if (fileInputRef.current) fileInputRef.current.value = ""
@@ -745,8 +728,14 @@ export default function AdminCuponsPage() {
 
     setIsSaving(true)
     try {
-      const maxUsageVal = maxUsage.trim() ? parseInt(maxUsage, 10) : undefined
-      const maxPerUserVal = maxUsagePerUser.trim() ? parseInt(maxUsagePerUser, 10) : undefined
+      const maxUsageVal = maxUsage.trim() ? parseInt(maxUsage, 10) : null
+      const maxPerUserVal = maxUsagePerUser.trim() ? parseInt(maxUsagePerUser, 10) : null
+      const cleanBannerUrl = bannerImageUrl.trim() || null
+      if (cleanBannerUrl && cleanBannerUrl.startsWith("data:")) {
+        appToast.error("Banner inválido", "Faça upload da imagem do banner para obter uma URL válida.")
+        setIsSaving(false)
+        return
+      }
 
       const payload: Partial<Coupon> = {
         code: finalCode,
@@ -761,13 +750,13 @@ export default function AdminCuponsPage() {
         type,
         minOrderValue: minOrderVal,
         restrictedCategories: restrictedCategories.length > 0 ? restrictedCategories : null,
-        maxUsagePerUser: maxPerUserVal,
-        maxUsage: maxUsageVal,
+        maxUsagePerUser: maxPerUserVal as any,
+        maxUsage: maxUsageVal as any,
         expiresAt: isPermanent ? null : expiresAt ? new Date(expiresAt + "T23:59:00") : null,
         showCodeInTitle,
         showOnHome,
         homePriority: parseInt(homePriority, 10) || 0,
-        bannerImageUrl: bannerImageUrl.trim() || null,
+        bannerImageUrl: cleanBannerUrl,
         badgeLabel: badgeLabel.trim() || null,
         isBannerHighlight,
         templateOrigin,
@@ -775,10 +764,12 @@ export default function AdminCuponsPage() {
       }
 
       if (editingCoupon) {
-        await couponsManager.updateCoupon(editingCoupon.id, payload)
+        const updated = await couponsManager.updateCoupon(editingCoupon.id, payload)
+        if (!updated) throw new Error("Não foi possível atualizar o cupom.")
         appToast.success("Cupom atualizado com sucesso!")
       } else {
-        await couponsManager.addCoupon(payload as any)
+        const created = await couponsManager.addCoupon(payload as any)
+        if (!created) throw new Error("Não foi possível criar o cupom.")
         appToast.success("Cupom criado com sucesso!")
       }
 
@@ -794,13 +785,14 @@ export default function AdminCuponsPage() {
   const handleToggleHome = async (coupon: Coupon) => {
     try {
       const nextVal = !coupon.showOnHome
-      await couponsManager.updateCoupon(coupon.id, { showOnHome: nextVal })
+      const ok = await couponsManager.updateCoupon(coupon.id, { showOnHome: nextVal })
+      if (!ok) throw new Error("Falha ao atualizar destaque na Home.")
       setCoupons((prev) =>
         prev.map((c) => (c.id === coupon.id ? { ...c, showOnHome: nextVal } : c))
       )
       appToast.success(nextVal ? "Cupom destacado na vitrine da Home!" : "Cupom removido da vitrine.")
-    } catch {
-      appToast.error("Erro", "Não foi possível atualizar o destaque na Home.")
+    } catch (err: any) {
+      appToast.error("Erro", err?.message || "Não foi possível atualizar o destaque na Home.")
     }
   }
 
@@ -814,7 +806,8 @@ export default function AdminCuponsPage() {
     }
     try {
       const nextVal = !coupon.isBannerHighlight
-      await couponsManager.updateCoupon(coupon.id, { isBannerHighlight: nextVal })
+      const ok = await couponsManager.updateCoupon(coupon.id, { isBannerHighlight: nextVal })
+      if (!ok) throw new Error("Falha ao atualizar status do banner.")
       setCoupons((prev) =>
         prev.map((c) => (c.id === coupon.id ? { ...c, isBannerHighlight: nextVal } : c))
       )
@@ -823,31 +816,35 @@ export default function AdminCuponsPage() {
           ? "Banner ativado no carrossel da Home!"
           : "Banner removido do carrossel da Home."
       )
-    } catch {
-      appToast.error("Erro", "Não foi possível atualizar o status do banner.")
+    } catch (err: any) {
+      appToast.error("Erro", err?.message || "Não foi possível atualizar o status do banner.")
     }
   }
 
   const handleToggleActive = async (coupon: Coupon) => {
     try {
       const nextVal = !coupon.isActive
-      await couponsManager.updateCoupon(coupon.id, { isActive: nextVal })
+      const ok = await couponsManager.updateCoupon(coupon.id, { isActive: nextVal })
+      if (!ok) throw new Error("Falha ao alterar status do cupom.")
       setCoupons((prev) =>
         prev.map((c) => (c.id === coupon.id ? { ...c, isActive: nextVal } : c))
       )
-    } catch {
-      appToast.error("Erro", "Não foi possível alterar o status do cupom.")
+    } catch (err: any) {
+      appToast.error("Erro", err?.message || "Não foi possível alterar o status do cupom.")
     }
   }
 
   const handleDelete = async (coupon: Coupon) => {
     if (!confirm(`Excluir o cupom "${coupon.code}"?`)) return
     try {
-      await couponsManager.deleteCoupon(coupon.id)
+      const deleted = await couponsManager.deleteCoupon(coupon.id)
+      if (!deleted) {
+        throw new Error("Não foi possível excluir o cupom.")
+      }
       await loadCoupons()
       appToast.success("Cupom excluído.")
-    } catch {
-      appToast.error("Erro", "Não foi possível excluir o cupom.")
+    } catch (err: any) {
+      appToast.error("Erro ao excluir cupom", err?.message || "Não foi possível excluir o cupom.")
     }
   }
 

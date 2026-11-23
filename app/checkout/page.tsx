@@ -41,7 +41,7 @@ export default function CheckoutPage() {
   const [storeStatus, setStoreStatus] = useState<StoreStatus | null>(null)
   const [isStoreOpen, setIsStoreOpen] = useState(true)
   const [isDeliveryEnabled, setIsDeliveryEnabled] = useState(true)
-  const [deliveryFee, setDeliveryFee] = useState(5.0)
+  const [deliveryFee, setDeliveryFee] = useState(3.0)
 
   // Endereços do cliente
   const [addresses, setAddresses] = useState<Address[]>([])
@@ -99,9 +99,11 @@ export default function CheckoutPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const pendingOrderIdRef = useRef<string | null>(null)
+  const pendingOrderTotalRef = useRef<number | null>(null)
 
   useEffect(() => {
     pendingOrderIdRef.current = null
+    pendingOrderTotalRef.current = null
   }, [items, formaPagamento, appliedCoupon, deliveryType])
 
   // ─── 1. Carregamento inicial de status da loja, usuário e produtos ─────────────
@@ -119,7 +121,8 @@ export default function CheckoutPage() {
           setDeliveryType("pickup")
         }
         if (status.isDeliveryFeeEnabled) {
-          setDeliveryFee(Number(status.deliveryFee) || 5.0)
+          const parsedFee = Number(status.deliveryFee)
+          setDeliveryFee(Number.isFinite(parsedFee) && parsedFee >= 0 ? parsedFee : 3.0)
         } else {
           setDeliveryFee(0)
         }
@@ -202,7 +205,7 @@ export default function CheckoutPage() {
         }
       } else if (savedCards.length > 0) {
         const targetType =
-          formaPagamento === "cartao_debito" ? "cartão de débito" : "cartao_credito"
+          formaPagamento === "cartao_debito" ? "cartão de débito" : "cartão de crédito"
         const matchingCards = savedCards.filter((c) => c.card_type === targetType)
         const pool = matchingCards.length > 0 ? matchingCards : savedCards
         const def = pool.find((c) => c.is_default) || pool[0]
@@ -222,7 +225,7 @@ export default function CheckoutPage() {
   const subtotal = getTotalPrice()
   // Base oficial do mínimo: subtotal bruto dos itens (sem frete, sem desconto).
   // Cupom pendente (abaixo do mínimo) não gera desconto nem trava o pedido.
-  const discountAmount = evaluateCoupon(appliedCoupon, subtotal).discount
+  const discountAmount = evaluateCoupon(appliedCoupon, subtotal, items).discount
   const currentDeliveryFee = deliveryType === "pickup" ? 0 : deliveryFee
   const finalTotal = Math.max(0, subtotal - discountAmount + currentDeliveryFee)
   const totalItemCount = items.reduce((sum, item) => sum + item.quantity, 0)
@@ -550,7 +553,7 @@ export default function CheckoutPage() {
           : "cartao"
 
       // Cupom pendente (subtotal_itens < mínimo) é ignorado: pedido segue sem desconto.
-      const couponResolution = resolveCouponForCheckout(appliedCoupon, subtotal)
+      const couponResolution = resolveCouponForCheckout(appliedCoupon, subtotal, items)
 
       const orderPayload = {
         customerName: nome.trim(),
@@ -617,14 +620,19 @@ export default function CheckoutPage() {
 
       // Reutiliza o pedido pendente em caso de nova tentativa de pagamento online
       let orderId = pendingOrderIdRef.current
+      let authoritativeOrderTotal = pendingOrderTotalRef.current ?? finalTotal
       if (!orderId) {
         const createdOrder = await ordersManager.createOrder(orderPayload)
         if (!createdOrder?.id) {
           throw new Error("Não foi possível gerar seu pedido. Tente novamente.")
         }
         orderId = createdOrder.id
+        if (Number.isFinite(Number(createdOrder.total)) && Number(createdOrder.total) > 0) {
+          authoritativeOrderTotal = Number(createdOrder.total)
+        }
         if (isPaymentOnline) {
           pendingOrderIdRef.current = orderId
+          pendingOrderTotalRef.current = authoritativeOrderTotal
         }
 
         // Persiste o endereço preenchido para próximos pedidos
@@ -701,17 +709,33 @@ export default function CheckoutPage() {
             paymentMethodId: selectedSavedCard.payment_method_id,
             docNumber: cardCpf.replace(/\D/g, ""),
             installments: formaPagamento === "cartao_credito" ? installments : 1,
-            installmentsBaseAmount: finalTotal,
+            installmentsBaseAmount: authoritativeOrderTotal,
           }),
         })
 
         const cardData = await cardRes.json().catch(() => ({}))
+        if (cardData?.action === "held_underpaid" || cardData?.code === "held_underpaid") {
+          pendingOrderIdRef.current = null
+          pendingOrderTotalRef.current = null
+          clearCart()
+          appToast.info("Pagamento em análise", "Pagamento em análise — acompanhe no pedido")
+          router.push(`/pedidos/${orderId}`)
+          return
+        }
         if (
           !cardRes.ok ||
           !cardData.success ||
           cardData.status === "rejected" ||
           (cardData.status !== "approved" && cardData.status !== "in_process")
         ) {
+          if (
+            cardRes.status === 429 ||
+            cardData?.code === "order_status_not_payable" ||
+            cardData?.code === "cc_rejected_max_attempts"
+          ) {
+            pendingOrderIdRef.current = null
+            pendingOrderTotalRef.current = null
+          }
           let rejectMsg =
             cardData.error || "Pagamento não aprovado. Verifique os dados do cartão."
           if (cardData.status === "rejected") {
@@ -738,22 +762,8 @@ export default function CheckoutPage() {
           return
         }
 
-        fetch("/api/bark", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "notify", orderId }),
-        }).catch(() => {})
-
-        fetch("/api/notify-new-order", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ orderId }),
-        }).catch(() => {})
-
         pendingOrderIdRef.current = null
+        pendingOrderTotalRef.current = null
         clearCart()
         router.push(`/pedidos/${orderId}`)
         return
@@ -761,32 +771,43 @@ export default function CheckoutPage() {
 
       // Se for PIX, aciona a rota interna do Mercado Pago para gerar a chave e QR Code imediatamente
       if (isOnlinePix) {
-        try {
-          const supabase = getSupabaseBrowserClient()
-          const { data: sessionRes } = await supabase.auth.getSession()
-          const token = sessionRes?.session?.access_token
+        const supabase = getSupabaseBrowserClient()
+        const { data: sessionRes } = await supabase.auth.getSession()
+        const token = sessionRes?.session?.access_token
 
-          if (token) {
-            await fetch("/api/mercadopago/pix", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify({ orderId }),
-            })
+        if (!token) {
+          const msg = "Sessão expirada. Faça login novamente para gerar o QR Code Pix."
+          setErrorMessage(msg)
+          appToast.error("Atenção", msg)
+          setIsSubmitting(false)
+          return
+        }
+
+        const pixRes = await fetch("/api/mercadopago/pix", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ orderId }),
+        })
+        const pixData = await pixRes.json().catch(() => null)
+        if (!pixRes.ok || !pixData?.success) {
+          if (
+            pixData?.code === "order_status_not_payable" ||
+            pixData?.code === "order_not_found"
+          ) {
+            pendingOrderIdRef.current = null
+            pendingOrderTotalRef.current = null
           }
-        } catch (pixErr) {
-          console.warn("[Checkout] Geração de Pix em segundo plano falhou:", pixErr)
+          const msg =
+            pixData?.error || "Não foi possível gerar o QR Code Pix no momento. Tente novamente."
+          setErrorMessage(msg)
+          appToast.error("Falha ao gerar Pix", msg)
+          setIsSubmitting(false)
+          return
         }
       } else {
-        // Disparo incondicional do alarme crítico Bark (iOS) para novos pedidos pendentes
-        fetch("/api/bark", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "notify", orderId }),
-        }).catch(() => {})
-
         // Dispara notificação push para os administradores
         getSupabaseBrowserClient()
           .auth.getSession()
@@ -808,6 +829,7 @@ export default function CheckoutPage() {
 
       // Limpa a sacola e redireciona direto para a tela de acompanhamento/pagamento
       pendingOrderIdRef.current = null
+      pendingOrderTotalRef.current = null
       clearCart()
       router.push(`/pedidos/${orderId}`)
     } catch (err: any) {

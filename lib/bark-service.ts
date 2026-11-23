@@ -11,11 +11,7 @@ const BARK_PUSH_URL = "https://api.day.app/push"
 const DEFAULT_ADMIN_URL = "https://batatatopiacanga.com.br/admin"
 
 export function getBarkDeviceKey(): string {
-  return (
-    process.env.BARK_DEVICE_KEY ||
-    process.env.NEXT_PUBLIC_BARK_DEVICE_KEY ||
-    "rhdPArWptmFfukNzm25fEg"
-  ).trim()
+  return (process.env.BARK_DEVICE_KEY || "").trim()
 }
 
 export function formatBarkPayment(paymentMethod?: string | null): string {

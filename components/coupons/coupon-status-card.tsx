@@ -3,6 +3,7 @@
 import React from "react"
 import { Tag, CheckCircle2, X } from "lucide-react"
 import { evaluateCoupon } from "@/lib/coupon-rules"
+import { useCart } from "@/lib/cart-context"
 
 export interface CouponStatusCardProps {
   /** Subtotal bruto dos itens (sem frete, sem desconto). */
@@ -28,10 +29,12 @@ function describeDiscount(coupon: any): string {
  * - pending: subtotal_itens < valor_minimo (âmbar, barra fina, não trava o pedido)
  */
 export function CouponStatusCard({ subtotal, coupon, onRemove, className = "" }: CouponStatusCardProps) {
-  const evaluation = evaluateCoupon(coupon, subtotal)
+  const { items } = useCart()
+  const evaluation = evaluateCoupon(coupon, subtotal, items)
   if (evaluation.status === "none") return null
 
   const isApplied = evaluation.status === "applied"
+  const isCategoryIneligible = !isApplied && evaluation.missing <= 0
   const percentage = Math.round(evaluation.progress * 100)
   const discountLabel = describeDiscount(coupon)
 
@@ -58,11 +61,11 @@ export function CouponStatusCard({ subtotal, coupon, onRemove, className = "" }:
           <span className="inline-flex items-center gap-1 shrink-0 rounded-full bg-emerald-100/80 px-2 py-0.5 text-[11px] font-black text-emerald-700">
             <CheckCircle2 className="h-3 w-3" aria-hidden="true" /> Liberado
           </span>
-        ) : (
+        ) : !isCategoryIneligible ? (
           <span className="inline-flex items-center shrink-0 rounded-full bg-amber-100/80 px-2 py-0.5 text-[11px] font-bold text-amber-800">
             Faltam {formatMoney(evaluation.missing)}
           </span>
-        )}
+        ) : null}
 
         {onRemove && (
           <button
@@ -82,6 +85,10 @@ export function CouponStatusCard({ subtotal, coupon, onRemove, className = "" }:
           {evaluation.discount > 0
             ? `${formatMoney(evaluation.discount)} de desconto aplicado`
             : "Desconto aplicado"}
+        </p>
+      ) : isCategoryIneligible ? (
+        <p className="mt-1.5 text-xs font-medium leading-snug text-stone-700">
+          Adicione itens de categorias elegíveis para usar este cupom.
         </p>
       ) : (
         <>

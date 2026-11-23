@@ -172,10 +172,12 @@ export default function SegurancaContaPage() {
       return
     }
 
-    if (newPassword.length < 6) {
+    const hasLetter = /[a-zA-Z]/.test(newPassword)
+    const hasNumber = /[0-9]/.test(newPassword)
+    if (newPassword.length < 8 || !hasLetter || !hasNumber) {
       setPasswordFeedback({
         type: "error",
-        message: "A nova senha deve ter pelo menos 6 caracteres.",
+        message: "A nova senha deve ter pelo menos 8 caracteres, incluindo letras e números.",
       })
       return
     }
@@ -569,7 +571,7 @@ export default function SegurancaContaPage() {
               ) : (
                 <p className="text-xs text-[#717171]">
                   Para redefinir sua senha sem estar logado, acesse a opção{" "}
-                  <Link href="/esqueci-senha" className="text-[#C1440E] font-semibold underline">
+                  <Link href="/reset-password" className="text-[#C1440E] font-semibold underline">
                     Esqueci minha senha
                   </Link>{" "}
                   na tela de login.

@@ -39,8 +39,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import { PhotoBankPicker } from "@/components/photo-bank-picker"
-
-const ADMIN_EMAILS = ["enzzobaraldo2008@gmail.com", "maraysis9010@gmail.com"]
+import { isAdmin as checkIsAdminRole } from "@/lib/supabase/admin"
 
 const CATEGORIES = [
   { key: "batata", label: "Batatas Recheadas", icon: Flame, color: "text-amber-500 bg-amber-50" },
@@ -174,22 +173,42 @@ export default function AdminProdutosPage() {
   }
 
   useEffect(() => {
+    let active = true
     if (!loading) {
       if (!user) {
         router.push("/login")
-      } else if (user.email && ADMIN_EMAILS.includes(user.email)) {
-        setIsAdmin(true)
-        loadProducts()
-        loadAdicionais()
       } else {
-        router.push("/")
+        checkIsAdminRole(user.id)
+          .then((allowed) => {
+            if (!active) return
+            if (allowed) {
+              setIsAdmin(true)
+              loadProducts()
+              loadAdicionais()
+            } else {
+              router.push("/")
+            }
+          })
+          .catch(() => {
+            if (active) router.push("/")
+          })
       }
+    }
+    return () => {
+      active = false
     }
   }, [user, loading, router])
 
   const loadProducts = async () => {
-    const allProducts = await productsManager.getProducts()
-    setProducts(allProducts)
+    try {
+      const allProducts = await productsManager.getProducts({ strict: true })
+      setProducts(allProducts)
+    } catch (err) {
+      appToast.error(
+        "Erro ao carregar produtos",
+        err instanceof Error ? err.message : "Não foi possível consultar o cardápio."
+      )
+    }
   }
 
   const loadAdicionais = async () => {
@@ -325,54 +344,79 @@ export default function AdminProdutosPage() {
       return
     }
 
-    if (editingAdicional) {
-      await adicionaisManager.updateAdicional(editingAdicional.id, {
-        name: formAdicionalName.trim(),
-        price,
-        ...((formAdicionalCategoria ? { adicional_categoria: formAdicionalCategoria } : {}) as any),
-      })
-    } else {
-      const created = await adicionaisManager.addAdicional({
-        name: formAdicionalName.trim(),
-        price,
-      })
-      if (created && formAdicionalCategoria) {
-        await adicionaisManager.updateAdicional(created.id, {
-          adicional_categoria: formAdicionalCategoria,
-        } as any)
+    if (isSaving) return
+    setIsSaving(true)
+    try {
+      let saved: Adicional | null = null
+      if (editingAdicional) {
+        saved = await adicionaisManager.updateAdicional(editingAdicional.id, {
+          name: formAdicionalName.trim(),
+          price,
+          ...(formAdicionalCategoria ? { adicional_categoria: formAdicionalCategoria } : {}),
+        })
+      } else {
+        saved = await adicionaisManager.addAdicional({
+          name: formAdicionalName.trim(),
+          price,
+          ...(formAdicionalCategoria ? { adicional_categoria: formAdicionalCategoria } : {}),
+        })
       }
-    }
 
-    await loadAdicionais()
-    setIsAdicionalDialogOpen(false)
+      if (!saved) return
+
+      appToast.success(
+        editingAdicional ? "Adicional atualizado" : "Adicional criado",
+        `"${formAdicionalName.trim()}" foi salvo com sucesso.`
+      )
+      await loadAdicionais()
+      setIsAdicionalDialogOpen(false)
+    } catch (err) {
+      appToast.error("Erro ao salvar adicional", err instanceof Error ? err.message : String(err))
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleDeleteProduct = async (id: string) => {
     if (confirm("Tem certeza que deseja excluir este produto do cardápio?")) {
-      await productsManager.deleteProduct(id)
-      loadProducts()
+      try {
+        await productsManager.deleteProduct(id)
+        await loadProducts()
+        appToast.success("Produto excluído", "O produto foi removido do cardápio.")
+      } catch (err) {
+        appToast.error("Não foi possível excluir o produto", err instanceof Error ? err.message : String(err))
+      }
     }
   }
 
   const handleDeleteAdicional = async (id: string) => {
     if (confirm("Tem certeza que deseja excluir este adicional?")) {
-      await adicionaisManager.deleteAdicional(id)
-      await loadAdicionais()
+      try {
+        const deleted = await adicionaisManager.deleteAdicional(id)
+        if (deleted) {
+          await loadAdicionais()
+          appToast.success("Adicional excluído", "O adicional foi removido com sucesso.")
+        }
+      } catch (err) {
+        appToast.error("Não foi possível excluir o adicional", err instanceof Error ? err.message : String(err))
+      }
     }
   }
 
   // Fast stock pause toggle (iFood Standard)
   const handleToggleAvailability = async (product: Product) => {
-    const newStatus = !product.available
+    const previousStatus = product.available
+    const newStatus = !previousStatus
     setProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, available: newStatus } : p)))
     try {
       await productsManager.updateProduct(product.id, {
         available: newStatus,
       })
+      await loadProducts()
     } catch (err) {
+      setProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, available: previousStatus } : p)))
       appToast.error("Erro ao alterar disponibilidade", err instanceof Error ? err.message : String(err))
     }
-    loadProducts()
   }
 
   const toggleAdicional = (adicionalId: string) => {
@@ -671,9 +715,6 @@ export default function AdminProdutosPage() {
                                   {product.badgeText || product.badge_text}
                                 </span>
                               )}
-                              <span className="text-base font-black text-gray-900">
-                                R$ {product.price.toFixed(2).replace(".", ",")}
-                              </span>
                               {product.adicionais && product.adicionais.length > 0 && (
                                 <span className="text-[10px] font-semibold text-purple-700 bg-purple-50 border border-purple-200/60 px-1.5 py-0.5 rounded-md">
                                   {product.adicionais.length} adicionais

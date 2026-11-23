@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
+import { createClient } from "@supabase/supabase-js"
 import { formatCep } from "@/lib/maps-service"
+import { authenticateRequestUser } from "@/lib/supabase/route-auth"
+
+function getSupabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return null
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
+}
 
 function cleanStreetName(name: string): string {
   if (!name) return ""
@@ -12,6 +21,16 @@ function cleanStreetName(name: string): string {
 }
 
 export async function GET(req: NextRequest) {
+  // NEW-14 FIX: Exige sessão autenticada (Bearer ou cookie SSR) para proteger cota do Google Maps
+  const service = getSupabaseAdmin()
+  const user = await authenticateRequestUser(req, service)
+  if (!user) {
+    return NextResponse.json(
+      { error: "Autenticação obrigatória para geocodificação." },
+      { status: 401 }
+    )
+  }
+
   const { searchParams } = new URL(req.url)
   const latStr = searchParams.get("lat")
   const lngStr = searchParams.get("lng")
@@ -26,9 +45,17 @@ export async function GET(req: NextRequest) {
   const lat = parseFloat(latStr)
   const lng = parseFloat(lngStr)
 
-  if (isNaN(lat) || isNaN(lng)) {
+  // Validação numérica + bounding-box do Brasil (cobre SP/Iacanga e impede abuso global da cota)
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng) ||
+    lat < -34 ||
+    lat > 6 ||
+    lng < -74 ||
+    lng > -34
+  ) {
     return NextResponse.json(
-      { error: "Coordenadas geográficas inválidas." },
+      { error: "Coordenadas geográficas inválidas ou fora da área atendida." },
       { status: 400 }
     )
   }

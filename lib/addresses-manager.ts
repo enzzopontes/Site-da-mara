@@ -11,6 +11,10 @@ export interface Address {
   state: string
   cep: string
   is_default: boolean
+  label?: "casa" | "trabalho" | null
+  reference_point?: string | null
+  latitude?: number | null
+  longitude?: number | null
   created_at?: string
   updated_at?: string
 }

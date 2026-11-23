@@ -2,7 +2,7 @@
 
 import { appToast } from "@/lib/app-toast"
 
-import { useEffect, useState, useCallback, useMemo } from "react"
+import { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { HeaderWrapper } from "@/components/header-wrapper"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
@@ -41,10 +41,20 @@ import {
   Sparkles
 } from "lucide-react"
 import { ordersManager, type DailySales, type Order } from "@/lib/orders-manager"
-
-const ADMIN_EMAILS = ["enzzobaraldo2008@gmail.com", "maraysis9010@gmail.com"]
+import { isAdmin as checkIsAdminRole } from "@/lib/supabase/admin"
 
 type DateFilterType = "all" | "7d" | "30d" | "today"
+
+const brtDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Sao_Paulo",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+})
+
+function getBrtDateKey(date: Date = new Date()): string {
+  return brtDateFormatter.format(date)
+}
 
 export default function AdminCaixaPage() {
   const { user, loading } = useAuth()
@@ -59,6 +69,7 @@ export default function AdminCaixaPage() {
   })
   const [salesHistory, setSalesHistory] = useState<DailySales[]>([])
   const [expandedDate, setExpandedDate] = useState<string | null>(null)
+  const expandedDateRef = useRef<string | null>(null)
   const [dateOrders, setDateOrders] = useState<Record<string, Order[]>>({})
   const [loadingOrders, setLoadingOrders] = useState<string | null>(null)
   const [showRevenue, setShowRevenue] = useState(true)
@@ -70,12 +81,16 @@ export default function AdminCaixaPage() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [dateFilter, setDateFilter] = useState<DateFilterType>("all")
 
+  useEffect(() => {
+    expandedDateRef.current = expandedDate
+  }, [expandedDate])
+
   const loadData = useCallback(async () => {
     try {
       const todayStats = await ordersManager.getTodayStats()
       const history = await ordersManager.getSalesHistory()
       
-      const todayStr = new Date().toISOString().split('T')[0]
+      const todayStr = getBrtDateKey()
       const hasToday = history.some(h => h.date === todayStr)
       
       let finalHistory = [...history]
@@ -96,27 +111,42 @@ export default function AdminCaixaPage() {
       setStats(todayStats)
       setSalesHistory(finalHistory)
       
-      if (expandedDate) {
-        const orders = await ordersManager.getOrdersByDate(expandedDate)
-        setDateOrders(prev => ({ ...prev, [expandedDate]: orders }))
+      const currentExpandedDate = expandedDateRef.current
+      if (currentExpandedDate) {
+        const orders = await ordersManager.getOrdersByDate(currentExpandedDate)
+        setDateOrders(prev => ({ ...prev, [currentExpandedDate]: orders }))
       }
     } catch (error) {
       console.error("Erro ao carregar dados:", error)
     }
-  }, [expandedDate])
+  }, [])
 
   useEffect(() => {
     if (!loading) {
       if (!user) {
         router.push("/login")
-      } else if (user.email && ADMIN_EMAILS.includes(user.email)) {
-        setIsAdmin(true)
-        loadData()
-        const interval = setInterval(loadData, 30000)
-        return () => clearInterval(interval)
       } else {
-        appToast.error("Acesso negado", "Você não tem permissão para acessar esta página.")
-        router.push("/")
+        let active = true
+        let interval: ReturnType<typeof setInterval> | null = null
+        checkIsAdminRole(user.id)
+          .then((allowed) => {
+            if (!active) return
+            if (allowed) {
+              setIsAdmin(true)
+              loadData()
+              interval = setInterval(loadData, 30000)
+            } else {
+              appToast.error("Acesso negado", "Você não tem permissão para acessar esta página.")
+              router.push("/")
+            }
+          })
+          .catch(() => {
+            if (active) router.push("/")
+          })
+        return () => {
+          active = false
+          if (interval) clearInterval(interval)
+        }
       }
     }
   }, [user, loading, router, loadData])
@@ -191,20 +221,16 @@ export default function AdminCaixaPage() {
 
   // Filtro de datas
   const filteredSalesHistory = useMemo(() => {
-    const todayStr = new Date().toISOString().split('T')[0]
+    const todayStr = getBrtDateKey()
     if (dateFilter === "today") {
       return salesHistory.filter(h => h.date === todayStr)
     }
     if (dateFilter === "7d") {
-      const d7 = new Date()
-      d7.setDate(d7.getDate() - 7)
-      const d7Str = d7.toISOString().split('T')[0]
+      const d7Str = getBrtDateKey(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
       return salesHistory.filter(h => h.date >= d7Str)
     }
     if (dateFilter === "30d") {
-      const d30 = new Date()
-      d30.setDate(d30.getDate() - 30)
-      const d30Str = d30.toISOString().split('T')[0]
+      const d30Str = getBrtDateKey(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))
       return salesHistory.filter(h => h.date >= d30Str)
     }
     return salesHistory
@@ -222,13 +248,15 @@ export default function AdminCaixaPage() {
     }
   }, [filteredSalesHistory])
 
-  // Análise detalhada do dia expandido ou dos pedidos já carregados
+  // Análise detalhada do dia expandido (NEW-06: contabiliza apenas pedidos entregues, separando cancelados/pendentes)
   const expandedBreakdown = useMemo(() => {
     if (!expandedDate || !dateOrders[expandedDate]) return null
-    const orders = dateOrders[expandedDate]
+    const allOrders = dateOrders[expandedDate]
+    const deliveredOrders = allOrders.filter((o) => o.status === "delivered")
+    const cancelledCount = allOrders.filter((o) => o.status === "cancelled").length
     let pix = 0, dinheiro = 0, cartao = 0, outros = 0, discounts = 0
 
-    orders.forEach(o => {
+    deliveredOrders.forEach(o => {
       const method = (o.paymentMethod || '').toLowerCase()
       const val = Number(o.total || 0)
       discounts += Number(o.discountAmount || 0)
@@ -240,7 +268,7 @@ export default function AdminCaixaPage() {
     })
 
     const total = pix + dinheiro + cartao + outros
-    const ticket = orders.length > 0 ? total / orders.length : 0
+    const ticket = deliveredOrders.length > 0 ? total / deliveredOrders.length : 0
 
     return {
       pix,
@@ -250,7 +278,8 @@ export default function AdminCaixaPage() {
       total,
       ticket,
       discounts,
-      count: orders.length,
+      count: deliveredOrders.length,
+      cancelledCount,
       pixPercent: total > 0 ? (pix / total) * 100 : 0,
       dinheiroPercent: total > 0 ? (dinheiro / total) * 100 : 0,
     }
@@ -268,7 +297,7 @@ export default function AdminCaixaPage() {
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
     link.href = url
-    link.setAttribute("download", `fechamento-caixa-${new Date().toISOString().split('T')[0]}.csv`)
+    link.setAttribute("download", `fechamento-caixa-${getBrtDateKey()}.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -481,7 +510,7 @@ export default function AdminCaixaPage() {
               <div className="grid gap-3">
                 {filteredSalesHistory.map((day) => {
                   const isExpanded = expandedDate === day.date
-                  const isToday = day.date === new Date().toISOString().split('T')[0]
+                  const isToday = day.date === getBrtDateKey()
                   const dayTicket = day.count > 0 ? day.total / day.count : 0
 
                   return (

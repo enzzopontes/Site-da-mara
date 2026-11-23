@@ -137,7 +137,6 @@ class StoreStatusManager {
       let status: StoreStatus
       if (!data) {
         status = this.getDefaultStatus()
-        await this.saveStatus(status)
       } else {
         status = data.setting_value as StoreStatus
         // Garante que novos campos existam
@@ -155,33 +154,22 @@ class StoreStatusManager {
         if (status.itemPromo === undefined) status.itemPromo = { isActive: false, imageId: undefined, imageUrl: undefined, useUrl: false }
       }
 
-      // Aplica horário automático se estiver ativado
+      // Aplica cálculo de horário em memória na leitura (NEW-10: sem disparar UPSERT não autorizado em store_settings)
       if (status.autoSchedule !== false) {
         const scheduledOpen = this.shouldBeOpenBySchedule(status)
         if (status.manualOverride) {
-          // Se o ciclo programado mudou desde o override manual (ex: bateu 22:00 ou 10:00),
-          // desarma a sobreposição e retoma o agendamento normal automaticamente!
           if (status.lastCycleState !== undefined && scheduledOpen !== status.lastCycleState) {
             status.manualOverride = false
             status.isOpen = scheduledOpen
             status.lastCycleState = scheduledOpen
-            await this.saveStatus(status)
           }
-        } else {
-          if (status.isOpen !== scheduledOpen) {
-            status.isOpen = scheduledOpen
-            status.lastCycleState = scheduledOpen
-            await this.saveStatus(status)
-          }
+        } else if (status.isOpen !== scheduledOpen) {
+          status.isOpen = scheduledOpen
+          status.lastCycleState = scheduledOpen
         }
       }
 
       const adjustedStatus = this.processActiveOrders(status)
-      
-      if (JSON.stringify(status.activeOrders) !== JSON.stringify(adjustedStatus.activeOrders)) {
-        await this.saveStatus(adjustedStatus)
-      }
-
       this.cachedStatus = adjustedStatus
       return adjustedStatus
     } catch (err) {
@@ -464,27 +452,26 @@ class StoreStatusManager {
   }
 
   private async saveStatus(status: StoreStatus): Promise<void> {
-    try {
-      const { error } = await this.supabase
-        .from("store_settings")
-        .upsert(
-          {
-            setting_key: this.settingKey,
-            setting_value: status,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "setting_key" }
-        )
+    const { error } = await this.supabase
+      .from("store_settings")
+      .upsert(
+        {
+          setting_key: this.settingKey,
+          setting_value: status,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "setting_key" }
+      )
 
-      if (error) throw error
+    if (error) {
+      console.error("[StoreStatusManager] Error in saveStatus:", error)
+      throw new Error(error.message || "Falha ao salvar configurações da loja.")
+    }
 
-      this.cachedStatus = status
+    this.cachedStatus = status
 
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("store-status-changed", { detail: status }))
-      }
-    } catch (err) {
-      console.error("[StoreStatusManager] Error in saveStatus:", err)
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("store-status-changed", { detail: status }))
     }
   }
 

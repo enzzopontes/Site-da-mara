@@ -464,21 +464,24 @@ export default function PerfilPage() {
           cpf: profileCpf.trim(),
         },
       })
-      await supabase
+      const { error: profileError } = await supabase
         .from("profiles")
-        .upsert({
-          id: user.id,
+        .update({
           full_name: profileName.trim(),
           phone: profilePhone.trim(),
-          cpf: profileCpf.trim(),
+          cpf: profileCpf.trim() || null,
           updated_at: new Date().toISOString(),
         })
+        .eq("id", user.id)
 
-      if (authError) {
+      const saveError = authError || profileError
+      if (saveError) {
+        const msg = saveError.message || "Não foi possível salvar suas alterações."
         setProfileFeedback({
           type: "error",
-          message: authError.message || "Não foi possível salvar suas alterações.",
+          message: msg,
         })
+        appToast.error("Erro ao salvar dados", msg)
       } else {
         setProfileFeedback({
           type: "success",

@@ -131,7 +131,20 @@ export function usePaymentCards() {
         const paymentMethodId = guessPaymentMethodId(cardNumber);
 
         const cleanDoc = (docNumber || "").replace(/\D/g, "");
-        if (cleanDoc.length === 11) {
+        const isValidCpf = (cpf: string): boolean => {
+          if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+          let sum = 0;
+          for (let i = 0; i < 9; i++) sum += Number(cpf[i]) * (10 - i);
+          let rest = (sum * 10) % 11;
+          if (rest === 10) rest = 0;
+          if (rest !== Number(cpf[9])) return false;
+          sum = 0;
+          for (let i = 0; i < 10; i++) sum += Number(cpf[i]) * (11 - i);
+          rest = (sum * 10) % 11;
+          if (rest === 10) rest = 0;
+          return rest === Number(cpf[10]);
+        };
+        if (isValidCpf(cleanDoc)) {
           try {
             await supabase.from("profiles").update({ cpf: cleanDoc }).eq("id", user.id);
           } catch (e) {
