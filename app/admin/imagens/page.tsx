@@ -208,11 +208,21 @@ export default function AdminImagensPage() {
     }
   }
 
-  const handleCopyUrl = async (id: string) => {
+  const getImageUrl = (img: UploadedImage) => img.url || `/api/images/${img.id}`
+
+  const getImagePreviewSrc = (img: UploadedImage) =>
+    img.data
+      ? img.data.startsWith("data:")
+        ? img.data
+        : `data:${img.mimeType || "image/jpeg"};base64,${img.data}`
+      : getImageUrl(img)
+
+  const handleCopyUrl = async (image: UploadedImage) => {
+    const url = getImageUrl(image)
     const origin = typeof window !== "undefined" ? window.location.origin : ""
-    const publicUrl = `${origin}/api/images/${id}`
+    const publicUrl = url.startsWith("http") ? url : `${origin}${url}`
     await navigator.clipboard.writeText(publicUrl)
-    setCopiedId(id)
+    setCopiedId(image.id)
     setTimeout(() => setCopiedId(null), 2500)
   }
 
@@ -461,8 +471,10 @@ export default function AdminImagensPage() {
                       {/* Thumbnail Container */}
                       <div className="relative aspect-square w-full bg-stone-100 overflow-hidden">
                         <img
-                          src={image.data ? (image.data.startsWith("data:") ? image.data : `data:${image.mimeType || "image/jpeg"};base64,${image.data}`) : "/placeholder.svg?height=300&width=300&query=imagem"}
+                          src={getImagePreviewSrc(image)}
                           alt={image.name}
+                          loading="lazy"
+                          decoding="async"
                           onLoad={e => handleImageLoad(image.id, e)}
                           onError={(e) => { e.currentTarget.src = "/placeholder.svg?height=300&width=300&query=imagem" }}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
@@ -500,7 +512,7 @@ export default function AdminImagensPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleCopyUrl(image.id)}
+                            onClick={() => handleCopyUrl(image)}
                             className={`flex-1 text-xs font-semibold h-8 rounded-lg gap-1.5 transition-colors ${
                               isCopied
                                 ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
@@ -521,7 +533,7 @@ export default function AdminImagensPage() {
                           </Button>
 
                           <a
-                            href={`/api/images/${image.id}`}
+                            href={getImageUrl(image)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="h-8 w-8 inline-flex items-center justify-center rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-500 hover:text-stone-800 transition-colors"
@@ -569,7 +581,7 @@ export default function AdminImagensPage() {
             {/* Thumbnail preview */}
             <div className="flex items-center gap-3 p-3 bg-stone-50 rounded-2xl border border-stone-200/80">
               <img
-                src={imageToDelete.data ? (imageToDelete.data.startsWith("data:") ? imageToDelete.data : `data:${imageToDelete.mimeType || "image/jpeg"};base64,${imageToDelete.data}`) : "/placeholder.svg?height=100&width=100&query=imagem"}
+                src={getImagePreviewSrc(imageToDelete)}
                 alt={imageToDelete.name}
                 className="h-14 w-14 rounded-xl object-cover border border-stone-200"
               />

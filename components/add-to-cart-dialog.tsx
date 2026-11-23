@@ -556,6 +556,7 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
             <img
               src={imageUrl}
               alt={product.name}
+              decoding="async"
               onLoad={() => setDialogImageLoaded(true)}
               onError={(e) => {
                 ;(e.target as HTMLImageElement).src = "/placeholder.jpg"
@@ -764,6 +765,8 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
                             <img
                               src={bebida.image}
                               alt={bebida.name}
+                              loading="lazy"
+                              decoding="async"
                               className="w-12 h-12 object-contain"
                               onError={(e) => {
                                 ;(e.target as HTMLImageElement).src = "/placeholder.jpg"

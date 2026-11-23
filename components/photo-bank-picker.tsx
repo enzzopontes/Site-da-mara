@@ -132,7 +132,7 @@ export function PhotoBankPicker({
       ) : (
         <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto p-1">
           {photos.map((image) => {
-            const photoUrl = `/api/images/${image.id}`
+            const photoUrl = image.url || `/api/images/${image.id}`
             const isSelected =
               normalized.length > 0 &&
               (normalized === photoUrl || normalized.endsWith(photoUrl))
@@ -165,6 +165,7 @@ export function PhotoBankPicker({
                     src={imgSrc}
                     alt={image.name}
                     loading="lazy"
+                    decoding="async"
                     onError={() =>
                       setFailedIds((prev) => ({ ...prev, [image.id]: true }))
                     }

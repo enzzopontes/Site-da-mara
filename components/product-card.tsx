@@ -241,6 +241,8 @@ export function ProductCard({
                 <img
                   src={imageUrl}
                   alt={product.name}
+                  loading="lazy"
+                  decoding="async"
                   onLoad={() => setImageLoaded(true)}
                   onError={() => setImageError(true)}
                   className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${
@@ -311,6 +313,8 @@ export function ProductCard({
                 <img
                   src={imageUrl}
                   alt={product.name}
+                  loading="lazy"
+                  decoding="async"
                   onLoad={() => setImageLoaded(true)}
                   onError={() => setImageError(true)}
                   className={`w-full h-full object-cover group-hover:scale-102 transition-transform duration-300 ${

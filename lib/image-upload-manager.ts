@@ -1,6 +1,8 @@
 import { getSupabaseBrowserClient } from "./supabase/client"
 import { validateImagePayload, sanitizeFileName } from "./security-validation"
 
+export const STORAGE_BUCKET = "Products"
+
 export interface UploadedImage {
   id: string
   name: string
@@ -8,11 +10,39 @@ export interface UploadedImage {
   mimeType: string
   uploadedAt: string
   category: "product" | "promo" | "general"
+  url?: string
+  source?: "storage" | "database"
+}
+
+export function getPublicUrl(image: UploadedImage): string {
+  return image.url || `/api/images/${image.id}`
 }
 
 class ImageUploadManager {
   private get supabase() {
     return getSupabaseBrowserClient()
+  }
+
+  getPublicUrl(image: UploadedImage): string {
+    return getPublicUrl(image)
+  }
+
+  private mimeToExt(mimeType: string): string {
+    const normalized = (mimeType || "").toLowerCase().trim()
+    if (normalized === "image/webp") return "webp"
+    if (normalized === "image/png") return "png"
+    if (normalized === "image/gif") return "gif"
+    return "jpg"
+  }
+
+  private base64ToBlob(base64: string, mimeType: string): Blob {
+    const binary = atob(base64)
+    const len = binary.length
+    const bytes = new Uint8Array(len)
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binary.charCodeAt(i)
+    }
+    return new Blob([bytes], { type: mimeType })
   }
 
   /**
@@ -37,12 +67,13 @@ class ImageUploadManager {
    */
   async compressImage(
     file: File,
-    maxWidth = 1200,
-    maxHeight = 1200
-  ): Promise<{ base64: string; mimeType: string }> {
+    maxWidth = 1000,
+    maxHeight = 1000
+  ): Promise<{ base64: string; mimeType: string; blob: Blob; ext: string }> {
     if (typeof window === "undefined") {
       const base64 = await this.fileToBase64(file)
-      return { base64, mimeType: file.type || "image/jpeg" }
+      const mimeType = file.type || "image/jpeg"
+      return { base64, mimeType, blob: file, ext: this.mimeToExt(mimeType) }
     }
 
     try {
@@ -80,13 +111,18 @@ class ImageUploadManager {
             if (mimeType === "image/gif") {
               const rawBase64 = dataUrl.split(",")[1] || dataUrl
               if (rawBase64.length <= MAX_BASE64_BYTES) {
-                resolve({ base64: rawBase64, mimeType: "image/gif" })
+                resolve({
+                  base64: rawBase64,
+                  mimeType: "image/gif",
+                  blob: file,
+                  ext: "gif",
+                })
                 return
               }
               mimeType = "image/jpeg"
             }
 
-            const renderAt = (w: number, h: number, mime: string, q: number): string => {
+            const renderDataUrl = (w: number, h: number, mime: string, q: number): string => {
               canvas.width = w
               canvas.height = h
               if (mime === "image/jpeg") {
@@ -96,11 +132,25 @@ class ImageUploadManager {
                 ctx.clearRect(0, 0, w, h)
               }
               ctx.drawImage(img, 0, 0, w, h)
-              const url = canvas.toDataURL(mime, q)
+              return canvas.toDataURL(mime, q)
+            }
+
+            const renderAt = (w: number, h: number, mime: string, q: number): string => {
+              const url = renderDataUrl(w, h, mime, q)
               return url.split(",")[1] || url
             }
 
-            let base64 = renderAt(width, height, mimeType, 0.82)
+            let base64: string
+            const webpDataUrl = renderDataUrl(width, height, "image/webp", 0.82)
+            if (webpDataUrl.startsWith("data:image/webp")) {
+              mimeType = "image/webp"
+              base64 = webpDataUrl.split(",")[1] || webpDataUrl
+            } else {
+              if (mimeType !== "image/png") {
+                mimeType = "image/jpeg"
+              }
+              base64 = renderAt(width, height, mimeType, 0.82)
+            }
 
             if (mimeType === "image/png" && base64.length > 700_000) {
               mimeType = "image/jpeg"
@@ -116,7 +166,9 @@ class ImageUploadManager {
             // BUG-08 FIX: Redução iterativa de dimensões até respeitar estritamente o limite de 2.750.000 bytes do banco
             let scale = 0.85
             while (base64.length > MAX_BASE64_BYTES && scale >= 0.25) {
-              mimeType = "image/jpeg"
+              if (mimeType !== "image/webp") {
+                mimeType = "image/jpeg"
+              }
               const nextW = Math.max(160, Math.round(width * scale))
               const nextH = Math.max(160, Math.round(height * scale))
               base64 = renderAt(nextW, nextH, mimeType, 0.4)
@@ -128,7 +180,9 @@ class ImageUploadManager {
               return
             }
 
-            resolve({ base64, mimeType })
+            const blob = this.base64ToBlob(base64, mimeType)
+            const ext = this.mimeToExt(mimeType)
+            resolve({ base64, mimeType, blob, ext })
           } catch (err) {
             reject(err)
           }
@@ -145,7 +199,8 @@ class ImageUploadManager {
             "Não foi possível comprimir a imagem abaixo do limite de 2,75 MB do banco de dados."
         )
       }
-      return { base64, mimeType: file.type || "image/jpeg" }
+      const mimeType = file.type || "image/jpeg"
+      return { base64, mimeType, blob: file, ext: this.mimeToExt(mimeType) }
     }
   }
 
@@ -179,7 +234,8 @@ class ImageUploadManager {
       }
 
       // Compactação inteligente no cliente
-      const { base64: base64Data, mimeType: compressedMime } = await this.compressImage(file)
+      const compressed = await this.compressImage(file)
+      const { base64: base64Data, mimeType: compressedMime } = compressed
       if (base64Data.length > 2_750_000) {
         throw new Error("A imagem comprimida excede o limite de 2,75 MB do banco. Escolha uma imagem menor.")
       }
@@ -193,9 +249,44 @@ class ImageUploadManager {
 
       const safeName = sanitizeFileName(file.name)
       const effectiveMime = validation.normalizedMime || effectiveMimeCandidate
+      const ext = this.mimeToExt(effectiveMime) || compressed.ext
+      const randomSuffix = Math.random().toString(36).substr(2, 9)
+      const storagePath = `uploads/${category}/${Date.now()}-${randomSuffix}.${ext}`
+
+      try {
+        const { error: storageError } = await this.supabase.storage
+          .from(STORAGE_BUCKET)
+          .upload(storagePath, compressed.blob, {
+            contentType: effectiveMime,
+            cacheControl: "31536000",
+            upsert: false,
+          })
+
+        if (!storageError) {
+          const { data: publicUrlData } = this.supabase.storage
+            .from(STORAGE_BUCKET)
+            .getPublicUrl(storagePath)
+
+          return {
+            id: storagePath,
+            url: publicUrlData.publicUrl,
+            name: file.name,
+          }
+        }
+
+        console.warn(
+          "[ImageUploadManager] Falha no upload para Supabase Storage, usando fallback no banco:",
+          storageError
+        )
+      } catch (storageErr) {
+        console.warn(
+          "[ImageUploadManager] Exceção no upload para Supabase Storage, usando fallback no banco:",
+          storageErr
+        )
+      }
 
       // Cria um ID único
-      const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      const id = `${Date.now()}-${randomSuffix}`
 
       // Salva no banco de dados
       // Garantimos que o objeto de inserção tenha a categoria correta
@@ -247,31 +338,121 @@ class ImageUploadManager {
     }
   }
 
+  private inferMimeFromName(name: string): string {
+    const ext = name.split(".").pop()?.toLowerCase()
+    if (ext === "webp") return "image/webp"
+    if (ext === "png") return "image/png"
+    if (ext === "gif") return "image/gif"
+    return "image/jpeg"
+  }
+
+  private async listStorageImages(): Promise<UploadedImage[]> {
+    try {
+      const folders = ["", "uploads/product", "uploads/promo", "uploads/general"] as const
+      const results = await Promise.all(
+        folders.map(async (folder) => {
+          try {
+            const { data, error } = await this.supabase.storage
+              .from(STORAGE_BUCKET)
+              .list(folder, {
+                limit: 500,
+                sortBy: { column: "created_at", order: "desc" },
+              })
+
+            if (error || !data) {
+              if (error) {
+                console.warn(`[ImageUploadManager] Erro ao listar pasta '${folder}' no Storage:`, error)
+              }
+              return [] as UploadedImage[]
+            }
+
+            const category: UploadedImage["category"] =
+              folder === "uploads/promo"
+                ? "promo"
+                : folder === "uploads/general"
+                ? "general"
+                : "product"
+
+            return data
+              .filter(
+                (item: any) =>
+                  Boolean(item?.id) &&
+                  Boolean(item?.name) &&
+                  item.name !== ".emptyFolderPlaceholder" &&
+                  !item.name.startsWith(".")
+              )
+              .map((item: any): UploadedImage => {
+                const fullPath = folder ? `${folder}/${item.name}` : item.name
+                const { data: publicUrlData } = this.supabase.storage
+                  .from(STORAGE_BUCKET)
+                  .getPublicUrl(fullPath)
+                const mimeType =
+                  item.metadata?.mimetype || this.inferMimeFromName(item.name)
+
+                return {
+                  id: fullPath,
+                  name: item.name,
+                  data: "",
+                  mimeType,
+                  uploadedAt:
+                    item.created_at || item.updated_at || new Date(0).toISOString(),
+                  category,
+                  url: publicUrlData.publicUrl,
+                  source: "storage",
+                }
+              })
+          } catch (folderError) {
+            console.warn(`[ImageUploadManager] Exceção ao listar pasta '${folder}' no Storage:`, folderError)
+            return [] as UploadedImage[]
+          }
+        })
+      )
+
+      return results.flat()
+    } catch (error) {
+      console.warn("[ImageUploadManager] Error listing storage images:", error)
+      return []
+    }
+  }
+
   /**
    * Obtém todas as imagens cadastradas
    */
   async getAllImages(): Promise<UploadedImage[]> {
     try {
       console.log(`[ImageUploadManager] Buscando todas as imagens`)
-      const { data, error } = await this.supabase
-        .from("uploaded_images")
-        .select("*")
-        .order("uploaded_at", { ascending: false })
+      const [storageImages, dbResult] = await Promise.all([
+        this.listStorageImages(),
+        this.supabase
+          .from("uploaded_images")
+          .select("*")
+          .order("uploaded_at", { ascending: false }),
+      ])
+
+      const { data, error } = dbResult
 
       if (error) {
         console.error(`[ImageUploadManager] Erro ao buscar todas as imagens:`, error)
         throw error
       }
 
-      console.log(`[ImageUploadManager] ${data?.length || 0} imagens encontradas`)
-      return (data || []).map((img: any) => ({
+      const dbImages: UploadedImage[] = (data || []).map((img: any) => ({
         id: img.id,
         name: img.name,
         data: img.data,
         mimeType: img.mime_type,
         uploadedAt: img.uploaded_at,
         category: img.category,
+        url: `/api/images/${img.id}`,
+        source: "database",
       }))
+
+      const combined = [...storageImages, ...dbImages].sort(
+        (a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+      )
+
+      console.log(`[ImageUploadManager] ${combined.length} imagens encontradas`)
+      return combined
     } catch (error) {
       console.error("[ImageUploadManager] Error fetching all images:", error)
       return []
@@ -282,17 +463,22 @@ class ImageUploadManager {
    * Lista todas as imagens cadastradas, propagando erros para o chamador
    */
   async listAllImages(): Promise<UploadedImage[]> {
-    const { data, error } = await this.supabase
-      .from("uploaded_images")
-      .select("*")
-      .order("uploaded_at", { ascending: false })
+    const [storageImages, dbResult] = await Promise.all([
+      this.listStorageImages(),
+      this.supabase
+        .from("uploaded_images")
+        .select("*")
+        .order("uploaded_at", { ascending: false }),
+    ])
+
+    const { data, error } = dbResult
 
     if (error) {
       console.error("[ImageUploadManager] Error listing all images:", error)
       throw new Error(error.message || "Erro ao carregar imagens do banco.")
     }
 
-    return (data || []).map(
+    const dbImages: UploadedImage[] = (data || []).map(
       (img: {
         id: string
         name: string
@@ -307,7 +493,13 @@ class ImageUploadManager {
         mimeType: img.mime_type,
         uploadedAt: img.uploaded_at,
         category: img.category,
+        url: `/api/images/${img.id}`,
+        source: "database",
       })
+    )
+
+    return [...storageImages, ...dbImages].sort(
+      (a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
     )
   }
 
@@ -379,6 +571,16 @@ class ImageUploadManager {
    */
   async deleteImage(id: string): Promise<boolean> {
     try {
+      const isStoragePath = id.includes("/") || /\.(webp|jpe?g|png|gif)$/i.test(id)
+      if (isStoragePath) {
+        const { error } = await this.supabase.storage
+          .from(STORAGE_BUCKET)
+          .remove([id])
+
+        if (error) throw error
+        return true
+      }
+
       const { error } = await this.supabase
         .from("uploaded_images")
         .delete()
