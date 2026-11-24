@@ -3,8 +3,18 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context"
+import {
+  evaluateCoupon,
+  getCouponMinOrder,
+  getRestrictedCategories,
+  toCents,
+} from "@/lib/coupon-rules"
 
-export function useCoupons(currentOrderTotal = 0, selectedCouponId?: string | null) {
+export function useCoupons(
+  currentOrderTotal = 0,
+  selectedCouponId?: string | null,
+  cartItems?: any[]
+) {
   const [coupons, setCoupons] = useState<any[]>([])
   const [freeCoupons, setFreeCoupons] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -29,22 +39,20 @@ export function useCoupons(currentOrderTotal = 0, selectedCouponId?: string | nu
         return
       }
 
-      // Mapeamento de contagem de usos do usuário atual por cupom
+      // Mapeamento de contagem de usos do usuário atual por cupom (via user_coupon_uses)
       const userUsageMap: Record<string, number> = {}
       if (user?.id) {
         try {
-          const { data: userOrders } = await supabase
-            .from("orders")
-            .select("coupon_code")
+          const { data: userUses } = await supabase
+            .from("user_coupon_uses")
+            .select("coupon_id")
             .eq("user_id", user.id)
-            .neq("status", "cancelled")
-            .not("coupon_code", "is", null)
 
-          if (userOrders) {
-            for (const o of userOrders) {
-              if (o.coupon_code) {
-                const cCode = String(o.coupon_code).toUpperCase().trim()
-                userUsageMap[cCode] = (userUsageMap[cCode] || 0) + 1
+          if (userUses) {
+            for (const u of userUses) {
+              if (u.coupon_id) {
+                const cId = String(u.coupon_id)
+                userUsageMap[cId] = (userUsageMap[cId] || 0) + 1
               }
             }
           }
@@ -73,8 +81,8 @@ export function useCoupons(currentOrderTotal = 0, selectedCouponId?: string | nu
       // Validação antecipada de limite de usos (global e por cliente) e expiração
       const nowMs = Date.now()
       const mappedCoupons = (activeCoupons ?? []).map((c: any) => {
-        const code = String(c.code || "").toUpperCase().trim()
-        const userUses = userUsageMap[code] || 0
+        const couponId = String(c.id || "")
+        const userUses = userUsageMap[couponId] || 0
         const isGlobalExhausted = c.max_uses != null && (c.current_uses ?? 0) >= c.max_uses
         const isUserExhausted = c.max_uses_per_user != null && userUses >= c.max_uses_per_user
         const isExpired = c.expires_at ? new Date(c.expires_at).getTime() < nowMs : false
@@ -110,9 +118,10 @@ export function useCoupons(currentOrderTotal = 0, selectedCouponId?: string | nu
 
   const getCouponMissingAmount = useCallback(
     (coupon: any) => {
-      const min = Number(coupon?.min_order_value ?? 0)
-      const missing = min - currentOrderTotal
-      return missing > 0 ? missing : 0
+      const minCents = toCents(getCouponMinOrder(coupon))
+      const totalCents = Math.max(0, toCents(currentOrderTotal))
+      const missingCents = minCents - totalCents
+      return missingCents > 0 ? missingCents / 100 : 0
     },
     [currentOrderTotal]
   )
@@ -124,16 +133,15 @@ export function useCoupons(currentOrderTotal = 0, selectedCouponId?: string | nu
   // 4. Cupons ESGOTADOS / EXPIRADOS no final
   // 5. Desempate sempre pelo maior desconto
   const sortedCoupons = useMemo(() => {
+    const totalCents = Math.max(0, toCents(currentOrderTotal))
     return [...coupons].sort((a, b) => {
       const isSelectedA = selectedCouponId && a.id === selectedCouponId
       const isSelectedB = selectedCouponId && b.id === selectedCouponId
       if (isSelectedA && !isSelectedB) return -1
       if (!isSelectedA && isSelectedB) return 1
 
-      const minA = Number(a?.min_order_value ?? 0)
-      const minB = Number(b?.min_order_value ?? 0)
-      const missingA = Math.max(0, minA - currentOrderTotal)
-      const missingB = Math.max(0, minB - currentOrderTotal)
+      const missingA = Math.max(0, toCents(getCouponMinOrder(a)) - totalCents)
+      const missingB = Math.max(0, toCents(getCouponMinOrder(b)) - totalCents)
 
       const isExpiredA = a.expires_at ? new Date(a.expires_at).getTime() < Date.now() : false
       const isExpiredB = b.expires_at ? new Date(b.expires_at).getTime() < Date.now() : false
@@ -167,7 +175,7 @@ export function useCoupons(currentOrderTotal = 0, selectedCouponId?: string | nu
   }, [coupons, currentOrderTotal, selectedCouponId])
 
   const validateCoupon = useCallback(
-    async (code: string) => {
+    async (code: string, cartItemsOverride?: any[]) => {
       const trimmed = code?.trim().toUpperCase()
       if (!trimmed) return { valid: false, reason: "Digite um código de cupom" }
 
@@ -190,15 +198,55 @@ export function useCoupons(currentOrderTotal = 0, selectedCouponId?: string | nu
         return { valid: false, reason: "Limite de usos atingido" }
       }
 
+      const evaluation = evaluateCoupon(coupon, currentOrderTotal)
+      if (evaluation.minOrder > 0 && evaluation.missing > 0) {
+        const falta = evaluation.missing.toFixed(2).replace(".", ",")
+        return { valid: false, reason: `Faltam R$ ${falta} pra usar este cupom` }
+      }
+
       const userId = user?.id ?? null
-      if (userId && coupon.max_uses_per_user != null) {
+
+      // 1. Regra de Primeiro Pedido (Boas-vindas para novos clientes cadastrados)
+      if (
+        coupon.template_origin === "first_order" ||
+        String(coupon.code || "").toUpperCase().startsWith("BEMVINDO")
+      ) {
+        if (!userId) {
+          return { valid: false, reason: "Faça login para usar cupom de 1º pedido" }
+        }
         try {
-          const { count } = await supabase
+          const { count: priorOrders } = await supabase
             .from("orders")
             .select("id", { count: "exact", head: true })
             .eq("user_id", userId)
-            .eq("coupon_code", coupon.code)
             .neq("status", "cancelled")
+
+          if ((priorOrders ?? 0) > 0) {
+            return { valid: false, reason: "Válido apenas no seu primeiro pedido" }
+          }
+        } catch {
+          // Ignora caso erro
+        }
+      }
+
+      // 2. Regra Exclusiva para Clientes Cadastrados / Aniversário
+      if (
+        coupon.template_origin === "registered_only" ||
+        coupon.template_origin === "aniversario"
+      ) {
+        if (!userId) {
+          return { valid: false, reason: "Exclusivo para clientes cadastrados. Faça login!" }
+        }
+      }
+
+      // 3. Limite por usuário (via user_coupon_uses)
+      if (userId && coupon.max_uses_per_user != null) {
+        try {
+          const { count } = await supabase
+            .from("user_coupon_uses")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", userId)
+            .eq("coupon_id", coupon.id)
 
           if ((count ?? 0) >= coupon.max_uses_per_user) {
             return {
@@ -211,14 +259,68 @@ export function useCoupons(currentOrderTotal = 0, selectedCouponId?: string | nu
         }
       }
 
-      if (coupon.min_order_value && currentOrderTotal > 0 && currentOrderTotal < coupon.min_order_value) {
-        const falta = (coupon.min_order_value - currentOrderTotal).toFixed(2).replace(".", ",")
-        return { valid: false, reason: `Faltam R$ ${falta} pra usar este cupom` }
+      // 4. Bloqueio durante promoções ativas da loja
+      try {
+        const { data: statusRow } = await supabase
+          .from("store_settings")
+          .select("setting_value")
+          .eq("setting_key", "store_status")
+          .maybeSingle()
+
+        let settingValue: any = statusRow?.setting_value
+        if (typeof settingValue === "string") {
+          try {
+            settingValue = JSON.parse(settingValue)
+          } catch {
+            settingValue = null
+          }
+        }
+
+        if (
+          settingValue?.itemPromo?.isActive ||
+          settingValue?.superPromo?.isActive ||
+          settingValue?.isPromoActive
+        ) {
+          return {
+            valid: false,
+            reason: "Cupons não podem ser combinados com promoções ativas.",
+          }
+        }
+      } catch {
+        // Ignora caso erro
+      }
+
+      // 5. Restrição por categorias elegíveis no carrinho
+      const effectiveCartItems = cartItemsOverride ?? cartItems ?? []
+      const allowedCategories = getRestrictedCategories(coupon)
+      if (
+        allowedCategories.length > 0 &&
+        Array.isArray(effectiveCartItems) &&
+        effectiveCartItems.length > 0
+      ) {
+        const itemsWithCategory = effectiveCartItems.filter((item) =>
+          Boolean(item?.category || item?.categoria)
+        )
+
+        if (itemsWithCategory.length > 0) {
+          const hasEligibleItem = itemsWithCategory.some((item) => {
+            const itemCategory = String(item?.category ?? item?.categoria ?? "")
+              .toLowerCase()
+              .trim()
+            return allowedCategories.includes(itemCategory)
+          })
+          if (!hasEligibleItem) {
+            return {
+              valid: false,
+              reason: "Cupom válido apenas para categorias específicas.",
+            }
+          }
+        }
       }
 
       return { valid: true, coupon: { ...coupon, isExhausted: false } }
     },
-    [currentOrderTotal, user?.id, supabase]
+    [currentOrderTotal, user?.id, supabase, cartItems]
   )
 
   return {

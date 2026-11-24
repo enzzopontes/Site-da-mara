@@ -25,7 +25,10 @@ import {
   OTP_SEND_COOLDOWN_SECONDS,
   writeSavedUserProfile,
   clearSavedUserProfile,
+  sanitizeReturnUrl,
 } from "./security-auth"
+
+const GUEST_ADDRESS_STORAGE_KEY = "batata_top_guest_address"
 
 export interface ContinueSavedAccountResult {
   status: "authenticated" | "otp_sent" | "otp_cooldown"
@@ -104,8 +107,8 @@ interface AuthContextType {
   verifyOtp: (email: string, token: string) => Promise<{ success: boolean; error?: string }>
   resendOtp: (email: string) => Promise<OtpSendResult>
   continueWithSavedAccount: (email: string) => Promise<ContinueSavedAccountResult>
-  signInWithGoogle: () => Promise<void>
-  signIn: () => Promise<void>
+  signInWithGoogle: (returnUrl?: string) => Promise<void>
+  signIn: (returnUrl?: string) => Promise<void>
   // Métodos legados mantidos com fallback seguro
   signInWithEmail: (email: string, password: string) => Promise<void>
   signUpWithEmail: (email: string, password: string) => Promise<void>
@@ -121,10 +124,84 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authModalOpen, setAuthModalOpen] = useState(false)
   const authEpochRef = useRef(0)
   const signOutPromiseRef = useRef<Promise<void> | null>(null)
+  const flushingGuestAddressRef = useRef(false)
   const supabase = getSupabaseBrowserClient()
 
   const openAuthModal = useCallback(() => setAuthModalOpen(true), [])
   const closeAuthModal = useCallback(() => setAuthModalOpen(false), [])
+
+  // Sincroniza endereço de visitante salvo localmente para a conta autenticada (paridade com flushPendingAddress do App)
+  const flushGuestAddress = useCallback(
+    async (currentUser: User | null) => {
+      if (typeof window === "undefined" || !currentUser?.id || flushingGuestAddressRef.current) {
+        return
+      }
+      flushingGuestAddressRef.current = true
+      try {
+        const raw = localStorage.getItem(GUEST_ADDRESS_STORAGE_KEY)
+        if (!raw) return
+
+        const parsed = JSON.parse(raw) as Record<string, unknown> | null
+        if (
+          !parsed ||
+          typeof parsed !== "object" ||
+          typeof parsed.street !== "string" ||
+          !parsed.street.trim()
+        ) {
+          return
+        }
+
+        const { count, error: countError } = await supabase
+          .from("addresses")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", currentUser.id)
+
+        if (countError) return
+
+        const rawLabel = typeof parsed.label === "string" ? parsed.label.trim().toLowerCase() : ""
+        const normalizedLabel: "casa" | "trabalho" | null =
+          rawLabel === "casa" ? "casa" : rawLabel === "trabalho" ? "trabalho" : null
+
+        const { error: insertError } = await supabase.from("addresses").insert({
+          user_id: currentUser.id,
+          street: parsed.street.trim(),
+          number:
+            parsed.number != null && String(parsed.number).trim()
+              ? String(parsed.number).trim()
+              : "S/N",
+          complement: typeof parsed.complement === "string" ? parsed.complement.trim() : "",
+          neighborhood: typeof parsed.neighborhood === "string" ? parsed.neighborhood.trim() : "",
+          city: typeof parsed.city === "string" && parsed.city.trim() ? parsed.city.trim() : "Iacanga",
+          state: typeof parsed.state === "string" && parsed.state.trim() ? parsed.state.trim() : "SP",
+          cep: typeof parsed.cep === "string" && parsed.cep.trim() ? parsed.cep.trim() : "17150-000",
+          is_default: !count,
+          label: normalizedLabel,
+          reference_point:
+            typeof parsed.reference_point === "string" && parsed.reference_point.trim()
+              ? parsed.reference_point.trim()
+              : null,
+          latitude:
+            typeof parsed.latitude === "number" && Number.isFinite(parsed.latitude)
+              ? parsed.latitude
+              : null,
+          longitude:
+            typeof parsed.longitude === "number" && Number.isFinite(parsed.longitude)
+              ? parsed.longitude
+              : null,
+        })
+
+        if (insertError) return
+
+        localStorage.removeItem(GUEST_ADDRESS_STORAGE_KEY)
+        window.dispatchEvent(new Event("address-changed"))
+      } catch {
+        // Mantém pendente no localStorage sem bloquear a autenticação
+      } finally {
+        flushingGuestAddressRef.current = false
+      }
+    },
+    [supabase]
+  )
 
   useEffect(() => {
     let isMounted = true
@@ -149,6 +226,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!isMounted || authEpochRef.current !== epochAtStart) return
         if (session) {
           persistSavedAccountSession(session)
+          if (session.user) {
+            void flushGuestAddress(session.user)
+          }
         }
         setUser(session?.user ?? null)
         setLoading(false)
@@ -176,6 +256,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (event === "SIGNED_IN") {
           resetOtpAttempts()
           setAuthModalOpen(false)
+          if (currentUser) {
+            setTimeout(() => {
+              void flushGuestAddress(currentUser)
+            }, 0)
+          }
         }
       } else if (event === "SIGNED_OUT") {
         setUser(null)
@@ -186,7 +271,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isMounted = false
       subscription.unsubscribe()
     }
-  }, [supabase])
+  }, [supabase, flushGuestAddress])
 
   // ─── Envio do Código de 6 Dígitos (signInWithOtp) com Cooldown de 60s ─────
   const signInWithOtp = async (rawEmail: string): Promise<OtpSendResult> => {
@@ -425,11 +510,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   // ─── Login com Google ─────────────────────────────────────────────────────
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (returnUrl?: string) => {
     const siteUrl =
       process.env.NEXT_PUBLIC_SITE_URL ||
       (typeof window !== "undefined" ? window.location.origin : "")
-    const redirectUrl = `${siteUrl}/auth/callback`
+
+    let rawNext = returnUrl
+    if (!rawNext && typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search)
+      const queryNext = params.get("returnUrl") || params.get("next")
+      if (queryNext) {
+        rawNext = queryNext
+      } else {
+        const currentPath = window.location.pathname
+        const isAuthRoute =
+          currentPath === "/login" ||
+          currentPath === "/cadastro" ||
+          currentPath === "/reset-password" ||
+          currentPath.startsWith("/auth/")
+        if (!isAuthRoute) {
+          rawNext = `${currentPath}${window.location.search || ""}`
+        }
+      }
+    }
+
+    const safeNext = sanitizeReturnUrl(rawNext, "/cardapio")
+    const redirectUrl = `${siteUrl}/auth/callback?next=${encodeURIComponent(safeNext)}`
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",

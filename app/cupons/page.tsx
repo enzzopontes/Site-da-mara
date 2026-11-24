@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, Suspense } from "react"
+import React, { useState, useRef, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Image from "next/image"
 import { ChevronLeft, XCircle } from "lucide-react"
@@ -16,13 +16,14 @@ function CuponsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const from = searchParams.get("from")
-  const { getTotalPrice, coupon: selectedCoupon, setCoupon } = useCart()
+  const { items, getTotalPrice, coupon: selectedCoupon, setCoupon } = useCart()
 
   const currentTotal = getTotalPrice()
 
   const [code, setCode] = useState("")
   const [applying, setApplying] = useState(false)
   const [rejectCoupon, setRejectCoupon] = useState(false)
+  const actionRef = useRef(false)
 
   const {
     coupons,
@@ -30,7 +31,7 @@ function CuponsContent() {
     loading,
     validateCoupon,
     getCouponMissingAmount,
-  } = useCoupons(currentTotal, !rejectCoupon ? selectedCoupon?.id : null)
+  } = useCoupons(currentTotal, !rejectCoupon ? selectedCoupon?.id : null, items)
 
   const handleReturn = () => {
     if (from === "cart" || from === "carrinho" || from === "checkout") {
@@ -41,40 +42,63 @@ function CuponsContent() {
   }
 
   const handleApply = async () => {
-    if (!code.trim() || applying) return
+    if (!code.trim() || applying || actionRef.current) return
+    actionRef.current = true
     setApplying(true)
-    const result = await validateCoupon(code)
-    setApplying(false)
+    try {
+      const result = await validateCoupon(code, items)
 
-    if (!result.valid) {
-      appToast.error("Cupom indisponível", result.reason || "Limite de usos atingido ou inválido.")
-      return
+      if (!result.valid || !result.coupon) {
+        appToast.error("Cupom indisponível", result.reason || "Limite de usos atingido ou inválido.")
+        return
+      }
+
+      setCoupon(result.coupon)
+      setRejectCoupon(false)
+      appToast.success("Cupom aplicado com sucesso!", `Cupom ${result.coupon.code} ativado para este pedido.`)
+      setTimeout(() => {
+        handleReturn()
+      }, 300)
+    } finally {
+      setApplying(false)
+      actionRef.current = false
     }
-
-    setCoupon(result.coupon)
-    setRejectCoupon(false)
-    appToast.success("Cupom aplicado com sucesso!", `Cupom ${result.coupon.code} ativado para este pedido.`)
-    setTimeout(() => {
-      handleReturn()
-    }, 300)
   }
 
-  const handleSelect = (coupon: any) => {
+  const handleSelect = async (coupon: any) => {
+    if (actionRef.current || applying) return
+
     if (coupon.isExhausted) {
       appToast.error("Cupom indisponível", coupon.exhaustedReason || "Este cupom atingiu o limite de usos.")
       return
     }
 
-    setRejectCoupon(false)
     const isSame = selectedCoupon?.id === coupon.id
-    const nextCoupon = isSame ? null : coupon
-    setCoupon(nextCoupon)
-    if (nextCoupon) {
-      appToast.success("Cupom selecionado!", `Cupom ${coupon.code} ativado para este pedido.`)
+    if (isSame) {
+      setRejectCoupon(false)
+      setCoupon(null)
+      return
+    }
+
+    actionRef.current = true
+    setApplying(true)
+    try {
+      const result = await validateCoupon(coupon.code, items)
+      if (!result.valid || !result.coupon) {
+        appToast.error("Cupom indisponível", result.reason || "Este cupom não pode ser usado neste pedido.")
+        return
+      }
+
+      setRejectCoupon(false)
+      setCoupon(result.coupon)
+      appToast.success("Cupom selecionado!", `Cupom ${result.coupon.code} ativado para este pedido.`)
       // Retorna automaticamente para o carrinho/checkout após seleção
       setTimeout(() => {
         handleReturn()
       }, 300)
+    } finally {
+      setApplying(false)
+      actionRef.current = false
     }
   }
 

@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef, useCallback } from "react"
+import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { useCart } from "@/lib/cart-context"
@@ -481,12 +482,13 @@ export function AuthContainer({
     appToast.dismiss()
 
     const trimmedName = `${firstName.trim()} ${lastName.trim()}`.trim()
+    const cleanCpf = cpfDigits || null
     try {
       const supabase = getSupabaseBrowserClient()
       const { data: updatedUserData, error } = await supabase.auth.updateUser({
         data: {
           full_name: trimmedName,
-          ...(cpfDigits && { cpf: cpfDigits }),
+          ...(cleanCpf && { cpf: cleanCpf }),
         },
       })
 
@@ -495,15 +497,26 @@ export function AuthContainer({
         return
       }
 
-      if (updatedUserData?.user?.id) {
-        await supabase
+      const { data: sessionData } = await supabase.auth.getSession()
+      const userId = updatedUserData?.user?.id || sessionData?.session?.user?.id
+
+      if (userId) {
+        const { error: profileError } = await supabase
           .from("profiles")
-          .update({
-            full_name: trimmedName,
-            ...(cpfDigits ? { cpf: cpfDigits } : {}),
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", updatedUserData.user.id)
+          .upsert(
+            {
+              id: userId,
+              full_name: trimmedName,
+              cpf: cleanCpf,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "id" }
+          )
+
+        if (profileError) {
+          appToast.error("Não foi possível salvar seus dados. Tente novamente.")
+          return
+        }
       }
 
       finishSuccessLogin(trimmedName)
@@ -860,7 +873,25 @@ export function AuthContainer({
           )}
           {step === "name" && (
             <p className="text-xs text-[#9C9188] leading-[17px] mb-4 text-center sm:text-left">
-              Ao continuar, você concorda com os <span className="font-bold text-[#1F1B16]">Termos de Uso</span> e confirma que leu nossa <span className="font-bold text-[#1F1B16]">Política de Privacidade do Batata Top</span>.
+              Ao continuar, você concorda com os{" "}
+              <Link
+                href="/termos"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-bold text-[#1F1B16] underline-offset-2 hover:underline"
+              >
+                Termos de Uso
+              </Link>{" "}
+              e confirma que leu nossa{" "}
+              <Link
+                href="/privacidade"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-bold text-[#1F1B16] underline-offset-2 hover:underline"
+              >
+                Política de Privacidade do Batata Top
+              </Link>
+              .
             </p>
           )}
 
@@ -876,6 +907,8 @@ export function AuthContainer({
           >
             {footerLoading ? (
               <ThreeDotsLoader color={isFooterValid ? "#1F1B16" : "#9C9188"} />
+            ) : step === "name" ? (
+              "Criar conta"
             ) : (
               "Continuar"
             )}

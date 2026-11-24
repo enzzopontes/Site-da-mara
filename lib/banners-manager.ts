@@ -31,10 +31,10 @@ export interface HomeBannerItem {
 export function isSafeImageUrl(url: string | null | undefined): boolean {
   if (!url || typeof url !== "string") return false
   const trimmed = url.trim().toLowerCase()
+  if (trimmed.includes("\\") || /[\u0000-\u001f\u007f]/.test(trimmed)) return false
   return (
     trimmed.startsWith("https://") ||
-    trimmed.startsWith("http://") ||
-    trimmed.startsWith("/") ||
+    (trimmed.startsWith("/") && !trimmed.startsWith("//")) ||
     trimmed.startsWith("data:image/")
   )
 }

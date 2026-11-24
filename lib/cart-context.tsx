@@ -51,6 +51,7 @@ interface CartContextType {
   removeItem: (id: string) => void
   removeFromCart: (id: string) => void
   updateQuantity: (id: string, quantity: number) => void
+  updateItem: (id: string, updated: Partial<CartItem>) => void
   clearCart: () => void
   checkoutSuccess: () => void
   getTotalPrice: () => number
@@ -225,16 +226,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
     })
 
     setItems((prev) => {
-      const sortAdicionais = (ads: any[]) =>
-        [...ads]
+      const sortAdicionais = (ads: any[] = []) =>
+        [...(ads || [])]
           .sort((a, b) => a.id.localeCompare(b.id))
           .map((a) => ({ id: a.id, quantity: a.quantity }))
+      const normalizeObs = (obs?: string) => (obs || "").trim()
+      const normalizedObs = normalizeObs(newItem.observacoes) || undefined
 
       const existingItemIndex = prev.findIndex(
         (item) =>
           item.id.slice(0, 36) === newItem.id.slice(0, 36) &&
           item.category === newItem.category &&
           item.pastaType === newItem.pastaType &&
+          normalizeObs(item.observacoes) === normalizeObs(newItem.observacoes) &&
           JSON.stringify(sortAdicionais(item.adicionais)) === JSON.stringify(sortAdicionais(newItem.adicionais))
       )
 
@@ -247,7 +251,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return updated
       }
 
-      return [...prev, { ...newItem, id: `${newItem.id.slice(0, 36)}-${Date.now()}` }]
+      return [...prev, { ...newItem, observacoes: normalizedObs, id: `${newItem.id.slice(0, 36)}-${Date.now()}` }]
     })
   }
 
@@ -261,6 +265,52 @@ export function CartProvider({ children }: { children: ReactNode }) {
       return
     }
     setItems((prev) => prev.map((item) => (item.id === id ? { ...item, quantity } : item)))
+  }
+
+  const updateItem = (id: string, updatedFields: Partial<CartItem>) => {
+    setItems((prev) => {
+      const targetIndex = prev.findIndex((item) => item.id === id)
+      if (targetIndex === -1) return prev
+
+      const normalizeObs = (obs?: string) => (obs || "").trim()
+      const sortAdicionais = (ads: CartItem["adicionais"] = []) =>
+        [...(ads || [])]
+          .sort((a, b) => a.id.localeCompare(b.id))
+          .map((a) => ({ id: a.id, quantity: a.quantity }))
+
+      const merged: CartItem = {
+        ...prev[targetIndex],
+        ...updatedFields,
+        id: prev[targetIndex].id,
+      }
+      merged.observacoes = normalizeObs(merged.observacoes) || undefined
+
+      if ((Number(merged.quantity) || 0) <= 0) {
+        return prev.filter((item) => item.id !== id)
+      }
+
+      const duplicateIndex = prev.findIndex(
+        (item, idx) =>
+          idx !== targetIndex &&
+          item.id.slice(0, 36) === merged.id.slice(0, 36) &&
+          item.category === merged.category &&
+          item.pastaType === merged.pastaType &&
+          normalizeObs(item.observacoes) === normalizeObs(merged.observacoes) &&
+          JSON.stringify(sortAdicionais(item.adicionais)) === JSON.stringify(sortAdicionais(merged.adicionais))
+      )
+
+      if (duplicateIndex !== -1) {
+        return prev
+          .map((item, idx) =>
+            idx === duplicateIndex
+              ? { ...item, quantity: item.quantity + merged.quantity }
+              : item
+          )
+          .filter((_, idx) => idx !== targetIndex)
+      }
+
+      return prev.map((item, idx) => (idx === targetIndex ? merged : item))
+    })
   }
 
   const clearCart = () => {
@@ -298,6 +348,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         removeItem,
         removeFromCart: removeItem,
         updateQuantity,
+        updateItem,
         clearCart,
         checkoutSuccess,
         getTotalPrice,

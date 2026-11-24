@@ -4,7 +4,7 @@ import { useState } from "react"
 import { X, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { supabase } from "@/lib/supabase-fix"
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context"
 import { appToast } from "@/lib/app-toast"
 import {
@@ -22,12 +22,47 @@ interface FeedbackModalProps {
   onSuccess?: () => void
 }
 
+const POSITIVE_TAGS = [
+  "🔥 Quentinha",
+  "🥔 Muito bem recheada",
+  "🚗 Entrega rápida da Batata Top",
+  "📦 Bem embalada",
+  "😋 Sabor incrível",
+  "❤️ Atendimento nota 10",
+]
+
+const NEGATIVE_TAGS = [
+  "❄️ Chegou fria",
+  "⏳ Demorou para entregar",
+  "📦 Embalagem danificada",
+  "🧂 Pouco recheio / tempero",
+  "❓ Item do pedido errado",
+]
+
 export function FeedbackModal({ orderId, orderNumber, initialRating = 0, onClose, onSuccess }: FeedbackModalProps) {
   const { user } = useAuth()
   const [rating, setRating] = useState(initialRating)
   const [hoveredRating, setHoveredRating] = useState(0)
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [comment, setComment] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleSelectRating = (star: number) => {
+    const wasPositive = rating >= 4
+    const isPositive = star >= 4
+    if (rating === 0 || wasPositive !== isPositive) {
+      setSelectedTags([])
+    }
+    setRating(star)
+  }
+
+  const toggleTag = (tag: string) => {
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((item) => item !== tag) : [...prev, tag],
+    )
+  }
+
+  const availableTags = rating >= 4 ? POSITIVE_TAGS : NEGATIVE_TAGS
 
   const handleSubmit = async () => {
     if (rating === 0) {
@@ -38,6 +73,7 @@ export function FeedbackModal({ orderId, orderNumber, initialRating = 0, onClose
     setIsSubmitting(true)
 
     try {
+      const supabase = getSupabaseBrowserClient()
       const feedbackData = {
         order_id: orderId,
         user_id: user?.id || null,
@@ -45,6 +81,7 @@ export function FeedbackModal({ orderId, orderNumber, initialRating = 0, onClose
         customer_phone: user?.user_metadata?.phone || "",
         rating,
         comment: comment.trim() || null,
+        tags: selectedTags,
       }
 
       const { error } = await supabase
@@ -107,7 +144,7 @@ export function FeedbackModal({ orderId, orderNumber, initialRating = 0, onClose
                 <button
                   key={star}
                   type="button"
-                  onClick={() => setRating(star)}
+                  onClick={() => handleSelectRating(star)}
                   onMouseEnter={() => setHoveredRating(star)}
                   onMouseLeave={() => setHoveredRating(0)}
                   data-vaul-no-drag
@@ -135,6 +172,40 @@ export function FeedbackModal({ orderId, orderNumber, initialRating = 0, onClose
               </div>
             )}
           </div>
+
+          {/* Dynamic Feedback Tags */}
+          {rating > 0 && (
+            <div className="space-y-3">
+              <label className="block text-sm font-black text-gray-800 text-center">
+                {rating >= 4 ? "O que você mais gostou?" : "O que podemos melhorar?"}
+              </label>
+              <div className="flex flex-wrap justify-center gap-2">
+                {availableTags.map((tag) => {
+                  const isSelected = selectedTags.includes(tag)
+                  const selectedClasses =
+                    rating >= 4
+                      ? "bg-[#FFF9E6] border-[#E3A008] text-[#B45309] font-bold shadow-sm"
+                      : "bg-[#FFF3EE] border-[#C1440E] text-[#C1440E] font-bold shadow-sm"
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => toggleTag(tag)}
+                      aria-pressed={isSelected}
+                      data-vaul-no-drag
+                      className={`px-3 py-1.5 rounded-full border text-[13px] transition-all active:scale-95 ${
+                        isSelected
+                          ? selectedClasses
+                          : "bg-[#F7F7F7] border-[#EEEEEE] text-[#4B5563] font-semibold hover:border-[#E3A008]/60 hover:bg-[#FFF9E6]/50"
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Comment */}
           <div className="space-y-3">

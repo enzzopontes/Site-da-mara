@@ -46,7 +46,7 @@ export default async function SobrePage() {
         </section>
 
         {/* CONTEÚDO PRINCIPAL */}
-        <section className="py-20 bg-white">
+        <section className="py-20 bg-white overflow-hidden">
           <div className="container mx-auto px-4 max-w-5xl">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center mb-24">
               <div className="space-y-8">
@@ -108,7 +108,7 @@ export default async function SobrePage() {
                 </div>
 
                 {/* FLOATING BADGE Nº1 */}
-                <div className="absolute -top-6 -right-6 bg-white p-4 rounded-2xl shadow-2xl border border-yellow-100 animate-bounce duration-[3000ms]">
+                <div className="absolute -top-6 right-2 sm:-right-6 bg-white p-4 rounded-2xl shadow-2xl border border-yellow-100 animate-bounce duration-[3000ms]">
                   <div className="flex items-center gap-3">
                     <div className="bg-yellow-400 p-2 rounded-xl text-white">
                       <Trophy className="h-6 w-6 fill-current" />
@@ -121,8 +121,8 @@ export default async function SobrePage() {
                 </div>
 
                 {/* FLOATING BADGE QUALIDADE */}
-                <div className="absolute -bottom-26 -left-6 bg-white p-6 rounded-2xl shadow-xl border border-gray-50">
-                  <div className="flex items-center gap-">
+                <div className="absolute -bottom-6 left-2 sm:-bottom-12 sm:-left-6 bg-white p-5 sm:p-6 rounded-2xl shadow-xl border border-gray-50">
+                  <div className="flex items-center gap-3">
                     <div className="bg-yellow-100 p-3 rounded-xl text-yellow-600">
                       <Star className="h-6 w-6 fill-current" />
                     </div>
@@ -180,7 +180,7 @@ export default async function SobrePage() {
                       Rua Carlos Roberto Crepaldi, 120
                     </p>
                     <p className="text-gray-400 font-medium ml-7">
-                      Jardim Alvorada, Iacanga - SP
+                      Centro, Iacanga - SP (Portão de ferro preto)
                     </p>
                   </div>
                 </div>

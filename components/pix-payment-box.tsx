@@ -2,20 +2,53 @@
 
 import { useState, useEffect, useRef } from "react"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Copy, Check, QrCode, Clock, CheckCircle2, AlertCircle, ExternalLink } from "lucide-react"
+import { Copy, Check, QrCode, Clock, CheckCircle2, AlertCircle, ExternalLink, XCircle } from "lucide-react"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 
 interface PixPaymentBoxProps {
   orderId: string
   total: number
   pixData?: any
+  mpPaymentId?: string | number | null
   onPaymentApproved?: () => void
 }
 
-export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPaymentApproved }: PixPaymentBoxProps) {
+function isPixStatusUnderpaid(res: any): boolean {
+  return Boolean(
+    res?.action === "held_underpaid" ||
+      res?.status === "held_underpaid" ||
+      res?.needs_review === true ||
+      res?.review_reason === "underpaid"
+  )
+}
+
+function isPixStatusApproved(res: any): boolean {
+  return (
+    !isPixStatusUnderpaid(res) &&
+    (res?.statusDetail === "accredited" ||
+      res?.paymentStatus === "approved" ||
+      res?.status === "approved" ||
+      res?.status === "processed")
+  )
+}
+
+function isOrderMetadataUnderpaid(meta: any): boolean {
+  return Boolean(
+    (meta?.needs_review && meta?.review_reason === "underpaid") ||
+      meta?.review_reason === "underpaid"
+  )
+}
+
+export function PixPaymentBox({
+  orderId,
+  total,
+  pixData: initialPixData,
+  mpPaymentId: initialMpPaymentId,
+  onPaymentApproved,
+}: PixPaymentBoxProps) {
   // Helper de extração multichaves idêntico ao app mobile
   const extractKeys = (data: any) => {
-    if (!data) return { qrCode: "", qrCodeBase64: "", ticketUrl: "", expirationDate: null }
+    if (!data) return { qrCode: "", qrCodeBase64: "", ticketUrl: "", expirationDate: null, paymentId: null }
     const qrCode =
       data.pix_qr_code ||
       data.qr_code ||
@@ -41,8 +74,14 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
       data.expiration_date ||
       data.date_of_expiration ||
       null
+    const paymentId =
+      data.paymentId ||
+      data.payment_id ||
+      data.mp_payment_id ||
+      data.pix?.payment_id ||
+      null
 
-    return { qrCode, qrCodeBase64, ticketUrl, expirationDate }
+    return { qrCode, qrCodeBase64, ticketUrl, expirationDate, paymentId }
   }
 
   const isPixStillValid = (data: any): boolean => {
@@ -59,19 +98,47 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
     const parsed = extractKeys(initialPixData)
     return isPixStillValid(parsed) ? parsed : null
   })
+  const [mpPaymentId, setMpPaymentId] = useState<string | null>(() => {
+    const fromProp = initialMpPaymentId != null ? String(initialMpPaymentId) : null
+    if (fromProp) return fromProp
+    const fromInitial = extractKeys(initialPixData).paymentId
+    return fromInitial != null ? String(fromInitial) : null
+  })
   const [loading, setLoading] = useState(() => {
     if (!initialPixData) return true
     return !isPixStillValid(extractKeys(initialPixData))
   })
   const [error, setError] = useState<string | null>(null)
   const [isApproved, setIsApproved] = useState(false)
+  const [isUnderpaidReview, setIsUnderpaidReview] = useState(false)
+  const [isExpiredOrCancelled, setIsExpiredOrCancelled] = useState(false)
   const [timeLeft, setTimeLeft] = useState<string>("")
   const regenAttemptedRef = useRef(false)
+  const hasTriggeredExpiryRef = useRef(false)
+  const approvedNotifiedRef = useRef(false)
 
-  // Sincroniza pix se initialPixData mudar (NEW-13: ignora QR expirado para permitir regeneração automática)
+  const notifyApproved = () => {
+    setIsApproved(true)
+    if (!approvedNotifiedRef.current) {
+      approvedNotifiedRef.current = true
+      onPaymentApproved?.()
+    }
+  }
+
+  // Sincroniza mpPaymentId se prop mudar
+  useEffect(() => {
+    if (initialMpPaymentId != null && String(initialMpPaymentId)) {
+      setMpPaymentId(String(initialMpPaymentId))
+    }
+  }, [initialMpPaymentId])
+
+  // Sincroniza pix se initialPixData mudar
   useEffect(() => {
     if (initialPixData) {
       const parsed = extractKeys(initialPixData)
+      if (parsed.paymentId) {
+        setMpPaymentId(String(parsed.paymentId))
+      }
       if (isPixStillValid(parsed)) {
         regenAttemptedRef.current = false
         setPix(parsed)
@@ -85,6 +152,7 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
     let isMounted = true
 
     async function fetchPix() {
+      if (isApproved || isUnderpaidReview || isExpiredOrCancelled) return
       if (isPixStillValid(pix) || (pix && regenAttemptedRef.current)) return
       setLoading(true)
       setError(null)
@@ -113,6 +181,9 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
 
         if (data.success) {
           const parsed = extractKeys(data)
+          if (parsed.paymentId) {
+            setMpPaymentId(String(parsed.paymentId))
+          }
           regenAttemptedRef.current = !isPixStillValid(parsed)
           setPix(parsed)
         } else {
@@ -130,11 +201,11 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
     return () => {
       isMounted = false
     }
-  }, [orderId, pix?.qrCode, pix?.qr_code])
+  }, [orderId, pix?.qrCode, pix?.qr_code, isApproved, isUnderpaidReview, isExpiredOrCancelled])
 
-  // Temporizador de expiração (30 min ou da API)
+  // Temporizador de expiração (30 min ou da API) — cancela o pedido via RPC ao zerar (igual app)
   useEffect(() => {
-    if (!pix || isApproved) return
+    if (!pix || isApproved || isUnderpaidReview || isExpiredOrCancelled) return
 
     const expTimeStr = pix?.expirationDate ?? pix?.expiration_date ?? pix?.date_of_expiration
     const parsedExp = expTimeStr ? new Date(expTimeStr).getTime() : NaN
@@ -146,9 +217,18 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
       if (diff <= 0) {
         setTimeLeft("Tempo expirado")
         if (timer) clearInterval(timer)
-        if (!regenAttemptedRef.current) {
-          regenAttemptedRef.current = true
-          setPix(null)
+        if (!hasTriggeredExpiryRef.current) {
+          hasTriggeredExpiryRef.current = true
+          setIsExpiredOrCancelled(true)
+          const supabase = getSupabaseBrowserClient()
+          void (async () => {
+            try {
+              await supabase.rpc("cancel_order_user", {
+                p_order_id: orderId,
+                p_cancel_reason: "pix_expirado_30min",
+              })
+            } catch {}
+          })()
         }
         return
       }
@@ -164,11 +244,43 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
     return () => {
       if (timer) clearInterval(timer)
     }
-  }, [pix, isApproved])
+  }, [orderId, pix, isApproved, isUnderpaidReview, isExpiredOrCancelled])
 
-  // Monitora mudança de status em tempo real via Supabase + Polling HTTP
+  // Monitora mudança de status em tempo real via Supabase + Polling no banco
   useEffect(() => {
+    if (isApproved || isUnderpaidReview || isExpiredOrCancelled) return
     const supabase = getSupabaseBrowserClient()
+    let isActive = true
+
+    const evaluateOrderState = (status: string | undefined, meta: any) => {
+      const discoveredMpId = meta?.mp_payment_id || meta?.pix?.payment_id
+      if (discoveredMpId) {
+        setMpPaymentId((prev) => prev || String(discoveredMpId))
+      }
+
+      if (isOrderMetadataUnderpaid(meta)) {
+        setIsUnderpaidReview(true)
+        return true
+      }
+
+      if (status === "cancelled") {
+        setIsExpiredOrCancelled(true)
+        return true
+      }
+
+      const mpStatus = meta?.mp_payment_status
+      const isPaid =
+        (status && status !== "awaiting_payment" && status !== "cancelled") ||
+        mpStatus === "approved" ||
+        Boolean(meta?.paid_at)
+
+      if (isPaid) {
+        notifyApproved()
+        return true
+      }
+
+      return false
+    }
 
     // 1. Inscrição Realtime no Supabase
     const channel = supabase
@@ -182,21 +294,14 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
           filter: `id=eq.${orderId}`,
         },
         (payload: any) => {
-          const newStatus = payload.new?.status
-          const mpStatus = payload.new?.metadata?.mp_payment_status
-          if (
-            (newStatus && newStatus !== "awaiting_payment" && newStatus !== "cancelled") ||
-            mpStatus === "approved"
-          ) {
-            setIsApproved(true)
-            onPaymentApproved?.()
-          }
+          if (!isActive) return
+          evaluateOrderState(payload.new?.status, payload.new?.metadata)
         }
       )
       .subscribe()
 
-    // 2. Polling ativo a cada 3 segundos como contingência (igual app)
-    const interval = setInterval(async () => {
+    // 2. Polling ativo no Supabase a cada 3 segundos (também descobre metadata.mp_payment_id)
+    const checkOrderRow = async () => {
       try {
         const { data, error: qErr } = await supabase
           .from("orders")
@@ -204,26 +309,83 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
           .eq("id", orderId)
           .maybeSingle()
 
-        if (!qErr && data) {
-          const isPaid =
-            (data.status && data.status !== "awaiting_payment" && data.status !== "cancelled") ||
-            data.metadata?.mp_payment_status === "approved" ||
-            Boolean(data.metadata?.paid_at)
-
-          if (isPaid) {
-            setIsApproved(true)
-            onPaymentApproved?.()
-            clearInterval(interval)
-          }
+        if (!isActive || qErr || !data) return
+        const terminal = evaluateOrderState(data.status, data.metadata)
+        if (terminal) {
+          clearInterval(interval)
         }
       } catch {}
-    }, 3000)
+    }
+
+    checkOrderRow()
+    const interval = setInterval(checkOrderRow, 3000)
 
     return () => {
+      isActive = false
       supabase.removeChannel(channel)
       clearInterval(interval)
     }
-  }, [orderId, onPaymentApproved])
+  }, [orderId, onPaymentApproved, isApproved, isUnderpaidReview, isExpiredOrCancelled])
+
+  // Polling ativo a cada 3s no endpoint /api/mercadopago/pix-status (reconciliação igual ao app)
+  useEffect(() => {
+    if (!mpPaymentId || isApproved || isUnderpaidReview || isExpiredOrCancelled) return
+
+    let isPollingActive = true
+    const supabase = getSupabaseBrowserClient()
+
+    const pollMercadoPago = async () => {
+      if (!isPollingActive) return
+      try {
+        const { data: sessionData } = await supabase.auth.getSession()
+        const token = sessionData?.session?.access_token
+        const headers: Record<string, string> = {}
+        if (token) {
+          headers.Authorization = `Bearer ${token}`
+        }
+
+        const res = await fetch(
+          `/api/mercadopago/pix-status?id=${encodeURIComponent(mpPaymentId)}&orderId=${encodeURIComponent(orderId)}`,
+          { headers }
+        )
+        const result = await res.json().catch(() => null)
+        if (!isPollingActive || !result) return
+
+        if (isPixStatusUnderpaid(result)) {
+          isPollingActive = false
+          clearInterval(interval)
+          setIsUnderpaidReview(true)
+          return
+        }
+
+        if (!result.success) return
+
+        if (isPixStatusApproved(result)) {
+          isPollingActive = false
+          clearInterval(interval)
+          notifyApproved()
+        } else if (
+          result.status === "cancelled" ||
+          result.status === "rejected" ||
+          result.status === "expired" ||
+          result.statusDetail === "expired" ||
+          result.paymentStatus === "cancelled" ||
+          result.paymentStatus === "rejected"
+        ) {
+          isPollingActive = false
+          clearInterval(interval)
+          setIsExpiredOrCancelled(true)
+        }
+      } catch {}
+    }
+
+    const interval = setInterval(pollMercadoPago, 3000)
+
+    return () => {
+      isPollingActive = false
+      clearInterval(interval)
+    }
+  }, [mpPaymentId, orderId, isApproved, isUnderpaidReview, isExpiredOrCancelled, onPaymentApproved])
 
   const handleCopyCode = async () => {
     const code = pix?.qrCode || pix?.qr_code
@@ -263,11 +425,40 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
     )
   }
 
+  if (isUnderpaidReview) {
+    return (
+      <div className="bg-[#FEF3C7] border-2 border-[#E3A008] rounded-3xl p-6 text-center shadow-lg shadow-amber-50 mb-6 transition-all duration-500 animate-in fade-in">
+        <div className="w-16 h-16 bg-[#E3A008] text-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-md shadow-amber-200">
+          <AlertCircle className="w-8 h-8" />
+        </div>
+        <h3 className="text-xl font-black text-[#78350F]">Pagamento em revisão</h3>
+        <p className="text-sm font-semibold text-[#B45309] mt-1">
+          Identificamos uma divergência no valor pago via Pix. Nossa equipe está analisando seu pagamento e entrará em contato em breve.
+        </p>
+      </div>
+    )
+  }
+
+  if (isExpiredOrCancelled) {
+    return (
+      <div className="bg-red-50 border-2 border-red-300 rounded-3xl p-6 text-center shadow-lg shadow-red-50 mb-6 transition-all duration-500 animate-in fade-in">
+        <div className="w-16 h-16 bg-red-500 text-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-md shadow-red-200">
+          <XCircle className="w-8 h-8" />
+        </div>
+        <h3 className="text-xl font-black text-red-950">Pix expirado ou cancelado</h3>
+        <p className="text-sm font-semibold text-red-700 mt-1">
+          O tempo limite de 30 minutos para pagamento via Pix expirou ou o pagamento foi cancelado. Faça um novo pedido se desejar.
+        </p>
+      </div>
+    )
+  }
+
   const qrCodeText = pix?.qrCode || pix?.qr_code || ""
-  const qrImageUri = pix?.qrCodeBase64 || pix?.qr_code_base64
-    ? `data:image/png;base64,${pix?.qrCodeBase64 || pix?.qr_code_base64}`
-    : qrCodeText
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrCodeText)}`
+  const rawBase64 = pix?.qrCodeBase64 || pix?.qr_code_base64 || ""
+  const qrImageUri = rawBase64
+    ? rawBase64.startsWith("data:image/")
+      ? rawBase64
+      : `data:image/png;base64,${rawBase64}`
     : null
 
   return (
@@ -328,7 +519,7 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
 
       {!loading && !error && pix && (
         <div className="flex flex-col items-center">
-          {/* Imagem do QR Code (com fallback de API online idêntico ao app) */}
+          {/* Imagem do QR Code (apenas base64 local, sem envio do payload a terceiros) */}
           {qrImageUri ? (
             <div className="bg-white p-3 rounded-2xl border-2 border-gray-200 shadow-inner mb-4">
               <img
@@ -337,7 +528,21 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
                 className="w-48 h-48 sm:w-56 sm:h-56 object-contain"
               />
             </div>
-          ) : null}
+          ) : (
+            <div className="w-full bg-amber-50/70 border border-amber-200 rounded-2xl p-4 text-center mb-4">
+              <QrCode className="w-7 h-7 text-amber-600 mx-auto mb-1.5" />
+              <p className="text-xs font-bold text-amber-900">
+                Imagem do QR Code indisponível no momento.
+              </p>
+              <p className="text-xs text-amber-800/90 mt-1">
+                Use <strong>&quot;Copiar código PIX&quot;</strong>
+                {pix.ticketUrl ? (
+                  <> ou <strong>&quot;Abrir link de pagamento&quot;</strong></>
+                ) : null}{" "}
+                abaixo para finalizar o pagamento.
+              </p>
+            </div>
+          )}
 
           {/* Valor a pagar */}
           <div className="text-center mb-4">
@@ -376,20 +581,20 @@ export function PixPaymentBox({ orderId, total, pixData: initialPixData, onPayme
                   {qrCodeText}
                 </p>
               </div>
-
-              {pix.ticketUrl && (
-                <a
-                  href={pix.ticketUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full h-11 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-bold text-gray-700 flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  <ExternalLink className="w-4 h-4 text-gray-500" />
-                  <span>Abrir link de pagamento no navegador / app</span>
-                </a>
-              )}
             </div>
           ) : null}
+
+          {pix.ticketUrl && /^https:\/\/.+/i.test(pix.ticketUrl) && (
+            <a
+              href={pix.ticketUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full h-11 mt-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-bold text-gray-700 flex items-center justify-center gap-1.5 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4 text-gray-500" />
+              <span>Abrir link de pagamento no navegador / app</span>
+            </a>
+          )}
 
           {/* Guia Rápido estilo iFood */}
           <div className="w-full mt-5 pt-4 border-t border-gray-100">

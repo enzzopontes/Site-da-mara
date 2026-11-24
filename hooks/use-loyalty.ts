@@ -39,18 +39,21 @@ export function useLoyalty() {
       }
     }
 
-    window.addEventListener("loyalty-update", handleUpdate)
-    window.addEventListener("storage", (e) => {
+    const handleStorage = (e: StorageEvent) => {
       if (e.key === "batata_top_loyalty_data_v2") {
         loyaltyManager.getLoyaltyState(userId).then((s) => {
           if (isMounted) setState(s)
         })
       }
-    })
+    }
+
+    window.addEventListener("loyalty-update", handleUpdate)
+    window.addEventListener("storage", handleStorage)
 
     return () => {
       isMounted = false
       window.removeEventListener("loyalty-update", handleUpdate)
+      window.removeEventListener("storage", handleStorage)
     }
   }, [userId])
 
@@ -75,6 +78,8 @@ export function useLoyalty() {
           type: "percentage",
           discount_type: "percentage",
           minOrderValue: 0,
+          restrictedCategories: ["batata", "batatas"],
+          restricted_categories: ["batata", "batatas"],
           badgeLabel: "100% OFF",
         })
       }

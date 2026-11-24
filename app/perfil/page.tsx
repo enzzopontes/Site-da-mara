@@ -13,8 +13,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/lib/auth-context"
+import { useUnreadNotifications } from "@/hooks/use-unread-notifications"
 import { addressesManager, type Address } from "@/lib/addresses-manager"
-import { couponsManager, type Coupon } from "@/lib/cupons-manager"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { appToast } from "@/lib/app-toast"
 import {
@@ -59,6 +59,72 @@ function getInitials(nameOrEmail?: string | null): string {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
   }
   return cleaned.slice(0, 2).toUpperCase()
+}
+
+function formatCPF(value: string): string {
+  const d = value.replace(/\D/g, "").slice(0, 11)
+  if (d.length <= 3) return d
+  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`
+  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`
+}
+
+function isValidCPF(raw: string): boolean {
+  const cpf = raw.replace(/\D/g, "")
+  if (cpf.length !== 11) return false
+  if (/^(\d)\1{10}$/.test(cpf)) return false
+
+  let sum = 0
+  for (let i = 0; i < 9; i++) sum += parseInt(cpf[i], 10) * (10 - i)
+  let check1 = 11 - (sum % 11)
+  if (check1 >= 10) check1 = 0
+  if (check1 !== parseInt(cpf[9], 10)) return false
+
+  sum = 0
+  for (let i = 0; i < 10; i++) sum += parseInt(cpf[i], 10) * (11 - i)
+  let check2 = 11 - (sum % 11)
+  if (check2 >= 10) check2 = 0
+  if (check2 !== parseInt(cpf[10], 10)) return false
+
+  return true
+}
+
+function formatPhone(value: string): string {
+  const d = value.replace(/\D/g, "").slice(0, 11)
+  if (d.length === 0) return ""
+  if (d.length <= 2) return `(${d}`
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`
+}
+
+function isWithinIacangaDeliveryArea(
+  city?: string | null,
+  state?: string | null
+): boolean {
+  const normalizedCity = (city || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+  const normalizedState = (state || "").trim().toUpperCase()
+  return normalizedCity === "iacanga" && normalizedState === "SP"
+}
+
+interface NotificationPrefs {
+  notify_orders_push: boolean
+  notify_promo_push: boolean
+  notify_promo_email: boolean
+  notify_promo_whatsapp: boolean
+  notify_promo_sms: boolean
+}
+
+const DEFAULT_NOTIF_PREFS: NotificationPrefs = {
+  notify_orders_push: true,
+  notify_promo_push: false,
+  notify_promo_email: false,
+  notify_promo_whatsapp: false,
+  notify_promo_sms: false,
 }
 
 export interface AccordionSubItem {
@@ -189,6 +255,7 @@ function ProfileSkeleton() {
 
 export default function PerfilPage() {
   const { user, loading, signOut } = useAuth()
+  const { unreadCount } = useUnreadNotifications(user?.id)
   const router = useRouter()
 
   // Offline state
@@ -199,12 +266,8 @@ export default function PerfilPage() {
   const [profilePhone, setProfilePhone] = useState("")
   const [profileCpf, setProfileCpf] = useState("")
   const [profileName, setProfileName] = useState("")
+  const [cpfTouched, setCpfTouched] = useState(false)
   const [ordersCount, setOrdersCount] = useState<number>(0)
-
-  // Coupons state
-  const [activeCoupons, setActiveCoupons] = useState<Coupon[]>([])
-  const [isLoadingCoupons, setIsLoadingCoupons] = useState(false)
-  const [copiedCode, setCopiedCode] = useState<string | null>(null)
 
   // Addresses state
   const [addresses, setAddresses] = useState<Address[]>([])
@@ -232,9 +295,12 @@ export default function PerfilPage() {
     message: string
   } | null>(null)
 
-  // Notification Preferences
-  const [notifOrders, setNotifOrders] = useState(true)
-  const [notifPromos, setNotifPromos] = useState(true)
+  // Notification Preferences (synced with profiles table)
+  const [notifPrefs, setNotifPrefs] =
+    useState<NotificationPrefs>(DEFAULT_NOTIF_PREFS)
+  const [savingNotifKey, setSavingNotifKey] = useState<
+    keyof NotificationPrefs | null
+  >(null)
 
   // Modals: Logout & LGPD Delete
   const [logoutModalOpen, setLogoutModalOpen] = useState(false)
@@ -254,49 +320,10 @@ export default function PerfilPage() {
       window.addEventListener("online", handleOnline)
       window.addEventListener("offline", handleOffline)
 
-      try {
-        const savedOrdersNotif = localStorage.getItem("bt_notif_orders")
-        const savedPromosNotif = localStorage.getItem("bt_notif_promos")
-        if (savedOrdersNotif !== null) setNotifOrders(savedOrdersNotif === "true")
-        if (savedPromosNotif !== null) setNotifPromos(savedPromosNotif === "true")
-      } catch {}
-
       return () => {
         window.removeEventListener("online", handleOnline)
         window.removeEventListener("offline", handleOffline)
       }
-    }
-  }, [])
-
-  // Load coupons (available for logged-in view)
-  useEffect(() => {
-    let mounted = true
-    const fetchCoupons = async () => {
-      setIsLoadingCoupons(true)
-      try {
-        const supabase = getSupabaseBrowserClient()
-        const { data, error } = await supabase
-          .from("coupons")
-          .select("*")
-          .eq("active", true)
-          .order("discount_value", { ascending: false })
-
-        if (!error && data) {
-          const now = new Date()
-          const valid = data.filter(
-            (c: any) => !c.expires_at || new Date(c.expires_at) > now
-          )
-          if (mounted) setActiveCoupons(valid)
-        }
-      } catch (err) {
-        console.error("Erro ao buscar cupons:", err)
-      } finally {
-        if (mounted) setIsLoadingCoupons(false)
-      }
-    }
-    fetchCoupons()
-    return () => {
-      mounted = false
     }
   }, [])
 
@@ -306,6 +333,7 @@ export default function PerfilPage() {
       setIsAdmin(false)
       setAddresses([])
       setIsLoadingAddresses(false)
+      setNotifPrefs(DEFAULT_NOTIF_PREFS)
       return
     }
 
@@ -315,8 +343,8 @@ export default function PerfilPage() {
         user.email?.split("@")[0] ||
         "Cliente Batata Top"
     )
-    setProfilePhone(user.user_metadata?.phone || "")
-    setProfileCpf(user.user_metadata?.cpf || "")
+    setProfilePhone(formatPhone(user.user_metadata?.phone || ""))
+    setProfileCpf(formatCPF(user.user_metadata?.cpf || ""))
 
     if (user.email && ADMIN_EMAILS.includes(user.email)) {
       setIsAdmin(true)
@@ -325,14 +353,24 @@ export default function PerfilPage() {
     const supabase = getSupabaseBrowserClient()
     supabase
       .from("profiles")
-      .select("role, full_name, phone, cpf")
+      .select(
+        "role, full_name, phone, cpf, notify_orders_push, notify_promo_push, notify_promo_email, notify_promo_whatsapp, notify_promo_sms"
+      )
       .eq("id", user.id)
-      .single()
+      .maybeSingle()
       .then(({ data }: any) => {
-        if (data?.role === "admin") setIsAdmin(true)
-        if (data?.full_name) setProfileName(data.full_name)
-        if (data?.phone) setProfilePhone(data.phone)
-        if (data?.cpf) setProfileCpf(data.cpf)
+        if (!data) return
+        if (data.role === "admin") setIsAdmin(true)
+        if (data.full_name) setProfileName(data.full_name)
+        if (data.phone) setProfilePhone(formatPhone(data.phone))
+        if (data.cpf) setProfileCpf(formatCPF(data.cpf))
+        setNotifPrefs({
+          notify_orders_push: data.notify_orders_push ?? true,
+          notify_promo_push: data.notify_promo_push ?? false,
+          notify_promo_email: data.notify_promo_email ?? false,
+          notify_promo_whatsapp: data.notify_promo_whatsapp ?? false,
+          notify_promo_sms: data.notify_promo_sms ?? false,
+        })
       })
       .catch(() => {})
 
@@ -374,10 +412,19 @@ export default function PerfilPage() {
       setAddressError("Preencha CEP, rua, número e bairro para salvar o endereço.")
       return
     }
+    if (!isWithinIacangaDeliveryArea(newAddress.city, newAddress.state)) {
+      const areaMsg =
+        "Entregamos apenas em Iacanga/SP. Informe um endereço dentro da nossa área de entrega."
+      setAddressError(areaMsg)
+      appToast.error("Fora da área de entrega", areaMsg)
+      return
+    }
     if (!user) return
     const address = {
       user_id: user.id,
       ...newAddress,
+      city: "Iacanga",
+      state: "SP",
       is_default: addresses.length === 0,
     }
     const result = await addressesManager.addAddress(address)
@@ -427,7 +474,7 @@ export default function PerfilPage() {
       .replace(/\D/g, "")
       .replace(/(\d{5})(\d)/, "$1-$2")
       .substring(0, 9)
-    setNewAddress({ ...newAddress, cep: formatted })
+    setNewAddress((prev) => ({ ...prev, cep: formatted }))
     if (formatted.replace(/\D/g, "").length === 8) {
       try {
         const response = await fetch(
@@ -435,14 +482,24 @@ export default function PerfilPage() {
         )
         const data = await response.json()
         if (!data.erro) {
-          setNewAddress({
-            ...newAddress,
+          const resolvedCity = data.localidade || ""
+          const resolvedState = data.uf || ""
+          setNewAddress((prev) => ({
+            ...prev,
             cep: formatted,
-            street: data.logradouro || "",
-            neighborhood: data.bairro || "",
-            city: data.localidade || "Iacanga",
-            state: data.uf || "SP",
-          })
+            street: data.logradouro || prev.street,
+            neighborhood: data.bairro || prev.neighborhood,
+            city: resolvedCity,
+            state: resolvedState,
+          }))
+          if (!isWithinIacangaDeliveryArea(resolvedCity, resolvedState)) {
+            const areaMsg =
+              "Entregamos apenas em Iacanga/SP. Este CEP está fora da nossa área de entrega."
+            setAddressError(areaMsg)
+            appToast.error("Fora da área de entrega", areaMsg)
+          } else {
+            setAddressError(null)
+          }
         }
       } catch (error) {
         console.error("Erro ao buscar CEP:", error)
@@ -454,27 +511,58 @@ export default function PerfilPage() {
     e.preventDefault()
     if (!user) return
     setProfileFeedback(null)
+
+    const trimmedName = profileName.trim()
+    const phoneDigits = profilePhone.replace(/\D/g, "")
+    const cpfDigits = profileCpf.replace(/\D/g, "")
+
+    if (trimmedName.length < 2) {
+      const msg = "Por favor, informe seu nome completo."
+      setProfileFeedback({ type: "error", message: msg })
+      appToast.warning("Nome incompleto", msg)
+      return
+    }
+
+    if (phoneDigits.length > 0 && phoneDigits.length < 10) {
+      const msg = "Por favor, insira um telefone válido com DDD."
+      setProfileFeedback({ type: "error", message: msg })
+      appToast.warning("Telefone inválido", msg)
+      return
+    }
+
+    if (cpfDigits.length > 0 && !isValidCPF(cpfDigits)) {
+      setCpfTouched(true)
+      const msg = "Insira um número de CPF válido ou deixe o campo em branco."
+      setProfileFeedback({ type: "error", message: msg })
+      appToast.error("CPF inválido", msg)
+      return
+    }
+
     setIsSavingProfile(true)
     try {
       const supabase = getSupabaseBrowserClient()
-      const { error: authError } = await supabase.auth.updateUser({
-        data: {
-          full_name: profileName.trim(),
-          phone: profilePhone.trim(),
-          cpf: profileCpf.trim(),
-        },
-      })
       const { error: profileError } = await supabase
         .from("profiles")
-        .update({
-          full_name: profileName.trim(),
-          phone: profilePhone.trim(),
-          cpf: profileCpf.trim() || null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", user.id)
+        .upsert(
+          {
+            id: user.id,
+            full_name: trimmedName,
+            phone: phoneDigits || null,
+            cpf: cpfDigits || null,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "id" }
+        )
 
-      const saveError = authError || profileError
+      const { error: authError } = await supabase.auth.updateUser({
+        data: {
+          full_name: trimmedName,
+          phone: phoneDigits || null,
+          cpf: cpfDigits || null,
+        },
+      })
+
+      const saveError = profileError || authError
       if (saveError) {
         const msg = saveError.message || "Não foi possível salvar suas alterações."
         setProfileFeedback({
@@ -514,45 +602,43 @@ export default function PerfilPage() {
     appToast.success("Histórico de busca limpo com sucesso")
   }
 
-  const handleToggleNotification = (type: "orders" | "promos") => {
-    if (type === "orders") {
-      const next = !notifOrders
-      setNotifOrders(next)
-      try {
-        localStorage.setItem("bt_notif_orders", String(next))
-      } catch {}
-      appToast.info(
-        next
-          ? "Avisos de status do pedido ativados"
-          : "Avisos de status do pedido silenciados"
+  const handleToggleNotification = async (key: keyof NotificationPrefs) => {
+    if (!user || savingNotifKey === key) return
+    const previous = notifPrefs[key]
+    const nextValue = !previous
+    setNotifPrefs((prev) => ({ ...prev, [key]: nextValue }))
+    setSavingNotifKey(key)
+
+    try {
+      const supabase = getSupabaseBrowserClient()
+      const { error } = await supabase
+        .from("profiles")
+        .upsert(
+          {
+            id: user.id,
+            [key]: nextValue,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "id" }
+        )
+
+      if (error) throw error
+    } catch (err) {
+      console.error("Erro ao salvar preferência de notificação:", err)
+      setNotifPrefs((prev) => ({ ...prev, [key]: previous }))
+      appToast.error(
+        "Erro ao salvar preferência",
+        "Não foi possível salvar essa preferência. Tente novamente."
       )
-    } else {
-      const next = !notifPromos
-      setNotifPromos(next)
-      try {
-        localStorage.setItem("bt_notif_promos", String(next))
-      } catch {}
-      appToast.info(
-        next
-          ? "Notificações de promoções ativadas"
-          : "Notificações de promoções desativadas"
-      )
+    } finally {
+      setSavingNotifKey(null)
     }
   }
 
-  const handleCopyCoupon = (code: string) => {
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(code)
-    }
-    setCopiedCode(code)
-    appToast.success(`Cupom ${code} copiado!`)
-    setTimeout(() => setCopiedCode(null), 2500)
-  }
-
-  const handleConfirmSignOut = async () => {
+  const handleConfirmSignOut = async (forgetAccount = false) => {
     setIsLoggingOut(true)
     try {
-      await signOut()
+      await signOut({ forgetAccount })
       setLogoutModalOpen(false)
       router.push("/")
     } finally {
@@ -581,6 +667,9 @@ export default function PerfilPage() {
       setDeleteProtocol(
         data.protocol || `BT-${Math.floor(100000 + Math.random() * 900000)}`
       )
+      try {
+        await signOut({ forgetAccount: true })
+      } catch {}
     } catch (err: any) {
       setDeleteModalError(
         err?.message || "Erro ao solicitar exclusão. Tente novamente."
@@ -594,6 +683,17 @@ export default function PerfilPage() {
     setOpenAccordion(accordionKey)
     setActiveSubPanel((prev) => (prev === panelKey ? null : panelKey))
   }
+
+  const customAvatarUrl =
+    typeof user?.user_metadata?.avatar_url === "string" &&
+    user.user_metadata.avatar_url.trim().length > 0 &&
+    !user.user_metadata.avatar_url.toLowerCase().includes("dicebear.com")
+      ? user.user_metadata.avatar_url.trim()
+      : null
+
+  const profileCpfDigits = profileCpf.replace(/\D/g, "")
+  const profileCpfError =
+    cpfTouched && profileCpfDigits.length > 0 && !isValidCPF(profileCpfDigits)
 
   if (loading) {
     return <ProfileSkeleton />
@@ -660,34 +760,21 @@ export default function PerfilPage() {
                     }
                     items={[
                       {
-                        label: "Notificações do navegador",
+                        label: "Notificações",
                         isExpandedContent: activeSubPanel === "guest-notif",
                         onPress: () => toggleSubPanel("guest-config", "guest-notif"),
                         customContent: (
                           <div className="p-3.5 rounded-xl bg-[#F7F5F0] border border-[#ECE7E0] space-y-2.5 text-xs">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="font-semibold text-[#1A1A1A]">
-                                  Ofertas e Promoções do Dia
-                                </p>
-                                <p className="text-[#717171]">
-                                  Receba avisos de cupons relâmpago neste navegador
-                                </p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => handleToggleNotification("promos")}
-                                className={`h-6 w-11 rounded-full transition-colors p-0.5 cursor-pointer ${
-                                  notifPromos ? "bg-[#22C55E]" : "bg-[#E5E7EB]"
-                                }`}
-                              >
-                                <span
-                                  className={`block h-5 w-5 rounded-full bg-white shadow-xs transition-transform ${
-                                    notifPromos ? "translate-x-5" : "translate-x-0"
-                                  }`}
-                                />
-                              </button>
-                            </div>
+                            <p className="text-[#717171]">
+                              Entre na sua conta para gerenciar suas preferências de notificações de pedidos e promoções.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => router.push("/login")}
+                              className="px-3.5 py-2 rounded-lg bg-[#E3A008] hover:bg-[#CA8A04] text-white font-semibold text-xs active:scale-[0.98] transition-all cursor-pointer"
+                            >
+                              Entrar na conta
+                            </button>
                           </div>
                         ),
                       },
@@ -752,11 +839,14 @@ export default function PerfilPage() {
                 {/* 1. Cabeçalho de Perfil */}
                 <div className="flex items-start sm:items-center gap-4 p-4 rounded-2xl bg-[#F3F0EB] md:bg-white border border-[#ECE7E0] mb-6">
                   <div className="h-16 w-16 rounded-full border-2 border-[#E3A008]/40 bg-[#FEF8EC] flex items-center justify-center text-[#A16207] font-bold text-lg overflow-hidden shrink-0 shadow-xs">
-                    {user.user_metadata?.avatar_url ? (
+                    {customAvatarUrl ? (
                       <img
-                        src={user.user_metadata.avatar_url}
+                        src={customAvatarUrl}
                         alt={profileName}
                         className="h-full w-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none"
+                        }}
                       />
                     ) : (
                       <span>{getInitials(profileName || user.email)}</span>
@@ -819,6 +909,36 @@ export default function PerfilPage() {
                       Gerencie suas formas de pagamento
                     </div>
                   </button>
+                </div>
+
+                {/* Atalho Notificações (Fiel ao App Mobile) */}
+                <div className={isAdmin ? "mb-4 border-b border-[#ECE7E0]" : "border-b border-[#ECE7E0]"}>
+                  <Link
+                    href="/notificacoes"
+                    className="w-full flex items-center justify-between py-4 px-1 text-left active:scale-[0.98] transition-transform group"
+                  >
+                    <div className="flex items-center gap-3.5 min-w-0 flex-1 pr-3">
+                      <div className="w-6 flex items-center justify-center text-[#717171] shrink-0">
+                        <Bell className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[15px] font-medium text-[#1A1A1A] truncate">
+                          Notificações
+                        </p>
+                        <p className="text-xs text-[#717171] truncate mt-0.5">
+                          Avisos, promoções e atualizações
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {unreadCount > 0 && (
+                        <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-[#C1440E] text-white text-[11px] font-bold inline-flex items-center justify-center leading-none">
+                          {unreadCount > 9 ? "9+" : unreadCount}
+                        </span>
+                      )}
+                      <ChevronRight className="h-4 w-4 text-[#717171] group-hover:translate-x-0.5 transition-transform shrink-0" />
+                    </div>
+                  </Link>
                 </div>
 
                 {/* Atalho Painel Admin (Apenas Administradores) */}
@@ -1034,6 +1154,16 @@ export default function PerfilPage() {
                                       className="h-9 rounded-lg border-[#E5E7EB] text-xs"
                                     />
                                   </div>
+                                  <div className="col-span-2">
+                                    <Label className="text-xs font-semibold text-[#717171]">
+                                      Cidade / UF (área de entrega: Iacanga/SP)
+                                    </Label>
+                                    <Input
+                                      value={`${newAddress.city || "Iacanga"} / ${newAddress.state || "SP"}`}
+                                      disabled
+                                      className="h-9 rounded-lg border-[#E5E7EB] bg-[#F7F5F0] text-xs text-[#717171]"
+                                    />
+                                  </div>
                                 </div>
                                 <div className="flex gap-2 pt-1">
                                   <button
@@ -1083,9 +1213,13 @@ export default function PerfilPage() {
                                     Telefone / WhatsApp
                                   </label>
                                   <input
-                                    type="text"
+                                    type="tel"
+                                    inputMode="tel"
+                                    maxLength={15}
                                     value={profilePhone}
-                                    onChange={(e) => setProfilePhone(e.target.value)}
+                                    onChange={(e) =>
+                                      setProfilePhone(formatPhone(e.target.value))
+                                    }
                                     placeholder="(14) 99999-9999"
                                     className="w-full px-3 py-2 rounded-lg border border-[#E5E7EB] bg-white text-xs sm:text-sm text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-[#E3A008]"
                                   />
@@ -1096,11 +1230,25 @@ export default function PerfilPage() {
                                   </label>
                                   <input
                                     type="text"
+                                    inputMode="numeric"
+                                    maxLength={14}
                                     value={profileCpf}
-                                    onChange={(e) => setProfileCpf(e.target.value)}
+                                    onChange={(e) =>
+                                      setProfileCpf(formatCPF(e.target.value))
+                                    }
+                                    onBlur={() => setCpfTouched(true)}
                                     placeholder="000.000.000-00"
-                                    className="w-full px-3 py-2 rounded-lg border border-[#E5E7EB] bg-white text-xs sm:text-sm text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-[#E3A008]"
+                                    className={`w-full px-3 py-2 rounded-lg border bg-white text-xs sm:text-sm text-[#1A1A1A] focus:outline-none focus:ring-2 ${
+                                      profileCpfError
+                                        ? "border-[#E63535] focus:ring-[#E63535]"
+                                        : "border-[#E5E7EB] focus:ring-[#E3A008]"
+                                    }`}
                                   />
+                                  {profileCpfError && (
+                                    <p className="mt-1 text-[11px] font-semibold text-[#E63535]">
+                                      Insira um número de CPF válido.
+                                    </p>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -1157,53 +1305,106 @@ export default function PerfilPage() {
                         isExpandedContent: activeSubPanel === "notificacoes",
                         onPress: () => toggleSubPanel("seguranca", "notificacoes"),
                         customContent: (
-                          <div className="p-3.5 rounded-xl bg-[#F7F5F0] border border-[#ECE7E0] space-y-3 text-xs">
-                            <div className="flex items-center justify-between">
+                          <div className="p-4 rounded-xl bg-[#F7F5F0] border border-[#ECE7E0] space-y-4 text-xs">
+                            {/* Bloco 1: Comunicações de pedidos */}
+                            <div className="space-y-2.5">
                               <div>
-                                <p className="font-semibold text-[#1A1A1A]">
-                                  Atualizações de Pedidos
+                                <p className="text-sm font-bold text-[#1A1A1A]">
+                                  Comunicações de pedidos
                                 </p>
-                                <p className="text-[#717171]">
-                                  Avisos sobre preparo e saída para entrega
+                                <p className="text-[#717171] mt-0.5 leading-relaxed">
+                                  Notificações sobre os pedidos são importantes para acompanhar as etapas do seu pedido
                                 </p>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => handleToggleNotification("orders")}
-                                className={`h-6 w-11 rounded-full transition-colors p-0.5 cursor-pointer ${
-                                  notifOrders ? "bg-[#22C55E]" : "bg-[#E5E7EB]"
-                                }`}
-                              >
-                                <span
-                                  className={`block h-5 w-5 rounded-full bg-white shadow-xs transition-transform ${
-                                    notifOrders ? "translate-x-5" : "translate-x-0"
+                              <div className="flex items-center justify-between pt-1">
+                                <span className="font-medium text-sm text-[#1A1A1A]">
+                                  Notificações
+                                </span>
+                                <button
+                                  type="button"
+                                  role="switch"
+                                  aria-checked={notifPrefs.notify_orders_push}
+                                  disabled={savingNotifKey === "notify_orders_push"}
+                                  onClick={() =>
+                                    handleToggleNotification("notify_orders_push")
+                                  }
+                                  className={`h-6 w-11 rounded-full transition-colors p-0.5 cursor-pointer disabled:opacity-60 ${
+                                    notifPrefs.notify_orders_push
+                                      ? "bg-[#E3A008]"
+                                      : "bg-[#E5E7EB]"
                                   }`}
-                                />
-                              </button>
+                                >
+                                  <span
+                                    className={`block h-5 w-5 rounded-full bg-white shadow-xs transition-transform ${
+                                      notifPrefs.notify_orders_push
+                                        ? "translate-x-5"
+                                        : "translate-x-0"
+                                    }`}
+                                  />
+                                </button>
+                              </div>
                             </div>
 
-                            <div className="border-t border-[#ECE7E0] pt-2.5 flex items-center justify-between">
+                            {/* Bloco 2: Comunicação de promoções */}
+                            <div className="border-t border-[#ECE7E0] pt-3.5 space-y-3">
                               <div>
-                                <p className="font-semibold text-[#1A1A1A]">
-                                  Cupons e Promoções
+                                <p className="text-sm font-bold text-[#1A1A1A]">
+                                  Comunicação de promoções
                                 </p>
-                                <p className="text-[#717171]">
-                                  Descontos exclusivos e novidades do cardápio
+                                <p className="text-[#717171] mt-0.5 leading-relaxed">
+                                  Mantenha ativado para receber novidades e promoções do Batata Top. Caso desative, em até 24 horas você deixará de recebê-las
                                 </p>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => handleToggleNotification("promos")}
-                                className={`h-6 w-11 rounded-full transition-colors p-0.5 cursor-pointer ${
-                                  notifPromos ? "bg-[#22C55E]" : "bg-[#E5E7EB]"
-                                }`}
-                              >
-                                <span
-                                  className={`block h-5 w-5 rounded-full bg-white shadow-xs transition-transform ${
-                                    notifPromos ? "translate-x-5" : "translate-x-0"
-                                  }`}
-                                />
-                              </button>
+
+                              {(
+                                [
+                                  {
+                                    key: "notify_promo_push",
+                                    label: "Notificações",
+                                  },
+                                  {
+                                    key: "notify_promo_email",
+                                    label: "E-mail",
+                                  },
+                                  {
+                                    key: "notify_promo_whatsapp",
+                                    label: "WhatsApp",
+                                  },
+                                  {
+                                    key: "notify_promo_sms",
+                                    label: "SMS",
+                                  },
+                                ] as const
+                              ).map(({ key, label }) => (
+                                <div
+                                  key={key}
+                                  className="flex items-center justify-between py-0.5"
+                                >
+                                  <span className="font-medium text-sm text-[#1A1A1A]">
+                                    {label}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={notifPrefs[key]}
+                                    disabled={savingNotifKey === key}
+                                    onClick={() => handleToggleNotification(key)}
+                                    className={`h-6 w-11 rounded-full transition-colors p-0.5 cursor-pointer disabled:opacity-60 ${
+                                      notifPrefs[key]
+                                        ? "bg-[#E3A008]"
+                                        : "bg-[#E5E7EB]"
+                                    }`}
+                                  >
+                                    <span
+                                      className={`block h-5 w-5 rounded-full bg-white shadow-xs transition-transform ${
+                                        notifPrefs[key]
+                                          ? "translate-x-5"
+                                          : "translate-x-0"
+                                      }`}
+                                    />
+                                  </button>
+                                </div>
+                              ))}
                             </div>
                           </div>
                         ),
@@ -1298,42 +1499,44 @@ export default function PerfilPage() {
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
           <div className="bg-white rounded-2xl border border-[#ECE7E0] max-w-sm w-full p-6 shadow-xl space-y-4">
             <div className="flex items-center justify-between">
-              <div className="h-10 w-10 rounded-full bg-red-50 text-[#E63535] flex items-center justify-center">
+              <div className="h-10 w-10 rounded-full bg-[#FEF8EC] text-[#C1440E] flex items-center justify-center">
                 <LogOut className="h-5 w-5" />
               </div>
               <button
                 type="button"
+                disabled={isLoggingOut}
                 onClick={() => setLogoutModalOpen(false)}
-                className="h-8 w-8 rounded-full hover:bg-[#F7F5F0] flex items-center justify-center text-[#717171] cursor-pointer"
+                className="h-8 w-8 rounded-full hover:bg-[#F7F5F0] flex items-center justify-center text-[#717171] cursor-pointer disabled:opacity-50"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div>
-              <h2 className="text-lg font-bold text-[#1A1A1A]">
-                Deseja sair da sua conta?
+            <div className="text-center space-y-1.5">
+              <h2 className="text-lg font-extrabold text-[#1A1A1A] leading-snug">
+                Quer que sua conta seja lembrada no próximo acesso?
               </h2>
-              <p className="text-xs sm:text-sm text-[#717171] mt-1">
-                Você precisará fazer login novamente para acessar seus endereços salvos e acompanhar pedidos.
+              <p className="text-xs sm:text-sm text-[#717171] leading-relaxed">
+                Quando você entrar novamente por este aparelho, a conta (junto com informações sobre pedidos e pagamentos) será lembrada.
               </p>
             </div>
 
-            <div className="flex gap-2.5 pt-2">
+            <div className="flex flex-col gap-2.5 pt-2">
               <button
                 type="button"
-                onClick={() => setLogoutModalOpen(false)}
-                className="flex-1 py-2.5 px-4 rounded-xl border border-[#ECE7E0] text-xs sm:text-sm font-semibold text-[#1A1A1A] hover:bg-[#F7F5F0] active:scale-[0.98] transition-all cursor-pointer"
+                disabled={isLoggingOut}
+                onClick={() => handleConfirmSignOut(false)}
+                className="w-full py-3 px-4 rounded-xl bg-[#E3A008] hover:bg-[#CA8A04] text-[#1A1A1A] text-sm font-extrabold active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
               >
-                Cancelar
+                {isLoggingOut ? "Saindo..." : "Sim, lembrar minha conta"}
               </button>
               <button
                 type="button"
                 disabled={isLoggingOut}
-                onClick={handleConfirmSignOut}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-[#E63535] hover:bg-[#C1440E] text-white text-xs sm:text-sm font-semibold active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
+                onClick={() => handleConfirmSignOut(true)}
+                className="w-full py-3 px-4 rounded-xl bg-white border-[1.5px] border-[#E3A008] hover:bg-[#FEF8EC] text-[#1A1A1A] text-sm font-bold active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
               >
-                {isLoggingOut ? "Saindo..." : "Sair agora"}
+                Não, esquecer minha conta
               </button>
             </div>
           </div>
@@ -1463,7 +1666,7 @@ export default function PerfilPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={handleConfirmSignOut}
+                  onClick={() => handleConfirmSignOut(true)}
                   className="w-full py-2.5 px-4 rounded-xl bg-[#1A1A1A] text-white font-semibold text-xs cursor-pointer"
                 >
                   Encerrar sessão e voltar ao início

@@ -17,6 +17,11 @@ import {
   Loader2,
 } from "lucide-react"
 import { useLoyalty } from "@/hooks/use-loyalty"
+import { useAuth } from "@/lib/auth-context"
+import { useCart } from "@/lib/cart-context"
+import { loyaltyManager } from "@/lib/loyalty-manager"
+import { triggerPixConfettiCannons } from "@/lib/pix-confetti"
+import { appToast } from "@/lib/app-toast"
 
 export interface CustomerReview {
   id: string
@@ -45,17 +50,87 @@ export function RestaurantHeaderCard({
   totalOrders = 0,
   onOpenReviews,
 }: RestaurantHeaderCardProps) {
+  const { user, openAuthModal } = useAuth()
+  const cart = useCart()
   const {
     ordersCount,
     targetOrders,
     remainingOrders,
     hasRewardAvailable,
-    isRedeeming,
-    redeemReward,
+    isRedeeming: isHookRedeeming,
   } = useLoyalty()
 
   const [showReviewsModal, setShowReviewsModal] = useState(false)
   const [showRewardModal, setShowRewardModal] = useState(false)
+  const [isRedeemingReward, setIsRedeemingReward] = useState(false)
+  const isRedeeming = isRedeemingReward || isHookRedeeming
+
+  const handleOpenRewardModal = () => {
+    if (!user?.id) {
+      appToast.info(
+        "Faça login para resgatar",
+        "Entre na sua conta para resgatar sua batata grátis do Programa de Fidelidade."
+      )
+      openAuthModal()
+      return
+    }
+    setShowRewardModal(true)
+  }
+
+  const handleRedeemReward = async () => {
+    if (!user?.id) {
+      setShowRewardModal(false)
+      appToast.info(
+        "Faça login para resgatar",
+        "Entre na sua conta para resgatar sua batata grátis do Programa de Fidelidade."
+      )
+      openAuthModal()
+      return
+    }
+
+    setIsRedeemingReward(true)
+    try {
+      const { couponCode } = await loyaltyManager.redeemReward(user.id)
+
+      triggerPixConfettiCannons()
+
+      if (cart?.setCoupon) {
+        cart.setCoupon({
+          code: couponCode,
+          title: "Batata Grátis Fidelidade 🥔",
+          description: "100% de desconto na sua batata pelo Programa de Fidelidade!",
+          discount: 100,
+          discountValue: 100,
+          discount_value: 100,
+          type: "percentage",
+          discountType: "percentage",
+          discount_type: "percentage",
+          minOrderValue: 0,
+          min_order_value: 0,
+          restrictedCategories: ["batata"],
+          restricted_categories: ["batata"],
+          badgeLabel: "100% OFF",
+        })
+      }
+
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(couponCode).catch(() => {})
+      }
+
+      appToast.success(
+        "🎉 Batata Grátis Resgatada!",
+        `Cupom ${couponCode} aplicado na sua sacola e copiado. Escolha sua batata favorita!`
+      )
+      setShowRewardModal(false)
+    } catch (err: any) {
+      appToast.error(
+        "Erro no resgate",
+        err?.message || "Não foi possível resgatar sua batata grátis. Tente novamente."
+      )
+    } finally {
+      setIsRedeemingReward(false)
+    }
+  }
 
   // Dados reais sincronizados com o Supabase
   const [realOrdersCount, setRealOrdersCount] = useState<number>(totalOrders)
@@ -251,7 +326,7 @@ export function RestaurantHeaderCard({
 
               <button
                 type="button"
-                onClick={() => setShowRewardModal(true)}
+                onClick={handleOpenRewardModal}
                 disabled={isRedeeming}
                 className="w-full sm:w-auto shrink-0 bg-gradient-to-r from-[#C1440E] to-[#E3A008] hover:from-[#A83709] hover:to-[#C98A00] text-white font-bold text-xs sm:text-sm px-4 py-2 sm:py-2.5 rounded-xl shadow-md hover:shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 animate-pulse"
               >
@@ -327,10 +402,7 @@ export function RestaurantHeaderCard({
 
             <button
               type="button"
-              onClick={async () => {
-                await redeemReward()
-                setShowRewardModal(false)
-              }}
+              onClick={handleRedeemReward}
               disabled={isRedeeming}
               className="w-full py-3 bg-[#E3A008] hover:bg-[#C1440E] text-white font-extrabold text-sm rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"
             >

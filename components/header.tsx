@@ -11,9 +11,11 @@ import {
   Home,
   UtensilsCrossed,
   Package,
+  Bell,
 } from "lucide-react"
 import { useCart } from "@/lib/cart-context"
 import { useAuth } from "@/lib/auth-context"
+import { useUnreadNotifications } from "@/hooks/use-unread-notifications"
 import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import Image from "next/image"
@@ -48,6 +50,7 @@ export function Header({ variant = "default" }: HeaderProps) {
   const searchParams = useSearchParams()
   const { items } = useCart()
   const { user, loading: authLoading, openAuthModal } = useAuth()
+  const { unreadCount } = useUnreadNotifications(user?.id)
 
   const [mounted, setMounted] = useState(false)
   const [timeGreeting, setTimeGreeting] = useState("Olá")
@@ -397,6 +400,26 @@ export function Header({ variant = "default" }: HeaderProps) {
                 </Link>
               )}
             </nav>
+
+            {user && (
+              <Link
+                href="/notificacoes"
+                aria-label="Notificações"
+                aria-current={isActive("/notificacoes") ? "page" : undefined}
+                className={`w-10 h-10 rounded-full flex items-center justify-center relative active:scale-[0.98] transition-colors flex-shrink-0 ${
+                  isActive("/notificacoes")
+                    ? "bg-[#FEF8EC] text-[#C1440E] ring-1 ring-[#E3A008]/40"
+                    : "bg-[#F3F0EB] hover:bg-[#ECE7E0] text-[#1A1A1A]"
+                }`}
+              >
+                <Bell className="h-5 w-5" />
+                {unreadCount > 0 && (
+                  <span className="bg-[#C1440E] text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 rounded-full border-2 border-white absolute -top-1 -right-1 flex items-center justify-center leading-none">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </Link>
+            )}
 
             <Link
               href="/checkout"

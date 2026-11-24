@@ -32,7 +32,7 @@ const CATEGORIES = [
     id: "cupons",
     name: "Cupons",
     iconSrc: "/assets/icones3d/icone cupom.png",
-    href: "#cupons",
+    href: "/cupons",
   },
   {
     id: "todos",
@@ -151,7 +151,7 @@ export function CategoryBar() {
             className="flex items-center justify-start md:justify-center gap-2.5 overflow-x-auto no-scrollbar py-1.5 px-1 mx-auto"
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
-            {["todos", "cardapio", "batata", "macarrao", "bebida"]
+            {["todos", "cardapio", "batata", "macarrao", "bebida", "cupons"]
               .map((id) => CATEGORIES.find((c) => c.id === id)!)
               .map((cat) => {
                 const isActive = activeId === cat.id

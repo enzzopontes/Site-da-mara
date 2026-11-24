@@ -7,7 +7,7 @@ import Link from "next/link"
 import { ShoppingBag, ArrowLeft, Loader2, AlertCircle } from "lucide-react"
 import { appToast } from "@/lib/app-toast"
 
-import { useCart } from "@/lib/cart-context"
+import { useCart, type CartItem } from "@/lib/cart-context"
 import { useAuth } from "@/lib/auth-context"
 import { couponsManager, type Coupon } from "@/lib/cupons-manager"
 import { evaluateCoupon, resolveCouponForCheckout } from "@/lib/coupon-rules"
@@ -24,16 +24,114 @@ import { CartFooter } from "@/components/checkout/cart-footer"
 import { MinOrderSheet } from "@/components/checkout/min-order-sheet"
 import { StepItens } from "@/components/checkout/step-itens"
 import { StepEntrega } from "@/components/checkout/step-entrega"
-import { StepPagamento } from "@/components/checkout/step-pagamento"
+import { StepPagamento, type InstallmentOption } from "@/components/checkout/step-pagamento"
 import { CheckoutSkeleton } from "@/components/skeletons/checkout-skeleton"
 import { AddressModal } from "@/components/address-modal"
+import { AddToCartDialog } from "@/components/add-to-cart-dialog"
 
 const MIN_ORDER_VALUE = 20.0
+
+const ERROR_MESSAGES: Record<string, string> = {
+  unauthorized: "Você precisa estar logado para fazer um pedido.",
+  invalid_customer_name: "Por favor, informe seu nome.",
+  invalid_customer_phone: "Telefone inválido para contato.",
+  invalid_delivery_type: "Tipo de entrega inválido.",
+  invalid_payment_method: "Forma de pagamento inválida.",
+  online_requires_pix_or_card: "Pagamento online requer PIX ou Cartão.",
+  store_is_closed: "A loja está fechada no momento.",
+  delivery_disabled: "O serviço de entrega está temporariamente indisponível.",
+  too_many_awaiting_orders:
+    "Você já possui 3 pedidos aguardando pagamento. Conclua ou aguarde o cancelamento.",
+  rate_limit_exceeded:
+    "Muitos pedidos em pouco tempo. Aguarde alguns minutos antes de tentar novamente.",
+  invalid_items: "Os itens do pedido são inválidos.",
+  invalid_product_id: "Produto selecionado inválido.",
+  invalid_item_quantity: "Quantidade de item inválida (deve ser entre 1 e 99).",
+  product_not_found: "Um dos produtos não foi encontrado em nosso cardápio.",
+  product_unavailable: "Um dos produtos escolhidos está indisponível no momento.",
+  addon_not_found: "Adicional não encontrado.",
+  addon_unavailable: "Um dos adicionais escolhidos está indisponível.",
+  invalid_addon_quantity: "Quantidade de adicional inválida.",
+  invalid_addon_id: "Identificador de adicional inválido.",
+  too_many_addons: "Limite de adicionais excedido.",
+  coupon_not_found: "Cupom de desconto não encontrado.",
+  coupon_inactive: "Este cupom não está ativo.",
+  coupon_expired: "Este cupom já expirou.",
+  coupon_max_uses_reached: "Este cupom atingiu o limite máximo de utilizações.",
+  coupon_min_order_value_not_met:
+    "O valor mínimo do pedido para este cupom não foi atingido.",
+  coupon_user_limit_reached: "Você já atingiu o limite de usos para este cupom.",
+  coupon_not_applicable: "Este cupom não é aplicável a este pedido.",
+  min_order_value_not_met:
+    "O pedido mínimo é de R$ 20,00 (sem considerar taxa de entrega).",
+  coupon_blocked_by_active_promo:
+    "Cupons não podem ser combinados com promoções ativas no momento.",
+  coupon_first_order_only: "Este cupom é válido apenas para o seu primeiro pedido.",
+  address_too_long: "Endereço muito longo.",
+  notes_too_long: "Observação do pedido muito longa (máximo 500 caracteres).",
+  pasta_type_too_long: "Tipo de massa inválido.",
+  item_notes_too_long: "Observação do item muito longa.",
+  coupon_type_unsupported: "Tipo de cupom não suportado.",
+  online_total_must_be_positive:
+    "O valor total para pagamento online deve ser maior que zero.",
+}
+
+function isValidPhone(phone: string): boolean {
+  let digits = (phone || "").replace(/\D/g, "")
+  if (digits.startsWith("55") && digits.length > 11) {
+    digits = digits.slice(2)
+  }
+  if (digits.length !== 10 && digits.length !== 11) return false
+  const ddd = parseInt(digits.slice(0, 2), 10)
+  if (ddd < 11 || ddd > 99) return false
+  if (digits.length === 11 && digits[2] !== "9") return false
+  if (/^(\d)\1+$/.test(digits)) return false
+  return true
+}
+
+function formatPhone(value: string): string {
+  let digits = (value || "").replace(/\D/g, "")
+  if (digits.startsWith("55") && digits.length > 11) {
+    digits = digits.slice(2)
+  }
+  digits = digits.slice(0, 11)
+  if (digits.length === 0) return ""
+  if (digits.length <= 2) return `(${digits}`
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`
+  if (digits.length <= 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`
+  }
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`
+}
+
+function getCardRejectionMessage(statusDetail?: string): string {
+  switch (statusDetail) {
+    case "cc_rejected_insufficient_amount":
+      return "Saldo insuficiente"
+    case "cc_rejected_bad_filled_security_code":
+      return "Código de segurança (CVV) inválido"
+    case "cc_rejected_bad_filled_date":
+      return "Cartão vencido ou data inválida"
+    case "cc_rejected_bad_filled_card_number":
+    case "cc_rejected_bad_filled_other":
+      return "Dados do cartão incorretos"
+    case "cc_rejected_call_for_authorize":
+      return "Autorize a transação junto ao seu banco"
+    case "cc_rejected_card_disabled":
+      return "Cartão desabilitado"
+    case "cc_rejected_duplicated_payment":
+      return "Pagamento duplicado recentemente"
+    case "cc_rejected_max_attempts":
+      return "Limite de tentativas excedido"
+    default:
+      return "Pagamento recusado pela operadora do cartão"
+  }
+}
 
 export default function CheckoutPage() {
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
-  const { items, getTotalPrice, updateQuantity, removeItem, addItem, clearCart, coupon: cartCoupon, setCoupon: setCartCoupon } = useCart()
+  const { items, getTotalPrice, updateQuantity, updateItem, removeItem, addItem, clearCart, coupon: cartCoupon, setCoupon: setCartCoupon } = useCart()
 
   // Controle de etapas do fluxo (Padrão iFood: itens -> entrega -> pagamento)
   const [step, setStep] = useState<CheckoutStep>("itens")
@@ -42,7 +140,9 @@ export default function CheckoutPage() {
   const [storeStatus, setStoreStatus] = useState<StoreStatus | null>(null)
   const [isStoreOpen, setIsStoreOpen] = useState(true)
   const [isDeliveryEnabled, setIsDeliveryEnabled] = useState(true)
+  const [isDeliveryFeeEnabled, setIsDeliveryFeeEnabled] = useState(true)
   const [deliveryFee, setDeliveryFee] = useState(3.0)
+  const [isPromoActive, setIsPromoActive] = useState(false)
 
   // Endereços do cliente
   const [addresses, setAddresses] = useState<Address[]>([])
@@ -54,6 +154,7 @@ export default function CheckoutPage() {
   // Dados de contato
   const [nome, setNome] = useState("")
   const [telefone, setTelefone] = useState("")
+  const savedProfilePhoneRef = useRef<string>("")
 
   // Formulário de novo endereço
   const [rua, setRua] = useState("")
@@ -61,6 +162,10 @@ export default function CheckoutPage() {
   const [complemento, setComplemento] = useState("")
   const [bairro, setBairro] = useState("")
   const [cep, setCep] = useState("")
+  const [newAddressCoords, setNewAddressCoords] = useState<{ lat: number | null; lng: number | null }>({
+    lat: null,
+    lng: null,
+  })
   const [enderecoError, setEnderecoError] = useState("")
   const [buscandoCep, setBuscandoCep] = useState(false)
 
@@ -78,6 +183,8 @@ export default function CheckoutPage() {
   const [savedCardCvv, setSavedCardCvv] = useState("")
   const [cardCpf, setCardCpf] = useState("")
   const [installments, setInstallments] = useState(1)
+  const [installmentOptions, setInstallmentOptions] = useState<InstallmentOption[]>([])
+  const [loadingInstallments, setLoadingInstallments] = useState(false)
   const { cards: savedCards, loadCards, addCard, savingCard } = usePaymentCards()
   const [troco, setTroco] = useState("")
   const [precisaTalheres, setPrecisaTalheres] = useState<"sim" | "nao" | "">("")
@@ -95,6 +202,9 @@ export default function CheckoutPage() {
   // Modal de Pedido Mínimo
   const [showMinOrderSheet, setShowMinOrderSheet] = useState(false)
 
+  // Modal de edição de item da sacola
+  const [editingCartItem, setEditingCartItem] = useState<{ index: number; item: CartItem } | null>(null)
+
   // Estados de submissão e carregamento
   const [isLoadingData, setIsLoadingData] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -107,6 +217,32 @@ export default function CheckoutPage() {
     pendingOrderTotalRef.current = null
   }, [items, formaPagamento, appliedCoupon, deliveryType])
 
+  const applyStoreSettings = useCallback((val: any) => {
+    if (!val) return
+    setStoreStatus(val)
+    if (typeof val.isOpen === "boolean") {
+      setIsStoreOpen(val.isOpen)
+    }
+    if (typeof val.isDeliveryEnabled === "boolean") {
+      setIsDeliveryEnabled(val.isDeliveryEnabled)
+      if (!val.isDeliveryEnabled) {
+        setDeliveryType("pickup")
+      }
+    }
+    if (val.isDeliveryFeeEnabled === true) {
+      setIsDeliveryFeeEnabled(true)
+      const parsedFee = Number(val.deliveryFee)
+      setDeliveryFee(Number.isFinite(parsedFee) && parsedFee >= 0 ? parsedFee : 3.0)
+    } else if (val.isDeliveryFeeEnabled === false) {
+      setIsDeliveryFeeEnabled(false)
+      setDeliveryFee(0)
+    }
+    const promoOn = Boolean(
+      val.itemPromo?.isActive || val.superPromo?.isActive || val.isPromoActive
+    )
+    setIsPromoActive(promoOn)
+  }, [])
+
   // ─── 1. Carregamento inicial de status da loja, usuário e produtos ─────────────
   useEffect(() => {
     async function init() {
@@ -114,27 +250,14 @@ export default function CheckoutPage() {
       try {
         // Status da Loja
         const status = await storeStatusManager.getStatus()
-        setStoreStatus(status)
-        setIsStoreOpen(status.isOpen ?? true)
-        const delivEnabled = status.isDeliveryEnabled ?? true
-        setIsDeliveryEnabled(delivEnabled)
-        if (!delivEnabled) {
-          setDeliveryType("pickup")
-        }
-        if (status.isDeliveryFeeEnabled) {
-          const parsedFee = Number(status.deliveryFee)
-          setDeliveryFee(Number.isFinite(parsedFee) && parsedFee >= 0 ? parsedFee : 3.0)
-        } else {
-          setDeliveryFee(0)
-        }
+        applyStoreSettings(status)
 
         const supabase = getSupabaseBrowserClient()
 
         // Dados do Usuário e Endereços
         if (user) {
           setNome(user.user_metadata?.full_name || "")
-          const rawPhone = user.user_metadata?.phone || ""
-          if (rawPhone) handleTelefoneChange(rawPhone)
+          let userPhone = (user.phone || user.user_metadata?.phone || "").trim()
 
           const userAddrs = await addressesManager.getUserAddresses(user.id)
           setAddresses(userAddrs)
@@ -150,18 +273,28 @@ export default function CheckoutPage() {
           }
 
           loadCards()
-          const supabase = getSupabaseBrowserClient()
           try {
             const { data: profile } = await supabase
               .from("profiles")
-              .select("cpf")
+              .select("cpf, phone")
               .eq("id", user.id)
               .maybeSingle()
             if (profile?.cpf) {
               setCardCpf(profile.cpf)
             }
+            if (profile?.phone) {
+              const cleanProfilePhone = profile.phone.replace(/\D/g, "").replace(/^55/, "")
+              savedProfilePhoneRef.current = cleanProfilePhone
+              if (!userPhone) {
+                userPhone = profile.phone.trim()
+              }
+            }
           } catch {
             // Silêncio
+          }
+
+          if (userPhone) {
+            setTelefone(formatPhone(userPhone) || userPhone)
           }
         }
 
@@ -186,7 +319,38 @@ export default function CheckoutPage() {
       }
     }
     init()
-  }, [user])
+  }, [user, applyStoreSettings])
+
+  // Assina atualizações em tempo real de store_settings (loja aberta, taxa de entrega e promoção ativa)
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient()
+    const channel = supabase
+      .channel("store_settings_checkout_realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "store_settings",
+          filter: "setting_key=eq.store_status",
+        },
+        (payload: any) => {
+          const nextVal = payload?.new?.setting_value
+          if (nextVal) {
+            const computedVal = { ...nextVal }
+            if (computedVal.autoSchedule !== false && !computedVal.manualOverride) {
+              computedVal.isOpen = storeStatusManager.shouldBeOpenBySchedule(computedVal)
+            }
+            applyStoreSettings(computedVal)
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [applyStoreSettings])
 
   // Redireciona para login se não autenticado
   useEffect(() => {
@@ -225,11 +389,111 @@ export default function CheckoutPage() {
   // ─── Cálculos Financeiros ──────────────────────────────────────────────────
   const subtotal = getTotalPrice()
   // Base oficial do mínimo: subtotal bruto dos itens (sem frete, sem desconto).
-  // Cupom pendente (abaixo do mínimo) não gera desconto nem trava o pedido.
-  const discountAmount = evaluateCoupon(appliedCoupon, subtotal, items).discount
-  const currentDeliveryFee = deliveryType === "pickup" ? 0 : deliveryFee
-  const finalTotal = Math.max(0, subtotal - discountAmount + currentDeliveryFee)
+  // Cupom pendente (abaixo do mínimo) ou promoção ativa não gera desconto nem trava o pedido.
+  const discountAmount = isPromoActive ? 0 : evaluateCoupon(appliedCoupon, subtotal, items).discount
+  const currentDeliveryFee = deliveryType === "pickup" || !isDeliveryFeeEnabled ? 0 : deliveryFee
+  const baseTotal = Math.round((Math.max(0, subtotal - discountAmount) + currentDeliveryFee) * 100) / 100
+  const selectedInstallmentOption =
+    formaPagamento === "cartao_credito"
+      ? installmentOptions.find((opt) => opt.installments === installments) || null
+      : null
+  const finalTotal =
+    selectedInstallmentOption &&
+    selectedInstallmentOption.installments > 1 &&
+    formaPagamento === "cartao_credito"
+      ? Math.round(selectedInstallmentOption.totalAmount * 100) / 100
+      : baseTotal
   const totalItemCount = items.reduce((sum, item) => sum + item.quantity, 0)
+
+  // Carrega opções reais de parcelamento no Mercado Pago para cartão de crédito
+  const loadInstallments = useCallback(
+    async (overrideAmount?: number) => {
+      const targetAmount =
+        typeof overrideAmount === "number" && overrideAmount > 0 ? overrideAmount : baseTotal
+      if (formaPagamento !== "cartao_credito" || targetAmount <= 0) {
+        setInstallmentOptions([])
+        return
+      }
+
+      if (!selectedSavedCard?.id) {
+        setInstallmentOptions([
+          {
+            installments: 1,
+            installmentAmount: targetAmount,
+            totalAmount: targetAmount,
+          },
+        ])
+        return
+      }
+
+      setLoadingInstallments(true)
+      try {
+        const supabase = getSupabaseBrowserClient()
+        const { data: sessionRes } = await supabase.auth.getSession()
+        const token = sessionRes?.session?.access_token
+        if (!token) {
+          setInstallmentOptions([
+            {
+              installments: 1,
+              installmentAmount: targetAmount,
+              totalAmount: targetAmount,
+            },
+          ])
+          return
+        }
+
+        const res = await fetch("/api/mercadopago/installments", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            amount: targetAmount,
+            savedCardId: selectedSavedCard.id,
+          }),
+        })
+        const data = await res.json().catch(() => null)
+        if (res.ok && data?.success && Array.isArray(data.payerCosts) && data.payerCosts.length > 0) {
+          setInstallmentOptions(data.payerCosts)
+          setInstallments((prev) => {
+            const match = data.payerCosts.find((c: InstallmentOption) => c.installments === prev)
+            return match ? match.installments : data.payerCosts[0].installments
+          })
+        } else {
+          setInstallmentOptions([
+            {
+              installments: 1,
+              installmentAmount: targetAmount,
+              totalAmount: targetAmount,
+            },
+          ])
+          setInstallments(1)
+        }
+      } catch (err) {
+        console.error("[Checkout] Erro ao consultar parcelamento:", err)
+        setInstallmentOptions([
+          {
+            installments: 1,
+            installmentAmount: targetAmount,
+            totalAmount: targetAmount,
+          },
+        ])
+      } finally {
+        setLoadingInstallments(false)
+      }
+    },
+    [baseTotal, formaPagamento, selectedSavedCard?.id]
+  )
+
+  useEffect(() => {
+    if (formaPagamento !== "cartao_credito") {
+      setInstallments(1)
+      setInstallmentOptions([])
+      return
+    }
+    loadInstallments(pendingOrderTotalRef.current ?? undefined)
+  }, [formaPagamento, selectedSavedCard?.id, baseTotal, loadInstallments])
 
   const hasTrackedCheckoutRef = useRef(false)
   useEffect(() => {
@@ -245,14 +509,7 @@ export default function CheckoutPage() {
 
   // ─── Formatação de Máscaras ────────────────────────────────────────────────
   const handleTelefoneChange = (value: string) => {
-    const nums = value.replace(/\D/g, "")
-    if (nums.length <= 11) {
-      let formatted = ""
-      if (nums.length > 0) formatted = `(${nums.substring(0, 2)}`
-      if (nums.length > 2) formatted += `) ${nums.substring(2, 7)}`
-      if (nums.length > 7) formatted += `-${nums.substring(7, 11)}`
-      setTelefone(formatted)
-    }
+    setTelefone(formatPhone(value))
   }
 
   const handleCepChange = async (value: string) => {
@@ -335,10 +592,8 @@ export default function CheckoutPage() {
     } catch {}
   }
 
-  // Auto-aplica cupom vindo do banner da Home ou da sacola (sessão única)
+  // Sincroniza cupom vindo do banner da Home ou alterado/removido na sacola (StepItens -> CouponModal)
   useEffect(() => {
-    if (appliedCoupon) return
-
     let pendingCode: string | null = null
     if (cartCoupon?.code) {
       pendingCode = cartCoupon.code
@@ -352,8 +607,18 @@ export default function CheckoutPage() {
       } catch {}
     }
 
-    if (pendingCode && pendingCode.trim()) {
-      handleApplyCoupon(pendingCode.trim())
+    if (!pendingCode || !pendingCode.trim()) {
+      if (appliedCoupon) {
+        setAppliedCoupon(null)
+        setCouponCode("")
+        setCouponError("")
+      }
+      return
+    }
+
+    const cleanCode = pendingCode.trim()
+    if (!appliedCoupon || String(appliedCoupon.code || "").toUpperCase() !== cleanCode.toUpperCase()) {
+      handleApplyCoupon(cleanCode)
     }
   }, [cartCoupon, user])
 
@@ -417,12 +682,12 @@ export default function CheckoutPage() {
 
   // ─── Validações por Etapa ──────────────────────────────────────────────────
   const validateStep1 = (): boolean => {
-    if (items.length === 0) {
+    if (items.length === 0 || subtotal <= 0) {
       setErrorMessage("Sua sacola está vazia. Adicione itens antes de continuar.")
       return false
     }
-    // Trava de Pedido Mínimo de R$ 20,00
-    if (subtotal < MIN_ORDER_VALUE) {
+    // Trava de Pedido Mínimo de R$ 20,00 (apenas para entrega)
+    if (deliveryType === "delivery" && subtotal < MIN_ORDER_VALUE) {
       setShowMinOrderSheet(true)
       return false
     }
@@ -431,13 +696,16 @@ export default function CheckoutPage() {
   }
 
   const validateStep2 = (): boolean => {
+    if (deliveryType === "delivery" && subtotal < MIN_ORDER_VALUE) {
+      setShowMinOrderSheet(true)
+      return false
+    }
     if (!nome.trim() || nome.trim().length < 3) {
       setErrorMessage("Por favor, digite seu nome completo para identificação.")
       return false
     }
-    const phoneDigits = telefone.replace(/\D/g, "")
-    if (phoneDigits.length < 10) {
-      setErrorMessage("Informe um número de telefone com DDD válido para contato.")
+    if (!telefone.trim() || !isValidPhone(telefone)) {
+      setErrorMessage("Informe um número de WhatsApp válido com DDD (ex: 14 99999-9999).")
       return false
     }
 
@@ -528,7 +796,35 @@ export default function CheckoutPage() {
   }
 
   // ─── Finalização do Pedido (Supabase RPC create_order & Mercado Pago Pix) ───
+  const persistUserPhone = () => {
+    if (!user?.id || !telefone.trim()) return
+    const cleanDigits = telefone.replace(/\D/g, "").replace(/^55/, "")
+    const phoneToSave = cleanDigits || telefone.trim()
+    if (!phoneToSave || phoneToSave === savedProfilePhoneRef.current) return
+    savedProfilePhoneRef.current = phoneToSave
+    const sb = getSupabaseBrowserClient()
+    sb.from("profiles")
+      .upsert({ id: user.id, phone: phoneToSave }, { onConflict: "id" })
+      .then(
+        ({ error }: any) => {
+          if (error) console.warn("[Checkout] Falha ao atualizar telefone em profiles:", error)
+        },
+        (err: any) => console.warn("[Checkout] Erro profiles.upsert:", err)
+      )
+    sb.auth.updateUser({ data: { phone: phoneToSave } }).catch(() => {})
+  }
+
   const handleFinalizarPedido = async () => {
+    if (!isStoreOpen) {
+      const msg = ERROR_MESSAGES.store_is_closed
+      setErrorMessage(msg)
+      appToast.error("Loja fechada", msg)
+      return
+    }
+    if (deliveryType === "delivery" && subtotal < MIN_ORDER_VALUE) {
+      setShowMinOrderSheet(true)
+      return
+    }
     if (!validateStep1() || !validateStep2() || !validateStep3()) return
     if (isSubmitting) return
 
@@ -539,34 +835,43 @@ export default function CheckoutPage() {
       let enderecoFormatado = "Retirada no Local"
       let bairroFormatado = ""
       let complementoFormatado = ""
+      const selectedAddrObj =
+        deliveryType === "delivery" && !useNewAddress
+          ? addresses.find((a) => a.id === selectedAddressId) || null
+          : null
 
       if (deliveryType === "delivery") {
         if (useNewAddress) {
           enderecoFormatado = `${rua}, ${numero}${complemento ? " - " + complemento : ""} - ${bairro}, Iacanga/SP`
           bairroFormatado = bairro
           complementoFormatado = complemento
-        } else {
-          const addr = addresses.find((a) => a.id === selectedAddressId)
-          if (addr) {
-            enderecoFormatado = `${addr.street}, ${addr.number}${addr.complement ? " - " + addr.complement : ""} - ${addr.neighborhood}, ${addr.city || "Iacanga"}/${addr.state || "SP"}`
-            bairroFormatado = addr.neighborhood
-            complementoFormatado = addr.complement || ""
-          }
+        } else if (selectedAddrObj) {
+          enderecoFormatado = `${selectedAddrObj.street}, ${selectedAddrObj.number}${selectedAddrObj.complement ? " - " + selectedAddrObj.complement : ""} - ${selectedAddrObj.neighborhood}, ${selectedAddrObj.city || "Iacanga"}/${selectedAddrObj.state || "SP"}`
+          bairroFormatado = selectedAddrObj.neighborhood
+          complementoFormatado = selectedAddrObj.complement || ""
         }
       }
 
-      const isOnlineCard = formaPagamento === "cartao_credito" || formaPagamento === "cartao_debito"
-      const isOnlinePix = formaPagamento === "pix"
-      const isPaymentOnline = isOnlinePix || isOnlineCard
-      const mappedPaymentMethod =
-        formaPagamento === "pix"
-          ? "pix"
-          : formaPagamento === "dinheiro"
-          ? "dinheiro"
-          : "cartao"
+      // Cupom pendente (subtotal_itens < mínimo) ou promoção ativa é ignorado: pedido segue sem desconto.
+      const couponResolution = isPromoActive
+        ? { couponCode: null, discount: 0 }
+        : resolveCouponForCheckout(appliedCoupon, subtotal, items)
 
-      // Cupom pendente (subtotal_itens < mínimo) é ignorado: pedido segue sem desconto.
-      const couponResolution = resolveCouponForCheckout(appliedCoupon, subtotal, items)
+      const effectiveTotalBeforeMp = Math.max(0, subtotal - (couponResolution.discount || 0)) + currentDeliveryFee
+      const isZeroTotalOrder = effectiveTotalBeforeMp <= 0 && subtotal > 0
+
+      const isOnlineCard = !isZeroTotalOrder && (formaPagamento === "cartao_credito" || formaPagamento === "cartao_debito")
+      const isOnlinePix = !isZeroTotalOrder && formaPagamento === "pix"
+      const isPaymentOnline = isOnlinePix || isOnlineCard
+      const mappedPaymentMethod = isZeroTotalOrder
+        ? "dinheiro"
+        : formaPagamento === "pix"
+        ? "pix"
+        : formaPagamento === "dinheiro"
+        ? "dinheiro"
+        : "cartao"
+
+      const normalizedDeliveryType = deliveryType === "pickup" ? "retirada" : "delivery"
 
       const orderPayload = {
         customerName: nome.trim(),
@@ -579,9 +884,27 @@ export default function CheckoutPage() {
         couponCode: couponResolution.couponCode,
         wantsCutlery: precisaTalheres === "sim",
         notes: `${observacoes ? `${observacoes}\n` : ""}Precisa de colher: ${precisaTalheres === "sim" ? "SIM" : "NÃO"}${formaPagamento === "dinheiro" && troco ? `\nTroco para: R$ ${troco}` : ""}`,
-        deliveryType,
+        deliveryType: normalizedDeliveryType,
         metadata: {
           source: "site",
+          cep:
+            deliveryType === "delivery"
+              ? useNewAddress
+                ? cep.trim() || null
+                : selectedAddrObj?.cep || null
+              : null,
+          delivery_lat:
+            deliveryType === "delivery"
+              ? useNewAddress
+                ? newAddressCoords.lat
+                : selectedAddrObj?.latitude ?? null
+              : null,
+          delivery_lng:
+            deliveryType === "delivery"
+              ? useNewAddress
+                ? newAddressCoords.lng
+                : selectedAddrObj?.longitude ?? null
+              : null,
           troco: formaPagamento === "dinheiro" && troco ? troco : null,
           deliveryFee: currentDeliveryFee,
           card_type:
@@ -633,7 +956,7 @@ export default function CheckoutPage() {
 
       // Reutiliza o pedido pendente em caso de nova tentativa de pagamento online
       let orderId = pendingOrderIdRef.current
-      let authoritativeOrderTotal = pendingOrderTotalRef.current ?? finalTotal
+      let authoritativeOrderTotal = pendingOrderTotalRef.current ?? baseTotal
       if (!orderId) {
         const createdOrder = await ordersManager.createOrder(orderPayload)
         if (!createdOrder?.id) {
@@ -659,7 +982,7 @@ export default function CheckoutPage() {
               neighborhood: bairro.trim(),
               city: "Iacanga",
               state: "SP",
-              cep: cep.trim() || "17150-000",
+              cep: cep.trim() || "17180-000",
               is_default: addresses.length === 0,
             }).catch(() => {})
           } else {
@@ -673,7 +996,7 @@ export default function CheckoutPage() {
                 neighborhood: bairro.trim(),
                 city: "Iacanga",
                 state: "SP",
-                cep: cep.trim() || "17150-000",
+                cep: cep.trim() || "17180-000",
                 is_default: true,
               }))
             } catch {}
@@ -683,96 +1006,112 @@ export default function CheckoutPage() {
 
       // Se for Cartão de Crédito ou Débito Online
       if (isOnlineCard) {
-        const tokenResult = await tokenizeSavedCardCvv({
-          cardId: selectedSavedCard.mp_card_id,
-          securityCode: savedCardCvv.trim(),
-        })
+        let cardRes: Response | null = null
+        let cardData: any = {}
+        try {
+          const tokenResult = await tokenizeSavedCardCvv({
+            cardId: selectedSavedCard.mp_card_id,
+            securityCode: savedCardCvv.trim(),
+          })
 
-        if (!tokenResult.success || !tokenResult.token) {
+          if (!tokenResult.success || !tokenResult.token) {
+            const msg =
+              tokenResult.error || "Não foi possível validar o código de segurança do cartão."
+            setErrorMessage(msg)
+            appToast.error("Atenção", msg)
+            setIsSubmitting(false)
+            return
+          }
+
+          const supabase = getSupabaseBrowserClient()
+          const { data: sessionRes } = await supabase.auth.getSession()
+          const token = sessionRes?.session?.access_token
+
+          if (!token) {
+            const msg = "Sessão expirada. Faça login novamente para concluir o pagamento."
+            setErrorMessage(msg)
+            appToast.error("Atenção", msg)
+            setIsSubmitting(false)
+            return
+          }
+
+          cardRes = await fetch("/api/mercadopago/card-payment", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              orderId,
+              token: tokenResult.token,
+              savedCardId: selectedSavedCard.id,
+              paymentMethodId: selectedSavedCard.payment_method_id,
+              docNumber: cardCpf.replace(/\D/g, ""),
+              installments: formaPagamento === "cartao_credito" ? installments : 1,
+              installmentsBaseAmount: authoritativeOrderTotal,
+            }),
+          })
+
+          cardData = await cardRes.json().catch(() => ({}))
+        } finally {
+          setSavedCardCvv("")
+        }
+
+        if (
+          cardData?.code === "installments_amount_mismatch" ||
+          cardData?.error === "installments_amount_mismatch" ||
+          String(cardData?.error || "").includes("installments_amount_mismatch")
+        ) {
+          loadInstallments(authoritativeOrderTotal)
           const msg =
-            tokenResult.error || "Não foi possível validar o código de segurança do cartão."
+            "O valor total do pedido foi atualizado. Revise as parcelas e confirme o pagamento novamente."
           setErrorMessage(msg)
-          appToast.error("Atenção", msg)
+          appToast.error("Valor atualizado", msg)
           setIsSubmitting(false)
           return
         }
 
-        const supabase = getSupabaseBrowserClient()
-        const { data: sessionRes } = await supabase.auth.getSession()
-        const token = sessionRes?.session?.access_token
-
-        if (!token) {
-          const msg = "Sessão expirada. Faça login novamente para concluir o pagamento."
-          setErrorMessage(msg)
-          appToast.error("Atenção", msg)
-          setIsSubmitting(false)
-          return
-        }
-
-        const cardRes = await fetch("/api/mercadopago/card-payment", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            orderId,
-            token: tokenResult.token,
-            savedCardId: selectedSavedCard.id,
-            paymentMethodId: selectedSavedCard.payment_method_id,
-            docNumber: cardCpf.replace(/\D/g, ""),
-            installments: formaPagamento === "cartao_credito" ? installments : 1,
-            installmentsBaseAmount: authoritativeOrderTotal,
-          }),
-        })
-
-        const cardData = await cardRes.json().catch(() => ({}))
         if (cardData?.action === "held_underpaid" || cardData?.code === "held_underpaid") {
+          persistUserPhone()
           pendingOrderIdRef.current = null
           pendingOrderTotalRef.current = null
           clearCart()
           appToast.info("Pagamento em análise", "Pagamento em análise — acompanhe no pedido")
-          router.push(`/pedidos/${orderId}`)
+          router.replace(`/pedidos/${orderId}`)
           return
         }
         if (
+          !cardRes ||
           !cardRes.ok ||
           !cardData.success ||
           cardData.status === "rejected" ||
           (cardData.status !== "approved" && cardData.status !== "in_process")
         ) {
           if (
-            cardRes.status === 429 ||
+            cardRes?.status === 429 ||
             cardData?.code === "order_status_not_payable" ||
-            cardData?.code === "cc_rejected_max_attempts"
+            cardData?.error === "order_status_not_payable" ||
+            cardData?.code === "cc_rejected_max_attempts" ||
+            cardData?.statusDetail === "cc_rejected_max_attempts"
           ) {
             pendingOrderIdRef.current = null
             pendingOrderTotalRef.current = null
           }
-          let rejectMsg =
-            cardData.error || "Pagamento não aprovado. Verifique os dados do cartão."
-          if (cardData.status === "rejected") {
-            switch (cardData.statusDetail) {
-              case "cc_rejected_insufficient_amount":
-                rejectMsg = "Saldo insuficiente"
-                break
-              case "cc_rejected_bad_filled_security_code":
-                rejectMsg = "Código de segurança (CVV) inválido"
-                break
-              case "cc_rejected_bad_filled_date":
-                rejectMsg = "Cartão vencido ou data inválida"
-                break
-              case "cc_rejected_call_for_authorize":
-                rejectMsg = "Autorize a transação junto ao seu banco"
-                break
-              default:
-                rejectMsg = "Pagamento recusado pelo banco emissor"
-            }
-          }
+          const rejectMsg =
+            cardData.status === "rejected"
+              ? getCardRejectionMessage(cardData.statusDetail)
+              : cardData.error || "Pagamento não aprovado. Verifique os dados do cartão."
           setErrorMessage(rejectMsg)
           appToast.error("Pedido recusado", rejectMsg)
           setIsSubmitting(false)
           return
+        }
+
+        if (cardData.status === "in_process") {
+          appToast.info(
+            "Pagamento em análise",
+            "Seu pagamento está sendo analisado pelo Mercado Pago. Você pode acompanhar o status pelo pedido."
+          )
         }
 
         if (cardData.status === "approved") {
@@ -783,10 +1122,11 @@ export default function CheckoutPage() {
             numItems: totalItemCount,
           })
         }
+        persistUserPhone()
         pendingOrderIdRef.current = null
         pendingOrderTotalRef.current = null
         clearCart()
-        router.push(`/pedidos/${orderId}`)
+        router.replace(`/pedidos/${orderId}`)
         return
       }
 
@@ -855,15 +1195,20 @@ export default function CheckoutPage() {
       }
 
       // Limpa a sacola e redireciona direto para a tela de acompanhamento/pagamento
+      persistUserPhone()
       pendingOrderIdRef.current = null
       pendingOrderTotalRef.current = null
       clearCart()
-      router.push(`/pedidos/${orderId}`)
+      router.replace(`/pedidos/${orderId}`)
     } catch (err: any) {
       console.error("[Checkout] Erro ao finalizar:", err)
-      setErrorMessage(
-        err.message || "Ocorreu um erro ao processar seu pedido. Por favor, tente novamente."
-      )
+      const rawMsg = err?.message || ""
+      const mappedMsg =
+        ERROR_MESSAGES[rawMsg] ||
+        rawMsg ||
+        "Ocorreu um erro ao processar seu pedido. Por favor, tente novamente."
+      setErrorMessage(mappedMsg)
+      appToast.error("Erro no pedido", mappedMsg)
       setIsSubmitting(false)
     }
   }
@@ -940,9 +1285,11 @@ export default function CheckoutPage() {
             couponError={couponError}
             validandoCupom={validandoCupom}
             deliveryType={deliveryType}
+            isStoreOpen={isStoreOpen}
             recommendedProducts={recommendedProducts}
             onUpdateQuantity={handleUpdateQuantity}
             onRemoveItem={handleRemoveItem}
+            onEditItem={(item, index) => setEditingCartItem({ item, index })}
             onSetCouponCode={setCouponCode}
             onApplyCoupon={handleApplyCoupon}
             onRemoveCoupon={handleRemoveCoupon}
@@ -995,6 +1342,9 @@ export default function CheckoutPage() {
             setCardCpf={setCardCpf}
             installments={installments}
             setInstallments={setInstallments}
+            installmentOptions={installmentOptions}
+            loadingInstallments={loadingInstallments}
+            baseTotal={baseTotal}
             savedCards={savedCards}
             addCard={addCard}
             savingCard={savingCard}
@@ -1044,7 +1394,41 @@ export default function CheckoutPage() {
         onClose={() => setShowMinOrderSheet(false)}
         currentSubtotal={subtotal}
         minOrderValue={MIN_ORDER_VALUE}
+        onChoosePickup={() => {
+          setShowMinOrderSheet(false)
+          setDeliveryType("pickup")
+          setErrorMessage(null)
+          setStep("entrega")
+          window.scrollTo({ top: 0, behavior: "smooth" })
+        }}
       />
+
+      {/* 4.5. Modal de Edição de Item da Sacola */}
+      {editingCartItem && (
+        <AddToCartDialog
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) setEditingCartItem(null)
+          }}
+          editMode={true}
+          product={{
+            id: editingCartItem.item.id.replace(/-\d{13}$/, ""),
+            name: editingCartItem.item.name,
+            price: editingCartItem.item.price,
+            image: editingCartItem.item.image,
+            description: "",
+            category: editingCartItem.item.category,
+          }}
+          initialQuantity={editingCartItem.item.quantity}
+          initialObservacoes={editingCartItem.item.observacoes}
+          initialPastaType={editingCartItem.item.pastaType}
+          initialAdicionais={editingCartItem.item.adicionais}
+          onSaveEdit={(updated) => {
+            updateItem(editingCartItem.item.id, updated)
+            setEditingCartItem(null)
+          }}
+        />
+      )}
 
       {/* 5. Modal de Seleção de Endereço no Mapa */}
       <AddressModal
@@ -1059,6 +1443,10 @@ export default function CheckoutPage() {
           if (addr.cep) {
             setCep(addr.cep)
           }
+          setNewAddressCoords({
+            lat: addr.latitude ?? null,
+            lng: addr.longitude ?? null,
+          })
           setIsAddressModalOpen(false)
         }}
       />

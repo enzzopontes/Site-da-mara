@@ -14,21 +14,25 @@ import {
 } from "@vis.gl/react-google-maps";
 import {
   ChevronLeft,
+  ChevronRight,
   Search,
   Crosshair,
   Home,
   Briefcase,
+  MapPin,
   Check,
   MoreVertical,
   Pencil,
   Trash2,
   Loader2,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { addressesManager, Address } from "@/lib/addresses-manager";
 import { mapsService, cleanStreetName } from "@/lib/maps-service";
 import { appToast } from "@/lib/app-toast";
 import { useRouter } from "next/navigation";
+import { OutOfAreaDialog } from "@/components/address-selection/out-of-area-dialog";
 
 export interface AddressFlowProps {
   onClose?: () => void;
@@ -48,6 +52,63 @@ const DEFAULT_IACANGA_COORDS: Coords = {
 };
 
 const GUEST_STORAGE_KEY = "batata_top_guest_address";
+const CIDADE_PERMITIDA = "Iacanga";
+const UF_PERMITIDA = "SP";
+const SEARCH_DEBOUNCE_MS = 400;
+const MIN_SEARCH_CHARS = 3;
+const NOMINATIM_CONTACT = "contato@batatatop.com.br";
+
+interface NominatimResult {
+  place_id: number | string;
+  lat: string;
+  lon: string;
+  display_name: string;
+  address?: {
+    road?: string;
+    pedestrian?: string;
+    house_number?: string;
+    suburb?: string;
+    neighbourhood?: string;
+    quarter?: string;
+    city?: string;
+    town?: string;
+    municipality?: string;
+    state?: string;
+    postcode?: string;
+  };
+}
+
+function normalizeText(value?: string | null): string {
+  return (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function isWithinDeliveryArea(city?: string | null, state?: string | null): boolean {
+  const normCity = normalizeText(city);
+  const normState = normalizeText(state);
+  return normCity === "iacanga" && (normState === "sp" || normState === "sao paulo");
+}
+
+function getAddressLabelText(label?: string | null): string {
+  const normalized = normalizeText(label);
+  if (normalized === "casa") return "Casa";
+  if (normalized === "trabalho") return "Trabalho";
+  return "Outro";
+}
+
+function renderAddressIcon(label?: string | null) {
+  const normalized = normalizeText(label);
+  if (normalized === "casa") {
+    return <Home className="w-6 h-6 stroke-[1.8]" />;
+  }
+  if (normalized === "trabalho") {
+    return <Briefcase className="w-6 h-6 stroke-[1.8]" />;
+  }
+  return <MapPin className="w-6 h-6 stroke-[1.8]" />;
+}
 
 // -------------------------------------------------------------
 // Pino Amarelo com Furo Central (Identico ao App)
@@ -227,7 +288,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
   const { user } = useAuth();
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
 
-  const [step, setStep] = useState<"initial" | "map" | "details">("initial");
+  const [step, setStep] = useState<"initial" | "search" | "map" | "details">("initial");
 
   // Localização rápida do GPS (sem travar)
   const [currentCoords, setCurrentCoords] = useState<Coords>(DEFAULT_IACANGA_COORDS);
@@ -247,22 +308,45 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
   const [selectedCep, setSelectedCep] = useState<string>("");
 
   // Formulário de Detalhes
+  const [needsNeighborhoodInput, setNeedsNeighborhoodInput] = useState<boolean>(false);
+  const [bairroInput, setBairroInput] = useState<string>("");
+  const [bairroError, setBairroError] = useState<string>("");
   const [numero, setNumero] = useState<string>("");
   const [semNumero, setSemNumero] = useState<boolean>(false);
   const [complemento, setComplemento] = useState<string>("");
   const [semComplemento, setSemComplemento] = useState<boolean>(false);
   const [pontoReferencia, setPontoReferencia] = useState<string>("");
-  const [labelFavorito, setLabelFavorito] = useState<"Casa" | "Trabalho" | null>("Casa");
+  const [labelFavorito, setLabelFavorito] = useState<"Casa" | "Trabalho" | null>(null);
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
   // Lista de Endereços Salvos
   const [savedAddresses, setSavedAddresses] = useState<Address[]>([]);
-  
-  // Modal de Ações dos 3 Pontos (Excluir / Editar)
+
+  // Modal de Ações dos 3 Pontos (Excluir / Editar) e Confirmação de Exclusão
   const [menuAddress, setMenuAddress] = useState<Address | null>(null);
+  const [confirmDeleteAddress, setConfirmDeleteAddress] = useState<Address | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
+  // Dialog de Fora da Área de Entrega
+  const [outOfAreaOpen, setOutOfAreaOpen] = useState<boolean>(false);
+
+  // Busca de endereço via Nominatim (Iacanga/SP)
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [searchSuggestions, setSearchSuggestions] = useState<NominatimResult[]>([]);
+  const [isSearching, setIsSearching] = useState<boolean>(false);
+  const [searchNotFound, setSearchNotFound] = useState<boolean>(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchAbortRef = useRef<AbortController | null>(null);
 
   const geocoderRef = useRef<google.maps.Geocoder | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+      if (searchAbortRef.current) searchAbortRef.current.abort();
+    };
+  }, []);
 
   // Desativa Mobile Navbar enquanto o mapa estiver selecionado
   useEffect(() => {
@@ -327,8 +411,8 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
                 const res = results[0];
                 let street = "";
                 let neighborhood = "";
-                let city = "Iacanga";
-                let state = "SP";
+                let city = "";
+                let state = "";
                 let cep = "";
 
                 for (const c of res.address_components) {
@@ -336,6 +420,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
                   if (types.includes("route")) street = c.long_name;
                   else if (types.includes("sublocality_level_1") || types.includes("sublocality")) neighborhood = c.long_name;
                   else if (types.includes("administrative_area_level_2")) city = c.long_name;
+                  else if (!city && types.includes("locality")) city = c.long_name;
                   else if (types.includes("administrative_area_level_1")) state = c.short_name;
                   else if (types.includes("postal_code")) cep = c.long_name;
                 }
@@ -359,8 +444,8 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
                 resolve({
                   street: cleanStreetName(fallbackData.street),
                   neighborhood: fallbackData.neighborhood,
-                  city: fallbackData.city,
-                  state: fallbackData.state,
+                  city: fallbackData.city || "",
+                  state: fallbackData.state || "",
                   cep: fallbackData.cep,
                   formatted: fallbackData.displayName || `${fallbackData.street}, ${fallbackData.neighborhood}`,
                 });
@@ -368,8 +453,8 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
                 resolve({
                   street: "",
                   neighborhood: "",
-                  city: "Iacanga",
-                  state: "SP",
+                  city: "",
+                  state: "",
                   cep: "",
                   formatted: "",
                 });
@@ -386,8 +471,8 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
             resolve({
               street: cleanStreetName(fallbackData.street),
               neighborhood: fallbackData.neighborhood,
-              city: fallbackData.city,
-              state: fallbackData.state,
+              city: fallbackData.city || "",
+              state: fallbackData.state || "",
               cep: fallbackData.cep,
               formatted: fallbackData.displayName || `${fallbackData.street}, ${fallbackData.neighborhood}`,
             });
@@ -396,8 +481,8 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
             resolve({
               street: "",
               neighborhood: "",
-              city: "Iacanga",
-              state: "SP",
+              city: "",
+              state: "",
               cep: "",
               formatted: "",
             });
@@ -495,8 +580,132 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
     locateUser(false);
   }, [locateUser]);
 
+  // Helpers de reset de formulário e busca Nominatim
+  const resetNewAddressForm = useCallback(() => {
+    setEditingAddressId(null);
+    setNeedsNeighborhoodInput(false);
+    setBairroInput("");
+    setBairroError("");
+    setNumero("");
+    setSemNumero(false);
+    setComplemento("");
+    setSemComplemento(false);
+    setPontoReferencia("");
+    setLabelFavorito(null);
+  }, []);
+
+  const clearSearch = useCallback(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    if (searchAbortRef.current) searchAbortRef.current.abort();
+    setSearchQuery("");
+    setSearchSuggestions([]);
+    setSearchNotFound(false);
+    setIsSearching(false);
+  }, []);
+
+  const handleSearchChange = useCallback((text: string) => {
+    setSearchQuery(text);
+    setSearchNotFound(false);
+
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+
+    const trimmed = text.trim();
+    if (trimmed.length < MIN_SEARCH_CHARS) {
+      if (searchAbortRef.current) searchAbortRef.current.abort();
+      setSearchSuggestions([]);
+      setIsSearching(false);
+      return;
+    }
+
+    searchDebounceRef.current = setTimeout(async () => {
+      if (searchAbortRef.current) searchAbortRef.current.abort();
+      const controller = new AbortController();
+      searchAbortRef.current = controller;
+
+      setIsSearching(true);
+      try {
+        const q = encodeURIComponent(`${trimmed}, ${CIDADE_PERMITIDA}, ${UF_PERMITIDA}, Brasil`);
+        const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${q}&addressdetails=1&limit=6&countrycodes=br&email=${encodeURIComponent(NOMINATIM_CONTACT)}`;
+        const res = await fetch(url, {
+          headers: { "Accept-Language": "pt-BR" },
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error("Nominatim search failed");
+        const data: NominatimResult[] = await res.json();
+
+        const filtered = (Array.isArray(data) ? data : []).filter((item) => {
+          const city =
+            item.address?.city ||
+            item.address?.town ||
+            item.address?.municipality ||
+            "";
+          const state = item.address?.state || "";
+          return (
+            normalizeText(city) === "iacanga" &&
+            (!state || normalizeText(state) === "sp" || normalizeText(state) === "sao paulo")
+          );
+        });
+
+        setSearchSuggestions(filtered);
+        setSearchNotFound(filtered.length === 0);
+      } catch (err: any) {
+        if (err?.name !== "AbortError") {
+          setSearchSuggestions([]);
+          setSearchNotFound(true);
+        }
+      } finally {
+        setIsSearching(false);
+      }
+    }, SEARCH_DEBOUNCE_MS);
+  }, []);
+
+  const handleSelectSearchSuggestion = (item: NominatimResult) => {
+    const addr = item.address || {};
+    const lat = parseFloat(item.lat);
+    const lng = parseFloat(item.lon);
+    const coords: Coords =
+      Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : DEFAULT_IACANGA_COORDS;
+
+    const street = cleanStreetName(
+      addr.road || addr.pedestrian || item.display_name.split(",")[0] || ""
+    );
+    const neighborhood = addr.suburb || addr.neighbourhood || addr.quarter || "";
+    const city = addr.city || addr.town || addr.municipality || CIDADE_PERMITIDA;
+    const state = addr.state || UF_PERMITIDA;
+
+    resetNewAddressForm();
+    setMapCoords(coords);
+    setSelectedStreet(street);
+    setSelectedNeighborhood(neighborhood);
+    setSelectedCity(city);
+    setSelectedState(state);
+    setSelectedCep(addr.postcode || "");
+    if (addr.house_number) {
+      setNumero(addr.house_number);
+    }
+
+    clearSearch();
+    setStep("map");
+  };
+
+  const handleOpenMapFromSearch = async () => {
+    resetNewAddressForm();
+    clearSearch();
+    setMapCoords(DEFAULT_IACANGA_COORDS);
+    setStep("map");
+    setIsResolvingAddress(true);
+    const data = await reverseGeocode(DEFAULT_IACANGA_COORDS);
+    setSelectedStreet(data.street);
+    setSelectedNeighborhood(data.neighborhood);
+    setSelectedCity(data.city);
+    setSelectedState(data.state);
+    setSelectedCep(data.cep);
+    setIsResolvingAddress(false);
+  };
+
   // 4. Clicar em "Usar localização atual": ABRE O MAPA E LOCALIZA COM PRECISÃO
   const handleUseCurrentLocation = async () => {
+    resetNewAddressForm();
     setStep("map"); // Abre o mapa imediatamente
     setIsResolvingAddress(true);
 
@@ -531,10 +740,42 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
     [reverseGeocode]
   );
 
-  // 6. Confirma no mapa -> vai para detalhes
+  // 6. Confirma no mapa -> valida área de entrega e vai para detalhes
   const handleConfirmMap = () => {
     if (isResolvingAddress) return;
+    if (!isWithinDeliveryArea(selectedCity, selectedState)) {
+      setOutOfAreaOpen(true);
+      return;
+    }
+
+    const hasNeighborhood = Boolean(
+      selectedNeighborhood && selectedNeighborhood.trim().length >= 2
+    );
+    setNeedsNeighborhoodInput(!hasNeighborhood);
+    setBairroInput(hasNeighborhood ? selectedNeighborhood.trim() : "");
+    setBairroError("");
     setStep("details");
+  };
+
+  const handleCloseOutOfArea = () => {
+    setOutOfAreaOpen(false);
+    if (step === "details") {
+      setStep("map");
+    }
+  };
+
+  const handleRecenterIacanga = async () => {
+    setOutOfAreaOpen(false);
+    setMapCoords(DEFAULT_IACANGA_COORDS);
+    setStep("map");
+    setIsResolvingAddress(true);
+    const data = await reverseGeocode(DEFAULT_IACANGA_COORDS);
+    setSelectedStreet(data.street);
+    setSelectedNeighborhood(data.neighborhood);
+    setSelectedCity(data.city);
+    setSelectedState(data.state);
+    setSelectedCep(data.cep);
+    setIsResolvingAddress(false);
   };
 
   // 7. Clicar em cima do endereço cadastrado: APENAS SELECIONA! Não abre mapa.
@@ -553,21 +794,34 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
     else router.push(redirectUrl);
   };
 
-  // 8. Ação do Menu 3 Pontos: Excluir
-  const handleMenuDelete = async () => {
+  // 8. Ação do Menu 3 Pontos: Solicitar confirmação antes de excluir
+  const handleRequestDelete = () => {
     if (!menuAddress) return;
-    const toDelete = menuAddress;
+    setConfirmDeleteAddress(menuAddress);
     setMenuAddress(null);
+  };
 
-    if (user) {
-      await addressesManager.deleteAddress(toDelete.id);
-    } else {
-      localStorage.removeItem(GUEST_STORAGE_KEY);
+  const handleConfirmDelete = async () => {
+    if (!confirmDeleteAddress || isDeleting) return;
+    const toDelete = confirmDeleteAddress;
+    setIsDeleting(true);
+    try {
+      if (user) {
+        await addressesManager.deleteAddress(toDelete.id);
+      } else {
+        localStorage.removeItem(GUEST_STORAGE_KEY);
+      }
+
+      setConfirmDeleteAddress(null);
+      await loadSavedAddresses();
+      window.dispatchEvent(new Event("address-changed"));
+      appToast.success("Endereço removido com sucesso.");
+    } catch (e) {
+      console.error(e);
+      appToast.error("Erro ao remover endereço.");
+    } finally {
+      setIsDeleting(false);
     }
-
-    await loadSavedAddresses();
-    window.dispatchEvent(new Event("address-changed"));
-    appToast.success("Endereço removido com sucesso.");
   };
 
   // 9. Ação do Menu 3 Pontos: Editar
@@ -583,6 +837,11 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
     setSelectedCity(addr.city);
     setSelectedState(addr.state);
     setSelectedCep(addr.cep);
+
+    const hasNeighborhood = Boolean(addr.neighborhood && addr.neighborhood.trim().length >= 2);
+    setNeedsNeighborhoodInput(!hasNeighborhood);
+    setBairroInput(hasNeighborhood ? addr.neighborhood.trim() : "");
+    setBairroError("");
 
     if (addr.latitude != null && addr.longitude != null) {
       setMapCoords({ lat: Number(addr.latitude), lng: Number(addr.longitude) });
@@ -616,6 +875,22 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
 
   // 10. Salva endereço final
   const handleSaveFinalAddress = async () => {
+    if (!isWithinDeliveryArea(selectedCity, selectedState)) {
+      setOutOfAreaOpen(true);
+      return;
+    }
+
+    const finalNeighborhood = needsNeighborhoodInput
+      ? bairroInput.trim()
+      : selectedNeighborhood.trim();
+
+    if (finalNeighborhood.length < 2) {
+      setNeedsNeighborhoodInput(true);
+      setBairroError("O bairro precisa ter pelo menos 2 caracteres");
+      appToast.warning("Bairro obrigatório", "Informe o bairro com pelo menos 2 caracteres.");
+      return;
+    }
+
     const finalNumber = semNumero ? "S/N" : numero.trim();
     const finalComplement = semComplemento ? "" : complemento.trim();
 
@@ -639,10 +914,10 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
         street: selectedStreet || "Endereço selecionado",
         number: finalNumber,
         complement: finalComplement,
-        neighborhood: selectedNeighborhood || "Centro",
-        city: selectedCity || "Iacanga",
-        state: selectedState || "SP",
-        cep: selectedCep || "17150-000",
+        neighborhood: finalNeighborhood,
+        city: CIDADE_PERMITIDA,
+        state: UF_PERMITIDA,
+        cep: selectedCep || "17180-000",
         is_default: true,
         label: dbLabel,
         reference_point: pontoReferencia.trim() || null,
@@ -682,6 +957,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
   };
 
   const isDetailsValid =
+    (!needsNeighborhoodInput || bairroInput.trim().length >= 2) &&
     (semNumero || numero.trim().length > 0) &&
     (semComplemento || complemento.trim().length > 0);
 
@@ -712,15 +988,19 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
 
             <div className="p-4 space-y-4 flex-1 overflow-y-auto">
               {/* Campo de Busca */}
-              <div
-                onClick={handleUseCurrentLocation}
-                className="flex items-center gap-2.5 px-3.5 py-3 bg-[#F0ECE4]/70 rounded-2xl cursor-pointer hover:bg-[#EAE4DC] transition-colors"
+              <button
+                type="button"
+                onClick={() => {
+                  clearSearch();
+                  setStep("search");
+                }}
+                className="w-full flex items-center gap-2.5 px-3.5 py-3 bg-[#F0ECE4]/70 rounded-2xl cursor-pointer hover:bg-[#EAE4DC] transition-colors text-left"
               >
-                <Search className="w-4 h-4 text-[#E59500]" />
+                <Search className="w-4 h-4 text-[#E59500] shrink-0" />
                 <span className="text-xs text-slate-500 font-medium">
                   Buscar endereço e número
                 </span>
-              </div>
+              </button>
 
               {/* Botão Usar Localização Atual (com subtítulo instantâneo do GPS) */}
               <div
@@ -749,48 +1029,67 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
 
               <div className="pt-2 border-t border-slate-200/60" />
 
-              {/* Card de Endereço Salvo (Borda Dourada - Clicar apenas seleciona!) */}
+              {/* Cards de Endereços Salvos (Borda Dourada e Check apenas quando is_default === true) */}
               {savedAddresses.length > 0 && (
                 <div className="space-y-3">
-                  {savedAddresses.map((addr, idx) => (
-                    <div
-                      key={addr.id || idx}
-                      onClick={() => handleSelectSavedAddress(addr)}
-                      className="relative flex items-center justify-between p-4 bg-white border-2 border-[#E59500] rounded-2xl shadow-xs cursor-pointer active:scale-[0.99] transition-all"
-                    >
-                      <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                        <div className="p-2 text-slate-700">
-                          <Home className="w-6 h-6 stroke-[1.8]" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-bold text-slate-900 leading-tight">
-                            Casa
-                          </p>
-                          <p className="text-xs text-slate-500 truncate mt-1">
-                            {addr.street}, {addr.number} - {addr.neighborhood}, {addr.city} - {addr.state}
-                          </p>
-                        </div>
-                      </div>
+                  {savedAddresses.map((addr, idx) => {
+                    const isDefault = addr.is_default === true;
+                    const labelText = getAddressLabelText(addr.label);
+                    const extraLine = [addr.complement, addr.reference_point]
+                      .filter(Boolean)
+                      .join(" - ");
 
-                      <div className="flex items-center gap-2 pl-3">
-                        <div className="flex items-center justify-center w-5 h-5 rounded-full bg-[#E59500] text-white">
-                          <Check className="w-3.5 h-3.5 stroke-[3]" />
+                    return (
+                      <div
+                        key={addr.id || idx}
+                        onClick={() => handleSelectSavedAddress(addr)}
+                        className={`relative flex items-center justify-between p-4 bg-white rounded-2xl shadow-xs cursor-pointer active:scale-[0.99] transition-all ${
+                          isDefault
+                            ? "border-2 border-[#E59500]"
+                            : "border border-slate-200 hover:border-slate-300"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                          <div className="p-2 text-slate-700 shrink-0">
+                            {renderAddressIcon(addr.label)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-bold text-slate-900 leading-tight truncate">
+                              {labelText}
+                            </p>
+                            <p className="text-xs text-slate-500 truncate mt-1">
+                              {addr.street}, {addr.number} - {addr.neighborhood}, {addr.city} - {addr.state}
+                            </p>
+                            {extraLine && (
+                              <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                                {extraLine}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                        {/* Botão dos 3 Pontos - Abre o Modal de Excluir / Editar */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation(); // NÃO seleciona o endereço!
-                            setMenuAddress(addr);
-                          }}
-                          className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-                          title="Opções do endereço"
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
+
+                        <div className="flex items-center gap-2 pl-3 shrink-0">
+                          {isDefault && (
+                            <div className="flex items-center justify-center w-5 h-5 rounded-full bg-[#E59500] text-white">
+                              <Check className="w-3.5 h-3.5 stroke-[3]" />
+                            </div>
+                          )}
+                          {/* Botão dos 3 Pontos - Abre o Modal de Excluir / Editar */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation(); // NÃO seleciona o endereço!
+                              setMenuAddress(addr);
+                            }}
+                            className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                            title="Opções do endereço"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -812,14 +1111,14 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
 
                   {/* Nome do endereço */}
                   <h3 className="text-base font-extrabold text-center text-slate-900 mb-5">
-                    Casa
+                    {getAddressLabelText(menuAddress.label)}
                   </h3>
 
                   {/* Botões Lado a Lado: Excluir e Editar */}
                   <div className="grid grid-cols-2 gap-3 mb-4">
                     <button
                       type="button"
-                      onClick={handleMenuDelete}
+                      onClick={handleRequestDelete}
                       className="flex items-center justify-center gap-2 py-3 px-4 border border-slate-200 rounded-2xl hover:bg-red-50 hover:border-red-200 hover:text-red-600 active:scale-[0.98] transition-all cursor-pointer text-slate-800 font-semibold text-sm"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -847,6 +1146,183 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
                 </div>
               </div>
             )}
+
+            {/* ======================================================== */}
+            {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO                         */}
+            {/* ======================================================== */}
+            {confirmDeleteAddress && (
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="confirm-delete-address-title"
+                onClick={() => !isDeleting && setConfirmDeleteAddress(null)}
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+              >
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl text-center"
+                >
+                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+                    <Trash2 className="h-6 w-6" />
+                  </div>
+                  <h3
+                    id="confirm-delete-address-title"
+                    className="text-base font-extrabold text-slate-900"
+                  >
+                    Excluir endereço?
+                  </h3>
+                  <p className="mt-2 text-xs text-slate-500 leading-relaxed">
+                    Tem certeza que deseja remover{" "}
+                    <span className="font-semibold text-slate-700">
+                      {confirmDeleteAddress.street}, {confirmDeleteAddress.number}
+                    </span>
+                    ? Essa ação não pode ser desfeita.
+                  </p>
+
+                  <div className="mt-5 grid grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      disabled={isDeleting}
+                      onClick={() => setConfirmDeleteAddress(null)}
+                      className="py-2.5 px-4 rounded-xl border border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 transition-colors cursor-pointer disabled:opacity-60"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isDeleting}
+                      onClick={handleConfirmDelete}
+                      className="py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
+                    >
+                      {isDeleting ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        "Excluir"
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* ESTADO 1.5: BUSCA DE ENDEREÇO VIA NOMINATIM (IACANGA/SP) */}
+        {/* ======================================================== */}
+        {step === "search" && (
+          <div className="flex flex-col h-full flex-1 bg-white">
+            <div className="px-4 pt-4 pb-2 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-2 px-3 py-2.5 bg-[#F0ECE4]/80 rounded-2xl border border-transparent focus-within:border-[#E59500] transition-colors">
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearSearch();
+                    setStep("initial");
+                  }}
+                  className="p-0.5 text-[#E59500] hover:opacity-80 active:scale-95 transition-all cursor-pointer shrink-0"
+                  title="Voltar"
+                >
+                  <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
+                </button>
+                <input
+                  type="text"
+                  autoFocus
+                  value={searchQuery}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  placeholder="Buscar endereço e número"
+                  className="flex-1 bg-transparent text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={clearSearch}
+                    className="p-0.5 text-slate-400 hover:text-slate-600 cursor-pointer shrink-0"
+                    aria-label="Limpar busca"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              <p className="text-[10px] text-slate-400 text-right mt-1.5 pr-1">
+                powered by OpenStreetMap • Iacanga/SP
+              </p>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4">
+              {isSearching && (
+                <div className="flex items-center justify-center py-8 gap-2 text-slate-500">
+                  <Loader2 className="w-5 h-5 animate-spin text-[#E59500]" />
+                  <span className="text-xs font-medium">Buscando endereços em Iacanga...</span>
+                </div>
+              )}
+
+              {!isSearching && searchSuggestions.length > 0 && (
+                <div className="divide-y divide-slate-100">
+                  {searchSuggestions.map((item) => (
+                    <button
+                      key={String(item.place_id)}
+                      type="button"
+                      onClick={() => handleSelectSearchSuggestion(item)}
+                      className="w-full flex items-center gap-3 py-3 px-2 hover:bg-[#FAF8F5] rounded-xl text-left transition-colors cursor-pointer"
+                    >
+                      <MapPin className="w-4 h-4 text-[#E59500] shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 truncate">
+                          {item.address?.road || item.display_name.split(",")[0]}
+                        </p>
+                        <p className="text-xs text-slate-500 truncate mt-0.5">
+                          {item.display_name}
+                        </p>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+                    </button>
+                  ))}
+                  <div className="pt-4 text-center">
+                    <button
+                      type="button"
+                      onClick={handleOpenMapFromSearch}
+                      className="text-sm font-bold text-[#E59500] hover:underline cursor-pointer"
+                    >
+                      Buscar pelo mapa
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {!isSearching && searchNotFound && (
+                <div className="py-10 px-4 text-center space-y-2">
+                  <p className="text-sm font-bold text-slate-800">
+                    Não encontramos esse endereço
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Verifique o que você digitou e tente de novo. Ou busque pelo mapa.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleOpenMapFromSearch}
+                    className="mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-[#E59500] hover:underline cursor-pointer"
+                  >
+                    Buscar pelo mapa
+                  </button>
+                </div>
+              )}
+
+              {!isSearching && !searchNotFound && searchSuggestions.length === 0 && (
+                <div className="py-10 px-4 text-center space-y-2">
+                  <p className="text-xs text-slate-400">
+                    Digite pelo menos {MIN_SEARCH_CHARS} caracteres para buscar em Iacanga/SP.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleOpenMapFromSearch}
+                    className="mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-[#E59500] hover:underline cursor-pointer"
+                  >
+                    Buscar pelo mapa
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -927,7 +1403,9 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
                     {selectedStreet || "Localização selecionada"}
                   </h2>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    {selectedNeighborhood ? `${selectedNeighborhood} - ` : ""}
+                    {(needsNeighborhoodInput ? bairroInput.trim() : selectedNeighborhood)
+                      ? `${needsNeighborhoodInput ? bairroInput.trim() : selectedNeighborhood} - `
+                      : ""}
                     {selectedCity}/{selectedState}
                   </p>
                 </div>
@@ -943,6 +1421,35 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
 
               {/* Campos */}
               <div className="p-5 space-y-4">
+                {/* Bairro obrigatório quando reverse geocode não retornou bairro */}
+                {needsNeighborhoodInput && (
+                  <div>
+                    <input
+                      type="text"
+                      value={bairroInput}
+                      maxLength={60}
+                      onChange={(e) => {
+                        setBairroInput(e.target.value);
+                        if (bairroError) setBairroError("");
+                      }}
+                      placeholder="Bairro *"
+                      className={`w-full px-3.5 py-3 text-sm text-slate-800 rounded-xl border bg-white transition-colors focus:outline-none ${
+                        bairroError
+                          ? "border-red-500 focus:border-red-500"
+                          : "border-slate-200 focus:border-[#E59500]"
+                      }`}
+                    />
+                    <div className="flex items-center justify-between mt-1 px-1">
+                      <span className="text-xs text-red-500">
+                        {bairroError}
+                      </span>
+                      <span className="text-[11px] text-slate-400">
+                        {bairroInput.length}/60
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Número */}
                 <div>
                   <input
@@ -1098,6 +1605,12 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
             </div>
           </div>
         )}
+
+        <OutOfAreaDialog
+          isOpen={outOfAreaOpen}
+          onClose={handleCloseOutOfArea}
+          onRecenterIacanga={handleRecenterIacanga}
+        />
       </div>
     </APIProvider>
   );

@@ -1,6 +1,8 @@
 import { getSupabaseBrowserClient } from "./supabase/client"
 import { validateOrder } from "./validation"
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export interface Order {
   id: string
   orderNumber?: number
@@ -10,8 +12,12 @@ export interface Order {
   total: number
   status: "pending" | "preparing" | "ready" | "delivered" | "cancelled" | "awaiting_payment" | "confirmed" | "preparo" | "out_for_delivery"
   paymentMethod: string
-  deliveryType: "delivery" | "pickup"
+  deliveryType: "delivery" | "pickup" | "retirada"
   address: string
+  neighborhood?: string
+  complement?: string
+  deliveryLat?: number | null
+  deliveryLng?: number | null
   createdAt: Date
   completedAt?: Date
   statusUpdatedAt?: Date
@@ -38,18 +44,66 @@ class OrdersManager {
     if (!orderCheck.isValid) {
       throw new Error(orderCheck.error || "Dados do pedido inválidos")
     }
-    const p_items = (order.items || []).map((item: any) => ({
-      product_id: String(item.product_id || item.id || '').slice(0, 36),
-      quantity: Math.max(1, Math.min(99, Math.floor(Number(item.quantity) || 1))),
-      notes: item.notes ? String(item.notes).slice(0, 300) : null,
-      pasta_type: item.pastaType || item.pasta_type || null,
-      adicionais: (item.adicionais || []).map((a: any) => ({
-        id: a.id || undefined,
-        name: a.name || a.nome || undefined,
-        price: Number(a.price ?? a.preco ?? 0),
-        quantity: Math.max(1, Math.min(20, Math.floor(Number(a.quantity) || 1))),
-      })),
-    }))
+    const p_items = (order.items || []).map((item: any) => {
+      const rawId = String(item.product_id || item.id || "").trim()
+      const productId = rawId.length >= 36 ? rawId.slice(0, 36) : rawId
+      if (!UUID_REGEX.test(productId)) {
+        const label = item.name || item.product_name || rawId || "sem identificação"
+        throw new Error(`Produto inválido no carrinho (${label}). Remova o item e adicione novamente.`)
+      }
+
+      const rawQty = Number(item.quantity ?? item.quantidade ?? 1)
+      const quantity = Math.max(1, Math.min(99, Math.floor(Number.isNaN(rawQty) ? 1 : rawQty)))
+
+      const rawNotes = String(item.notes || item.observacoes || "").trim()
+      const notes = rawNotes ? rawNotes.slice(0, 300) : null
+      const pastaType = item.pastaType || item.pasta_type || null
+
+      const adicionaisMap = new Map<string, { id?: string; name?: string; quantity: number }>()
+      if (Array.isArray(item.adicionais)) {
+        for (const adic of item.adicionais) {
+          if (!adic || typeof adic !== "object") continue
+          const rawAdicQty = Number(adic.quantity ?? adic.quantidade ?? 1)
+          const adicQty = Math.max(
+            1,
+            Math.min(99, Math.floor(Number.isNaN(rawAdicQty) ? 1 : rawAdicQty))
+          )
+          const rawAdicId = String(adic.id || "").trim()
+          const adicId = rawAdicId.length >= 36 ? rawAdicId.slice(0, 36) : rawAdicId
+          const isValidId = UUID_REGEX.test(adicId)
+
+          if (isValidId) {
+            const key = `id:${adicId.toLowerCase()}`
+            const existing = adicionaisMap.get(key)
+            if (existing) {
+              existing.quantity = Math.max(1, Math.min(99, existing.quantity + adicQty))
+            } else {
+              adicionaisMap.set(key, { id: adicId, quantity: adicQty })
+            }
+          } else if (adic.name || adic.nome) {
+            const adicName = String(adic.name || adic.nome).trim()
+            if (!adicName) continue
+            const key = `name:${adicName.toUpperCase()}`
+            const existing = adicionaisMap.get(key)
+            if (existing) {
+              existing.quantity = Math.max(1, Math.min(99, existing.quantity + adicQty))
+            } else {
+              adicionaisMap.set(key, { name: adicName, quantity: adicQty })
+            }
+          }
+        }
+      }
+
+      return {
+        product_id: productId,
+        quantity,
+        notes,
+        pasta_type: pastaType,
+        adicionais: Array.from(adicionaisMap.values()),
+      }
+    })
+
+    const { items: _ignoredItems, ...cleanMetadata } = order.metadata || {}
 
     const sb = this.supabase
     const { data: rpcData, error: rpcError } = await sb.rpc('create_order', {
@@ -64,10 +118,7 @@ class OrdersManager {
       p_coupon_code: order.couponCode || null,
       p_notes: order.notes || null,
       p_wants_cutlery: order.wantsCutlery ?? false,
-      p_metadata: {
-        ...(order.metadata || {}),
-        items: order.items || [],
-      },
+      p_metadata: cleanMetadata,
       p_items: p_items,
     })
 
@@ -84,6 +135,10 @@ class OrdersManager {
       paymentMethod: order.paymentMethod || "dinheiro",
       deliveryType: order.deliveryType || "delivery",
       address: order.customerAddress || "",
+      neighborhood: order.customerNeighborhood || "",
+      complement: order.customerComplement || "",
+      deliveryLat: cleanMetadata.delivery_lat ?? null,
+      deliveryLng: cleanMetadata.delivery_lng ?? null,
       createdAt: new Date(),
       discountAmount: Number(rpcData.discount_amount),
       couponCode: order.couponCode || null,
@@ -137,6 +192,10 @@ class OrdersManager {
       paymentMethod: o.payment_method,
       deliveryType: o.delivery_type || "delivery",
       address: o.customer_address,
+      neighborhood: o.customer_neighborhood || "",
+      complement: o.customer_complement || "",
+      deliveryLat: o.delivery_lat ?? o.metadata?.delivery_lat ?? null,
+      deliveryLng: o.delivery_lng ?? o.metadata?.delivery_lng ?? null,
       createdAt: new Date(o.created_at),
       completedAt: o.updated_at ? new Date(o.updated_at) : undefined,
       statusUpdatedAt: o.metadata?.statusUpdatedAt ? new Date(o.metadata.statusUpdatedAt) : (o.updated_at ? new Date(o.updated_at) : undefined),

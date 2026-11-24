@@ -18,6 +18,7 @@ export interface PaymentCardProps {
   selectedSavedCard: any | null
   total: number
   installments: number
+  installmentLabel?: string
   onOpenPaymentSelector: () => void
   onOpenInstallments?: () => void
 }
@@ -27,6 +28,7 @@ export function PaymentCard({
   selectedSavedCard,
   total,
   installments,
+  installmentLabel,
   onOpenPaymentSelector,
   onOpenInstallments,
 }: PaymentCardProps) {
@@ -108,9 +110,11 @@ export function PaymentCard({
     )
   }
 
-  const installmentAmount = (total / Math.max(1, installments || 1))
-    .toFixed(2)
-    .replace(".", ",")
+  const safeInstallments = Math.max(1, installments || 1)
+  const formattedTotal = total.toFixed(2).replace(".", ",")
+  const resolvedInstallmentLabel =
+    installmentLabel ||
+    (safeInstallments > 1 ? `${safeInstallments}x` : `1x de R$ ${formattedTotal}`)
 
   return (
     <div>
@@ -161,7 +165,7 @@ export function PaymentCard({
                 className="w-full h-11 px-4 flex items-center justify-between text-[13px] text-[#6B6B6B] hover:bg-gray-50/70 transition-colors text-left"
               >
                 <span className="truncate mr-3">
-                  {installments || 1}x de R$ {installmentAmount} sem juros
+                  {resolvedInstallmentLabel}
                 </span>
                 <ChevronRight className="h-3.5 w-3.5 text-[#6B6B6B] shrink-0" />
               </button>

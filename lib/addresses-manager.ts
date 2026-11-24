@@ -62,11 +62,30 @@ class AddressesManager {
   async addAddress(address: Omit<Address, "id" | "created_at" | "updated_at">): Promise<Address | null> {
     try {
       const client = this.supabase;
-      if (!client) return null;
+      if (!client || !address.user_id) return null;
+
+      const { count, error: countError } = await client
+        .from("addresses")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", address.user_id);
+
+      if (countError) throw countError;
+
+      const hasExistingAddresses = (count ?? 0) > 0;
+      const shouldBeDefault = address.is_default === true || !hasExistingAddresses;
+
+      if (shouldBeDefault) {
+        const { error: resetError } = await client
+          .from("addresses")
+          .update({ is_default: false })
+          .eq("user_id", address.user_id);
+
+        if (resetError) throw resetError;
+      }
 
       const { data, error } = await client
         .from("addresses")
-        .insert([address])
+        .insert([{ ...address, is_default: shouldBeDefault }])
         .select()
         .single();
 
@@ -83,10 +102,59 @@ class AddressesManager {
       const client = this.supabase;
       if (!client) return null;
 
-      const { data, error } = await client
+      let userId = updates.user_id;
+      if (!userId) {
+        const { data: userData } = await client.auth.getUser();
+        userId = userData?.user?.id;
+      }
+
+      const { is_default, ...safeUpdates } = updates;
+      let payload: Partial<Address>;
+
+      if (is_default === true) {
+        if (!userId) {
+          const { data: existing, error: fetchError } = await client
+            .from("addresses")
+            .select("user_id")
+            .eq("id", id)
+            .single();
+
+          if (fetchError) throw fetchError;
+          userId = existing?.user_id;
+        }
+
+        if (!userId) {
+          throw new Error("Usuário não identificado para definir endereço padrão.");
+        }
+
+        const { error: resetError } = await client
+          .from("addresses")
+          .update({ is_default: false })
+          .eq("user_id", userId)
+          .neq("id", id);
+
+        if (resetError) throw resetError;
+
+        payload = { ...safeUpdates, is_default: true };
+      } else {
+        payload = safeUpdates;
+      }
+
+      if (Object.keys(payload).length === 0) {
+        let selectQuery = client.from("addresses").select("*").eq("id", id);
+        if (userId) selectQuery = selectQuery.eq("user_id", userId);
+        const { data, error } = await selectQuery.single();
+        if (error) throw error;
+        return data;
+      }
+
+      let updateQuery = client
         .from("addresses")
-        .update(updates)
-        .eq("id", id)
+        .update(payload)
+        .eq("id", id);
+      if (userId) updateQuery = updateQuery.eq("user_id", userId);
+
+      const { data, error } = await updateQuery
         .select()
         .single();
 
@@ -98,15 +166,28 @@ class AddressesManager {
     }
   }
 
-  async deleteAddress(id: string): Promise<boolean> {
+  async deleteAddress(id: string, userId?: string): Promise<boolean> {
     try {
       const client = this.supabase;
       if (!client) return false;
 
+      let resolvedUserId = userId;
+      if (!resolvedUserId) {
+        const { data: userData, error: authError } = await client.auth.getUser();
+        if (authError) throw authError;
+        resolvedUserId = userData?.user?.id;
+      }
+
+      if (!resolvedUserId) {
+        console.error("[AddressesManager] Usuário não autenticado ao deletar endereço.");
+        return false;
+      }
+
       const { error } = await client
         .from("addresses")
         .delete()
-        .eq("id", id);
+        .eq("id", id)
+        .eq("user_id", resolvedUserId);
 
       if (error) throw error;
       return true;
@@ -119,12 +200,14 @@ class AddressesManager {
   async setDefaultAddress(userId: string, addressId: string): Promise<boolean> {
     try {
       const client = this.supabase;
-      if (!client) return false;
+      if (!client || !userId) return false;
 
-      await client
+      const { error: resetError } = await client
         .from("addresses")
         .update({ is_default: false })
         .eq("user_id", userId);
+
+      if (resetError) throw resetError;
 
       const { error } = await client
         .from("addresses")

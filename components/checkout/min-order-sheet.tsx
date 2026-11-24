@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { AlertCircle, Plus, X } from "lucide-react"
+import { AlertCircle, Plus, Store, X } from "lucide-react"
 import {
   ResponsiveModal,
   ResponsiveModalContent,
@@ -14,6 +14,7 @@ interface MinOrderSheetProps {
   onClose: () => void
   currentSubtotal: number
   minOrderValue?: number
+  onChoosePickup?: () => void
 }
 
 export function MinOrderSheet({
@@ -21,6 +22,7 @@ export function MinOrderSheet({
   onClose,
   currentSubtotal,
   minOrderValue = 20.0,
+  onChoosePickup,
 }: MinOrderSheetProps) {
   const router = useRouter()
 
@@ -77,6 +79,16 @@ export function MinOrderSheet({
             <Plus className="w-4 h-4" />
             Adicionar mais itens
           </button>
+          {onChoosePickup && (
+            <button
+              onClick={onChoosePickup}
+              data-vaul-no-drag
+              className="w-full h-12 border border-[#E3A008] text-[#C1440E] bg-amber-50/60 hover:bg-amber-50 active:scale-[0.98] font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Store className="w-4 h-4" />
+              Retirar na loja (sem valor mínimo)
+            </button>
+          )}
           <button
             onClick={onClose}
             data-vaul-no-drag

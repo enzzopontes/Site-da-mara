@@ -6,6 +6,7 @@ import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { useCart } from "@/lib/cart-context"
 import { useAuth } from "@/lib/auth-context"
+import { storeStatusManager, type StoreStatus } from "@/lib/store-status-manager"
 
 const hasLocalAuthToken = (): boolean => {
   if (typeof window === "undefined") return false
@@ -29,6 +30,36 @@ export function CartBar() {
   const { items, getTotalPrice } = useCart()
   const { user, loading: authLoading, openAuthModal } = useAuth()
   const [isMapActive, setIsMapActive] = useState(false)
+  const [isDeliveryFeeEnabled, setIsDeliveryFeeEnabled] = useState(true)
+  const [deliveryFee, setDeliveryFee] = useState(0)
+  const [statusLoaded, setStatusLoaded] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    const applyStatus = (status?: StoreStatus | null) => {
+      if (!active || !status) return
+      setIsDeliveryFeeEnabled(Boolean(status.isDeliveryFeeEnabled))
+      setDeliveryFee(typeof status.deliveryFee === "number" ? status.deliveryFee : 0)
+      setStatusLoaded(true)
+    }
+
+    storeStatusManager.getStatus().then(applyStatus).catch(() => {})
+
+    const handleStatusChange = (e: Event) => {
+      const detail = (e as CustomEvent<StoreStatus>).detail
+      if (detail) {
+        applyStatus(detail)
+      } else {
+        storeStatusManager.getStatus().then(applyStatus).catch(() => {})
+      }
+    }
+
+    window.addEventListener("store-status-changed", handleStatusChange)
+    return () => {
+      active = false
+      window.removeEventListener("store-status-changed", handleStatusChange)
+    }
+  }, [])
 
   useEffect(() => {
     const handleMapState = (e: any) => {
@@ -75,6 +106,9 @@ export function CartBar() {
     pathname.startsWith("/cupons") ||
     pathname.startsWith("/admin") ||
     pathname.startsWith("/payments") ||
+    pathname.startsWith("/perfil/pagamentos") ||
+    pathname.startsWith("/excluir-conta") ||
+    pathname.startsWith("/selecionar-endereco") ||
     pathname.startsWith("/reset-password")
 
   // Exibir somente quando totalItems > 0 e não estiver em rota restrita nem com mapa ativo
@@ -135,7 +169,20 @@ export function CartBar() {
           />
           <div className="flex-1 min-w-0 flex flex-col">
             <span className="text-xs text-[#6B6157] font-normal truncate">
-              Total com <strong className="font-bold text-[#1F1B16]">entrega grátis</strong>
+              {!statusLoaded ? (
+                "Total sem entrega"
+              ) : isDeliveryFeeEnabled && deliveryFee > 0 ? (
+                <>
+                  Total + entrega{" "}
+                  <strong className="font-bold text-[#1F1B16]">
+                    R$ {deliveryFee.toFixed(2).replace(".", ",")}
+                  </strong>
+                </>
+              ) : (
+                <>
+                  Total com <strong className="font-bold text-[#1F1B16]">entrega grátis</strong>
+                </>
+              )}
             </span>
             <div className="mt-0.5 flex items-baseline">
               <span className="text-base font-bold text-[#1F1B16] tracking-tight group-hover:text-[#E3A008] transition-colors whitespace-nowrap">

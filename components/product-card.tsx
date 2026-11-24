@@ -49,7 +49,7 @@ export function ProductCard({
   const [, setIsPromoActive] = useState(false)
   const [promoPrice, setPromoPrice] = useState<number | null>(null)
   const { addItem } = useCart()
-  const { user, openAuthModal } = useAuth()
+  const { user } = useAuth()
 
   useEffect(() => {
     const checkPromo = async () => {
@@ -113,30 +113,8 @@ export function ProductCard({
     (isMostRequested ? "Mais pedido" : rank === 1 ? "Nº 1 da casa" : hasDiscount ? "Promoção" : null)
 
   const handleAddClick = () => {
-    // Intercepta ação de adicionar: exige login obrigatório antes de prosseguir
-    if (!user) {
-      try {
-        sessionStorage.setItem(
-          "batata_pending_cart_item",
-          JSON.stringify({
-            product: {
-              id: product.id,
-              name: product.name,
-              price: currentPrice,
-              image: product.image,
-              quantity: 1,
-              category: product.category || "batata",
-              adicionais: [],
-            },
-          })
-        )
-      } catch {}
-      openAuthModal()
-      return
-    }
-
     // Checkout e carrinho utilizam EXCLUSIVAMENTE o preço final de venda (currentPrice)
-    if (product.category === "bebida") {
+    if (user && product.category === "bebida") {
       addItem({
         id: product.id,
         name: product.name,

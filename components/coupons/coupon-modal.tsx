@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useRef } from "react"
 import Image from "next/image"
 import { Tag, X, XCircle, Check, Loader2 } from "lucide-react"
 import { appToast } from "@/lib/app-toast"
@@ -22,43 +22,71 @@ interface CouponModalProps {
 }
 
 export function CouponModal({ open, onOpenChange, onCouponApplied }: CouponModalProps) {
-  const { getTotalPrice, coupon: selectedCoupon, setCoupon } = useCart()
+  const { items, getTotalPrice, coupon: selectedCoupon, setCoupon } = useCart()
   const currentTotal = getTotalPrice()
   const { coupons, loading, validateCoupon, getCouponMissingAmount } = useCoupons(
     currentTotal,
-    selectedCoupon?.id
+    selectedCoupon?.id,
+    items
   )
 
   const [code, setCode] = useState("")
   const [applying, setApplying] = useState(false)
+  const actionRef = useRef(false)
 
   const handleApply = async () => {
-    if (!code.trim() || applying) return
+    if (!code.trim() || applying || actionRef.current) return
+    actionRef.current = true
     setApplying(true)
-    const result = await validateCoupon(code)
-    setApplying(false)
+    try {
+      const result = await validateCoupon(code, items)
 
-    if (!result.valid) {
-      appToast.error(result.reason || "Cupom inválido")
+      if (!result.valid || !result.coupon) {
+        appToast.error("Cupom indisponível", result.reason || "Cupom inválido")
+        return
+      }
+
+      setCoupon(result.coupon)
+      appToast.success("Cupom aplicado com sucesso!")
+      onCouponApplied?.()
+      onOpenChange(false)
+    } finally {
+      setApplying(false)
+      actionRef.current = false
+    }
+  }
+
+  const handleSelect = async (coupon: any) => {
+    if (actionRef.current || applying) return
+
+    if (coupon.isExhausted) {
+      appToast.error("Cupom indisponível", coupon.exhaustedReason || "Este cupom atingiu o limite de usos.")
       return
     }
 
-    setCoupon(result.coupon)
-    appToast.success("Cupom aplicado com sucesso!")
-    onCouponApplied?.()
-    onOpenChange(false)
-  }
-
-  const handleSelect = (coupon: any) => {
     const isSame = selectedCoupon?.id === coupon.id
-    const nextCoupon = isSame ? null : coupon
-    setCoupon(nextCoupon)
-    if (nextCoupon) {
-      appToast.success(`Cupom ${coupon.code} selecionado!`)
+    if (isSame) {
+      setCoupon(null)
+      appToast.info("Cupom removido")
+      return
+    }
+
+    actionRef.current = true
+    setApplying(true)
+    try {
+      const result = await validateCoupon(coupon.code, items)
+      if (!result.valid || !result.coupon) {
+        appToast.error("Cupom indisponível", result.reason || "Este cupom não pode ser usado neste pedido.")
+        return
+      }
+
+      setCoupon(result.coupon)
+      appToast.success(`Cupom ${result.coupon.code} selecionado!`)
       onCouponApplied?.()
       onOpenChange(false)
-    } else {
-      appToast.info("Cupom removido")
+    } finally {
+      setApplying(false)
+      actionRef.current = false
     }
   }
 
@@ -181,7 +209,6 @@ export function CouponModal({ open, onOpenChange, onCouponApplied }: CouponModal
                     </div>
                   )}
                   <div
-                    onClick={() => isApplicable && handleSelect(coupon)}
                     data-vaul-no-drag
                     className={`rounded-2xl border transition-all ${
                       isSelected
@@ -196,7 +223,7 @@ export function CouponModal({ open, onOpenChange, onCouponApplied }: CouponModal
                       currentTotal={currentTotal}
                       isSelected={isSelected}
                       missingAmount={missing}
-                      onSelect={() => isApplicable && handleSelect(coupon)}
+                      onSelect={handleSelect}
                     />
                   </div>
                 </React.Fragment>

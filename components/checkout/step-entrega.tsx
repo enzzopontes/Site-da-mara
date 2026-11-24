@@ -341,7 +341,10 @@ export function StepEntrega({
                 Retirada na Casa (Batata Top)
               </h3>
               <p className="text-xs text-[#6B6157] mt-0.5 leading-relaxed">
-                Rua Carlos Roberto Crepaldi, 120 - Jardim Alvorada, Iacanga - SP
+                Rua Carlos Roberto Crepaldi, 120 - Centro, Iacanga - SP
+              </p>
+              <p className="text-xs text-[#6B6157] font-medium">
+                Portão de ferro preto
               </p>
               <p className="text-[11px] text-[#8C827A] mt-1 font-medium">
                 Retire seu pedido quentinho diretamente com a gente!

@@ -5,10 +5,13 @@ import useEmblaCarousel from "embla-carousel-react"
 import { ChevronLeft, ChevronRight, Tag } from "lucide-react"
 import { bannersManager, isSafeImageUrl, type HomeBannerItem } from "@/lib/banners-manager"
 import { useCart } from "@/lib/cart-context"
+import { useAuth } from "@/lib/auth-context"
+import { couponsManager } from "@/lib/cupons-manager"
 import { appToast } from "@/lib/app-toast"
 
 export function CampaignBanner() {
-  const { setCoupon } = useCart()
+  const { setCoupon, subtotal } = useCart()
+  const { user } = useAuth()
   const [banners, setBanners] = useState<HomeBannerItem[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -128,49 +131,71 @@ export function CampaignBanner() {
     async (banner: HomeBannerItem) => {
       const coupon = banner.coupon
       if (coupon && (coupon.code || coupon.id)) {
-        const couponData = {
-          id: coupon.id,
-          code: coupon.code,
-          discount: Number(coupon.discount_value),
-          type: coupon.discount_type as "percentage" | "fixed",
-          title: coupon.title,
-          description: coupon.description,
-          badgeLabel: coupon.badge_label,
-          minOrderValue: coupon.min_order_value != null ? Number(coupon.min_order_value) : null,
-          isActive: coupon.active,
-          expiresAt: coupon.expires_at ? new Date(coupon.expires_at) : null,
-        }
-
-        // 1. Atualiza estado global do CartContext
-        if (setCoupon) {
-          setCoupon(couponData)
-        }
-
-        // 2. Persiste em todas as chaves do localStorage para a sacola ler instantaneamente
         try {
-          localStorage.setItem("batata top-coupon", JSON.stringify(couponData))
-          localStorage.setItem("batata_applied_coupon", coupon.code)
-          localStorage.setItem("batata_pending_coupon", coupon.code)
-        } catch {}
+          const validation = await couponsManager.validateCoupon(
+            coupon.code,
+            user?.id,
+            subtotal
+          )
 
-        // 3. Copia o código para a área de transferência
-        await copyToClipboard(coupon.code)
+          if (!validation.valid) {
+            appToast.error(
+              "Cupom indisponível",
+              validation.message || "Este cupom não pode ser aplicado no momento."
+            )
+            return
+          }
 
-        // 4. Vibração tátil sutil em dispositivos móveis
-        if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-          try {
-            navigator.vibrate(20)
-          } catch {}
+          const validatedCoupon = validation.coupon ?? {
+            id: coupon.id,
+            code: coupon.code,
+            discount: Number(coupon.discount_value),
+            type: coupon.discount_type as "percentage" | "fixed",
+            title: coupon.title,
+            description: coupon.description,
+            badgeLabel: coupon.badge_label,
+            minOrderValue: coupon.min_order_value != null ? Number(coupon.min_order_value) : null,
+            isActive: coupon.active,
+            expiresAt: coupon.expires_at ? new Date(coupon.expires_at) : null,
+          }
+
+          // 1. Atualiza estado global do CartContext
+          if (setCoupon) {
+            setCoupon(validatedCoupon)
+          }
+
+          // 2. Copia o código para a área de transferência
+          await copyToClipboard(validatedCoupon.code)
+
+          // 3. Vibração tátil sutil em dispositivos móveis
+          if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+            try {
+              navigator.vibrate(20)
+            } catch {}
+          }
+
+          // 4. Toast superior confirmando a ativação na sacola
+          const minOrder = Number(validatedCoupon.minOrderValue || 0)
+          if (minOrder > 0 && subtotal < minOrder) {
+            appToast.success(
+              `Cupom "${validatedCoupon.code}" selecionado!`,
+              `Válido para pedidos a partir de R$ ${minOrder.toFixed(2).replace(".", ",")}.`
+            )
+          } else {
+            appToast.success(
+              `Cupom "${validatedCoupon.code}" aplicado com sucesso!`,
+              "Desconto ativado na sua sacola. O valor já foi reduzido!"
+            )
+          }
+        } catch {
+          appToast.error(
+            "Erro ao validar cupom",
+            "Não foi possível verificar este cupom agora. Tente novamente."
+          )
         }
-
-        // 5. Toast superior confirmando a ativação na sacola
-        appToast.success(
-          `Cupom "${coupon.code}" aplicado com sucesso!`,
-          "Desconto ativado na sua sacola. O valor já foi reduzido!"
-        )
       }
     },
-    [setCoupon, copyToClipboard]
+    [setCoupon, subtotal, user?.id, copyToClipboard]
   )
 
   const handlePrev = useCallback(() => {

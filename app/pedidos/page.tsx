@@ -21,6 +21,7 @@ import {
   Star,
   MessageSquare,
   RotateCcw,
+  AlertCircle,
 } from "lucide-react"
 
 // ─── Header Minimalista Padrão (Estilo iFood) ─────────────────────────────────
@@ -54,12 +55,21 @@ function PulsingDot() {
 }
 
 // ─── Barra de Progresso Segmentada Estilo iFood ──────────────────────────────
-function SegmentedProgressBar({ status }: { status: string }) {
+function SegmentedProgressBar({
+  status,
+  isUnderpaidReview = false,
+}: {
+  status: string
+  isUnderpaidReview?: boolean
+}) {
   // 1: Confirmado | 2: Preparo | 3: A caminho | 4: Entregue
   let currentStep = 1
   let statusText = "Pedido confirmado"
 
-  if (status === "awaiting_payment") {
+  if (isUnderpaidReview) {
+    currentStep = 1
+    statusText = "Pagamento em revisão"
+  } else if (status === "awaiting_payment") {
     currentStep = 1
     statusText = "Aguardando pagamento Pix"
   } else if (status === "pending" || status === "confirmed") {
@@ -105,16 +115,28 @@ function SegmentedProgressBar({ status }: { status: string }) {
   )
 }
 
+// ─── Verificador de Pedido em Revisão (Pagamento Parcial) ───────────────────
+export function isOrderUnderpaidReview(order: Order): boolean {
+  if (!order) return false
+  return Boolean(
+    (order as any).isUnderpaidReview ||
+      (order.metadata?.needs_review && order.metadata?.review_reason === "underpaid") ||
+      order.metadata?.review_reason === "underpaid"
+  )
+}
+
 // ─── Verificador de Pedido Aguardando Pix ──────────────────────────────────
 export function isOrderAwaitingPix(order: Order): boolean {
   if (!order) return false
+  const underpaidReview = isOrderUnderpaidReview(order)
   const isPaid =
-    order.metadata?.mp_payment_status === "approved" ||
-    order.metadata?.pix?.status === "approved" ||
     Boolean(order.metadata?.paid_at) ||
-    ["preparing", "preparo", "ready", "out_for_delivery", "delivered"].includes(order.status)
+    ["preparing", "preparo", "ready", "out_for_delivery", "delivered"].includes(order.status) ||
+    (!underpaidReview &&
+      (order.metadata?.mp_payment_status === "approved" ||
+        order.metadata?.pix?.status === "approved"))
 
-  if (isPaid) return false
+  if (isPaid || underpaidReview) return false
 
   const isPixMethod =
     order.paymentMethod === "pix" ||
@@ -135,6 +157,10 @@ function ActiveOrderCard({
   onDetails: (id: string) => void
 }) {
   const num = String(order.orderNumber || order.id.slice(-4).toUpperCase())
+  const underpaidReview =
+    isOrderUnderpaidReview(order) &&
+    !Boolean(order.metadata?.paid_at) &&
+    !["cancelled", "preparing", "preparo", "ready", "out_for_delivery", "delivered"].includes(order.status)
   const awaitingPix = isOrderAwaitingPix(order)
   const isPickup = order.deliveryType === "pickup" || (order.deliveryType as string) === "retirada"
   const deliveryTypeLabel = isPickup ? "Retirada" : "Delivery"
@@ -186,7 +212,12 @@ function ActiveOrderCard({
 
       {/* Faixa de Status Estilo iFood */}
       <div className="mt-3">
-        {awaitingPix ? (
+        {underpaidReview ? (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#FEF3C7] text-[#B45309] text-xs font-bold">
+            <AlertCircle className="w-4 h-4 shrink-0 text-[#D97706]" />
+            <span className="truncate">Pagamento em revisão • Em análise pela loja</span>
+          </div>
+        ) : awaitingPix ? (
           <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#FEF3C7] text-[#B45309] text-xs font-bold">
             <Clock className="w-4 h-4 shrink-0 text-[#D97706]" />
             <span className="truncate">Aguardando pagamento Pix • Toque para pagar</span>
@@ -195,6 +226,16 @@ function ActiveOrderCard({
           <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#DBEAFE] text-[#1E40AF] text-xs font-bold">
             <Bike className="w-4 h-4 shrink-0 text-[#1E40AF]" />
             <span className="truncate">A Batata Top saiu para entrega!</span>
+          </div>
+        ) : order.status === "ready" ? (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-bold">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+            <span className="truncate">Pedido pronto!</span>
+          </div>
+        ) : order.status === "pending" || order.status === "confirmed" ? (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#FEF3C7] text-[#B45309] text-xs font-bold">
+            <PulsingDot />
+            <span className="truncate">Pedido recebido • Aguardando preparo</span>
           </div>
         ) : (
           <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#FEF3C7] text-[#B45309] text-xs font-bold">
@@ -205,7 +246,7 @@ function ActiveOrderCard({
       </div>
 
       {/* Barra de Progresso Segmentada iFood */}
-      <SegmentedProgressBar status={order.status} />
+      <SegmentedProgressBar status={order.status} isUnderpaidReview={underpaidReview} />
 
       {/* Lista de Itens Rica dentro do Card */}
       <div className="py-2.5 space-y-2 border-y border-[#F5F2ED]">
@@ -266,7 +307,13 @@ function ActiveOrderCard({
 
       {/* Toque para Acompanhar */}
       <div className="mt-3 pt-2.5 border-t border-[#F5F2ED] flex items-center justify-between text-xs font-bold text-[#B45309]">
-        <span>{awaitingPix ? "Ver código e pagar Pix" : "Acompanhar detalhes do pedido"}</span>
+        <span>
+          {underpaidReview
+            ? "Ver detalhes da revisão do pagamento"
+            : awaitingPix
+            ? "Ver código e pagar Pix"
+            : "Acompanhar detalhes do pedido"}
+        </span>
         <ChevronRight className="w-4 h-4" />
       </div>
     </div>
@@ -511,16 +558,9 @@ export default function PedidosPage() {
       const map: Record<string, number> = {}
       if (data) {
         data.forEach((fb: any) => {
-          if (fb.order_id) map[fb.order_id] = fb.rating
+          if (fb.order_id && fb.rating != null) map[fb.order_id] = Number(fb.rating)
         })
       }
-      // Mescla com localStorage para compatibilidade imediata
-      try {
-        const local = JSON.parse(localStorage.getItem("evaluated-orders") || "[]")
-        local.forEach((oid: string) => {
-          if (!map[oid]) map[oid] = 5
-        })
-      } catch {}
       setFeedbackMap(map)
     } catch {}
   }, [])
@@ -611,6 +651,8 @@ export default function PedidosPage() {
 
     clearCart()
     order.items.forEach((item: any) => {
+      const rawNotes = item.notes ?? item.observacoes
+      const observacoes = typeof rawNotes === "string" ? rawNotes.trim() || undefined : undefined
       addItem({
         id: String(item.product_id || item.id || `reorder-${Date.now()}-${Math.random()}`),
         name: item.name || item.product_name,
@@ -619,6 +661,7 @@ export default function PedidosPage() {
         quantity: Number(item.quantity) || 1,
         category: item.category || "batata",
         pastaType: item.pastaType || undefined,
+        observacoes,
         adicionais: (item.adicionais || []).map((a: any) => ({
           id: a.id || String(a.name || a),
           name: a.name || String(a),
@@ -685,7 +728,7 @@ export default function PedidosPage() {
                 {!user && (
                   <button
                     type="button"
-                    onClick={() => router.push("/login?redirect=/pedidos")}
+                    onClick={() => router.push("/login?returnUrl=/pedidos")}
                     className="w-full sm:w-auto border border-[#E3A008] text-[#E3A008] hover:bg-[#E3A008]/10 font-extrabold px-6 py-3.5 rounded-xl transition-all"
                   >
                     Entrar na conta

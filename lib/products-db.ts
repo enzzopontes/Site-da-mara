@@ -42,6 +42,7 @@ export interface Adicional {
   id: string
   name: string
   price: number
+  adicional_categoria?: string | null
 }
 
 export interface Product {
@@ -364,11 +365,12 @@ class ProductsManager {
         available: p.available,
         adicionais: (p.product_adicionais || [])
           .map((pa: any) => pa.adicionais)
-          .filter(Boolean)
+          .filter((a: any) => a && a.available !== false)
           .map((a: any) => ({
             id: a.id,
             name: a.name,
             price: Number(a.price),
+            adicional_categoria: a.adicional_categoria ?? null,
           })),
         createdAt: new Date(p.created_at),
         updatedAt: new Date(p.updated_at),
@@ -426,7 +428,19 @@ class ProductsManager {
   }
 
   async getBebidasSortedByPopularity() {
-    return this.getBebidas()
+    const products = await this.getBebidas()
+    const ranking = await this.getRealRankingByCategory("bebida")
+
+    return [...products].sort((a, b) => {
+      const indexA = ranking.indexOf(a.name)
+      const indexB = ranking.indexOf(b.name)
+
+      if (indexA === -1 && indexB === -1) return a.name.localeCompare(b.name, "pt-BR")
+      if (indexA === -1) return 1
+      if (indexB === -1) return -1
+      if (indexA !== indexB) return indexA - indexB
+      return a.name.localeCompare(b.name, "pt-BR")
+    })
   }
 
   async getProductById(id: string) {
@@ -587,7 +601,7 @@ class ProductsManager {
 
       if (error || !data || data.length === 0) {
         const fallbackProduct = availableProducts[0] || products[0]
-        return { product: fallbackProduct, totalOrders: 35, customerPhotos: [] }
+        return { product: fallbackProduct, totalOrders: 0, customerPhotos: [] }
       }
 
       let topProduct: Product | undefined
@@ -604,15 +618,12 @@ class ProductsManager {
 
       if (!topProduct) {
         topProduct = availableProducts[0] || products[0]
-        totalOrders = 35
+        totalOrders = 0
       }
-      
-      // Buscamos o total de clientes para garantir que pedidos >= clientes
-      const totalCustomers = await this.getTotalCustomers()
 
       return {
         product: topProduct,
-        totalOrders: Math.max(totalCustomers + 5, totalOrders), // Garante que pedidos > clientes
+        totalOrders,
         customerPhotos: []
       }
     } catch {
@@ -620,7 +631,7 @@ class ProductsManager {
       const availableProducts = products.filter(p => p.available)
       return {
         product: availableProducts[0] || products[0],
-        totalOrders: 35, // Base mínima coerente com 30 clientes
+        totalOrders: 0,
         customerPhotos: []
       }
     }
@@ -681,7 +692,10 @@ class ProductsManager {
 
       // Ordena por quantidade vendida
       const sorted = [...categoryProducts]
-        .sort((a, b) => (countsById[b.id] || 0) - (countsById[a.id] || 0))
+        .sort((a, b) => {
+          const diff = (countsById[b.id] || 0) - (countsById[a.id] || 0)
+          return diff !== 0 ? diff : a.name.localeCompare(b.name, "pt-BR")
+        })
         .map(p => p.name)
       
       return sorted

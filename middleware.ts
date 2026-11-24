@@ -106,9 +106,14 @@ export default async function proxy(request: NextRequest) {
     }
   }
 
-  // 2. Proteção de Rotas de Usuário (Pedidos, Perfil, Meus Dados, Checkout)
-  const protectedUserRoutes = ["/pedidos", "/perfil", "/meus-dados", "/checkout"]
-  if (protectedUserRoutes.some((route) => url.pathname.startsWith(route))) {
+  // 2. Proteção de Rotas de Usuário (Pedidos, subrotas de Perfil, Meus Dados, Checkout)
+  const protectedUserRoutes = ["/pedidos", "/perfil/", "/meus-dados", "/checkout"]
+  const isProtectedUserRoute = protectedUserRoutes.some((route) =>
+    route.endsWith("/")
+      ? url.pathname.startsWith(route) && url.pathname !== route
+      : url.pathname === route || url.pathname.startsWith(`${route}/`)
+  )
+  if (isProtectedUserRoute) {
     if (!user) {
       const redirectUrl = new URL("/login", request.url)
       redirectUrl.searchParams.set("returnUrl", url.pathname)

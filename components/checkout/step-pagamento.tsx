@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   ChevronRight,
   X,
+  Loader2,
 } from "lucide-react"
 import { CartItem } from "@/lib/cart-context"
 import { Address } from "@/lib/addresses-manager"
@@ -19,6 +20,12 @@ import { PaymentCard } from "@/components/checkout/payment-card"
 import { PaymentModal } from "@/components/checkout/payment-modal"
 import { CardWizardModal } from "@/components/payment/card-wizard-modal"
 import { isValidCpf, formatCpf } from "@/lib/mercado-pago-client"
+
+export interface InstallmentOption {
+  installments: number
+  installmentAmount: number
+  totalAmount: number
+}
 
 interface StepPagamentoProps {
   formaPagamento:
@@ -38,6 +45,9 @@ interface StepPagamentoProps {
   setCardCpf: (v: string) => void
   installments: number
   setInstallments: (n: number) => void
+  installmentOptions?: InstallmentOption[]
+  loadingInstallments?: boolean
+  baseTotal?: number
   savedCards: any[]
   addCard: (params: any) => Promise<any>
   savingCard: boolean
@@ -70,6 +80,9 @@ export function StepPagamento({
   setCardCpf,
   installments,
   setInstallments,
+  installmentOptions,
+  loadingInstallments = false,
+  baseTotal,
   savedCards = [],
   addCard,
   savingCard,
@@ -106,7 +119,7 @@ export function StepPagamento({
 
   const getAddressDisplay = () => {
     if (deliveryType === "pickup") {
-      return "Retirada na Casa: Rua Carlos Roberto Crepaldi, 120 - Jd Alvorada"
+      return "Rua Carlos Roberto Crepaldi, 120 - Centro, Portão de ferro preto"
     }
     if (newAddressFormatted) return newAddressFormatted
     if (activeAddress) {
@@ -114,6 +127,19 @@ export function StepPagamento({
     }
     return "Endereço em Iacanga - SP"
   }
+
+  const effectiveBaseTotal =
+    typeof baseTotal === "number" && baseTotal > 0 ? baseTotal : finalTotal
+  const resolvedInstallmentOptions: InstallmentOption[] =
+    installmentOptions && installmentOptions.length > 0
+      ? installmentOptions
+      : [
+          {
+            installments: 1,
+            installmentAmount: effectiveBaseTotal,
+            totalAmount: effectiveBaseTotal,
+          },
+        ]
 
   return (
     <div className="space-y-6 pb-28">
@@ -136,9 +162,11 @@ export function StepPagamento({
             </label>
             <input
               type="text"
+              inputMode="decimal"
+              maxLength={10}
               placeholder="Ex: 50,00"
               value={troco}
-              onChange={(e) => setTroco(e.target.value)}
+              onChange={(e) => setTroco(e.target.value.replace(/[^0-9,.]/g, ""))}
               className="w-full h-11 px-3.5 rounded-xl border border-[#ECE7E0] bg-white text-sm font-bold text-[#1F1B16] focus:outline-none focus:ring-2 focus:ring-[#E3A008]"
             />
           </div>
@@ -441,36 +469,63 @@ export function StepPagamento({
               </button>
             </div>
             <div className="py-2 space-y-1.5 max-h-64 overflow-y-auto">
-              {[1, 2, 3, 4, 5, 6].map((num) => {
-                const installmentVal = (finalTotal / num).toFixed(2).replace(".", ",")
-                const isSelected = installments === num
-                return (
-                  <button
-                    key={num}
-                    type="button"
-                    onClick={() => {
-                      setInstallments(num)
-                      setIsInstallmentsOpen(false)
-                    }}
-                    className={`w-full flex items-center justify-between p-3 rounded-xl border text-left text-xs font-bold transition-all ${
-                      isSelected
-                        ? "border-[#E3A008] bg-amber-50 text-[#1F1B16] ring-1 ring-[#E3A008]"
-                        : "border-[#ECE7E0] hover:bg-gray-50 text-[#6B6157]"
-                    }`}
-                  >
-                    <span>
-                      {num}x de R$ {installmentVal} sem juros
-                    </span>
-                    <span
-                      className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                        isSelected ? "border-[#E3A008] bg-[#E3A008]" : "border-gray-300"
+              {loadingInstallments ? (
+                <div className="py-8 flex flex-col items-center justify-center gap-2 text-xs font-semibold text-[#6B6157]">
+                  <Loader2 className="w-5 h-5 animate-spin text-[#E3A008]" />
+                  <span>Consultando opções de parcelamento...</span>
+                </div>
+              ) : (
+                resolvedInstallmentOptions.map((option) => {
+                  const isSelected = installments === option.installments
+                  const isWithoutInterest =
+                    Math.abs(option.totalAmount - (effectiveBaseTotal || option.totalAmount)) < 0.05
+                  const installmentVal = option.installmentAmount.toFixed(2).replace(".", ",")
+                  const totalVal = option.totalAmount.toFixed(2).replace(".", ",")
+                  return (
+                    <button
+                      key={option.installments}
+                      type="button"
+                      onClick={() => {
+                        setInstallments(option.installments)
+                        setIsInstallmentsOpen(false)
+                      }}
+                      className={`w-full flex items-center justify-between p-3 rounded-xl border text-left text-xs font-bold transition-all cursor-pointer ${
+                        isSelected
+                          ? "border-[#E3A008] bg-amber-50 text-[#1F1B16] ring-1 ring-[#E3A008]"
+                          : "border-[#ECE7E0] hover:bg-gray-50 text-[#6B6157]"
                       }`}
                     >
-                      {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                    </span>
-                  </button>
-                )
-              })}
+                      <div className="flex flex-col gap-0.5 pr-2">
+                        <div className="flex items-center flex-wrap gap-1.5">
+                          <span className="text-[#1F1B16]">
+                            {option.installments}x de R$ {installmentVal}
+                          </span>
+                          <span
+                            className={
+                              isWithoutInterest
+                                ? "text-emerald-700 font-semibold"
+                                : "text-[#C1440E] font-semibold"
+                            }
+                          >
+                            {isWithoutInterest ? "sem acréscimos" : "com acréscimos"}
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-medium text-[#6B6157]">
+                          Total R$ {totalVal}
+                          {option.installments === 1 ? " à vista" : ""}
+                        </span>
+                      </div>
+                      <span
+                        className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                          isSelected ? "border-[#E3A008] bg-[#E3A008]" : "border-gray-300"
+                        }`}
+                      >
+                        {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </span>
+                    </button>
+                  )
+                })
+              )}
             </div>
           </div>
         </div>

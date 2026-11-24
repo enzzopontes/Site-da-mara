@@ -147,7 +147,7 @@ export function GuestTopbar({ onOpenAuth, desktopOnly = false }: GuestTopbarProp
   return (
     <aside
       aria-label="Aviso para clientes convidados"
-      className={`fixed ${bottomOffsetClass} left-0 right-0 z-40 px-3 transition-[bottom,transform] duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] pointer-events-auto select-none`}
+      className={`md:hidden fixed ${bottomOffsetClass} left-0 right-0 z-40 px-3 transition-[bottom,transform] duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] pointer-events-auto select-none`}
     >
       <div className={`max-w-md sm:max-w-lg mx-auto ${animationClass}`}>
         <button

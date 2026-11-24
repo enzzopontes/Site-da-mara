@@ -44,20 +44,34 @@ function computeDiscountCents(coupon: any, subtotalCents: number): number {
   return Math.min(subtotalCents, toCents(value))
 }
 
-function getRestrictedCategories(coupon: any): string[] {
+export function getRestrictedCategories(coupon: any): string[] {
   const raw = coupon?.restrictedCategories ?? coupon?.restricted_categories
   if (!Array.isArray(raw)) return []
-  return raw.map((c) => String(c || "").trim()).filter(Boolean)
+  return raw.map((c) => String(c || "").toLowerCase().trim()).filter(Boolean)
 }
 
 function computeEligibleCents(coupon: any, subtotalCents: number, items?: any[]): number {
+  const code = String(coupon?.code || "").trim().toUpperCase()
+  if (code.startsWith("FIDELIDADE-")) {
+    if (!Array.isArray(items) || items.length === 0) return 0
+    const batataUnitCents = items
+      .filter((item) => {
+        const cat = String(item?.category ?? item?.categoria ?? "").toLowerCase().trim()
+        return cat === "batata" || cat === "batatas"
+      })
+      .map((item) => toCents(Number(item?.price ?? item?.product_price ?? 0)))
+      .filter((c) => c > 0)
+    if (batataUnitCents.length === 0) return 0
+    return Math.max(0, Math.min(subtotalCents, Math.min(...batataUnitCents)))
+  }
+
   const restricted = getRestrictedCategories(coupon)
   if (restricted.length === 0 || !Array.isArray(items) || items.length === 0) {
     return subtotalCents
   }
   let sumCents = 0
   for (const item of items) {
-    const cat = String(item?.category || "").trim()
+    const cat = String(item?.category ?? item?.categoria ?? "").toLowerCase().trim()
     if (!restricted.includes(cat)) continue
     const qty = Math.max(1, Math.floor(Number(item?.quantity) || 1))
     const basePrice = Number(item?.price ?? item?.product_price ?? 0)

@@ -309,7 +309,7 @@ export default function SegurancaContaPage() {
   }
 
   const handleSignOutAfterDelete = async () => {
-    await signOut()
+    await signOut({ forgetAccount: true })
     router.push("/")
   }
 
@@ -498,7 +498,7 @@ export default function SegurancaContaPage() {
                           type={showPassword ? "text" : "password"}
                           value={newPassword}
                           onChange={(e) => setNewPassword(e.target.value)}
-                          placeholder="Mínimo de 6 caracteres"
+                          placeholder="Mínimo de 8 caracteres (letras e números)"
                           className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-[#E5E7EB] bg-white text-sm text-[#1A1A1A] placeholder:text-[#717171]/60 focus:outline-none focus:ring-2 focus:ring-[#E3A008]"
                         />
                         <button
@@ -569,12 +569,12 @@ export default function SegurancaContaPage() {
                   </button>
                 </form>
               ) : (
-                <p className="text-xs text-[#717171]">
-                  Para redefinir sua senha sem estar logado, acesse a opção{" "}
-                  <Link href="/reset-password" className="text-[#C1440E] font-semibold underline">
-                    Esqueci minha senha
+                <p className="text-xs text-[#717171] leading-relaxed">
+                  Você não precisa de senha para acessar sua conta: entre com código único por e-mail ou Google na{" "}
+                  <Link href="/login" className="text-[#C1440E] font-semibold underline">
+                    tela de login
                   </Link>{" "}
-                  na tela de login.
+                  e, após entrar, defina ou altere sua senha por aqui.
                 </p>
               )}
             </div>

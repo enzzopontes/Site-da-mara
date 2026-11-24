@@ -17,6 +17,16 @@ import { trackPurchase } from "@/lib/meta-pixel"
 import { FeedbackModal } from "@/components/feedback-modal"
 import { PedidoDetalheSkeleton } from "@/components/skeletons/pedido-detalhe-skeleton"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   ChevronLeft,
   Clock,
   ShieldCheck,
@@ -34,7 +44,26 @@ import {
   Star,
   Loader2,
   Check,
+  AlertCircle,
 } from "lucide-react"
+
+const celebratedOrderIds = new Set<string>()
+
+const CANCEL_ERROR_MESSAGES: Record<string, string> = {
+  order_status_not_cancellable: "Esse pedido já está a caminho e não pode mais ser cancelado.",
+  forbidden_not_owner: "Pedido não encontrado.",
+  order_not_found: "Pedido não encontrado.",
+  unauthorized: "Faça login novamente.",
+}
+
+function getCancelErrorMessage(rawMessage?: string): string {
+  if (!rawMessage) return "Não foi possível cancelar o pedido. Contate o suporte."
+  if (CANCEL_ERROR_MESSAGES[rawMessage]) return CANCEL_ERROR_MESSAGES[rawMessage]
+  for (const [code, friendly] of Object.entries(CANCEL_ERROR_MESSAGES)) {
+    if (rawMessage.includes(code)) return friendly
+  }
+  return rawMessage
+}
 
 // ─── Header Minimalista Padrão (Estilo iFood) ─────────────────────────────────
 function MinimalHeader({
@@ -176,12 +205,19 @@ export default function DetalhesPedidoPage() {
   const [order, setOrder] = useState<Order | null>(null)
   const [initialLoading, setInitialLoading] = useState(true)
   const [cancelling, setCancelling] = useState(false)
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [feedbackModalVisible, setFeedbackModalVisible] = useState(false)
   const [isEvaluated, setIsEvaluated] = useState(false)
 
-  const hasCelebratedRef = useRef(false)
+  const hasCelebratedRef = useRef(celebratedOrderIds.has(orderId))
+  const prevStatusRef = useRef<string | null>(null)
   const orderRef = useRef<Order | null>(null)
   orderRef.current = order
+
+  useEffect(() => {
+    hasCelebratedRef.current = celebratedOrderIds.has(orderId)
+    prevStatusRef.current = null
+  }, [orderId])
 
   // Carrega status de avaliação do pedido
   const checkIsEvaluated = useCallback(async (oid: string) => {
@@ -206,18 +242,20 @@ export default function DetalhesPedidoPage() {
   const loadOrder = useCallback(
     async (isSilent = false) => {
       if (!orderId) return
-      if (!isSilent && !order) {
+      if (!isSilent && !orderRef.current) {
         setInitialLoading(true)
       }
       try {
         const found = await ordersManager.getOrderById(orderId)
         if (found) {
+          prevStatusRef.current = found.status
           setOrder(found)
           checkIsEvaluated(found.id)
         } else {
           const todays = await ordersManager.getTodayOrders()
           const fb = todays.find((o) => o.id === orderId)
           if (fb) {
+            prevStatusRef.current = fb.status
             setOrder(fb)
             checkIsEvaluated(fb.id)
           }
@@ -228,7 +266,7 @@ export default function DetalhesPedidoPage() {
         if (!isSilent) setInitialLoading(false)
       }
     },
-    [orderId, order, checkIsEvaluated]
+    [orderId, checkIsEvaluated]
   )
 
   const loadOrderRef = useRef(loadOrder)
@@ -238,11 +276,13 @@ export default function DetalhesPedidoPage() {
 
   // Disparo da celebração quando Pix for aprovado
   const handlePaymentApproved = useCallback(() => {
-    if (!hasCelebratedRef.current) {
+    const currentOrder = orderRef.current
+    const orderKey = String(currentOrder?.id || orderId || "")
+    if (!hasCelebratedRef.current && !(orderKey && celebratedOrderIds.has(orderKey))) {
       hasCelebratedRef.current = true
+      if (orderKey) celebratedOrderIds.add(orderKey)
       appToast.success("Pagamento confirmado!", "Seu pedido já está sendo preparado.", { duration: 4000 })
       triggerPixConfettiCannons()
-      const currentOrder = orderRef.current
       if (currentOrder) {
         const orderItems = Array.isArray(currentOrder.items) ? currentOrder.items : []
         const contentIds = orderItems
@@ -261,12 +301,12 @@ export default function DetalhesPedidoPage() {
       }
     }
     loadOrderRef.current(true)
-  }, [])
+  }, [orderId])
 
   // Proteção de autenticação
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push(`/login?redirect=/pedidos/${orderId}`)
+      router.push(`/login?returnUrl=/pedidos/${orderId}`)
     }
   }, [user, authLoading, router, orderId])
 
@@ -289,19 +329,36 @@ export default function DetalhesPedidoPage() {
           filter: `id=eq.${orderId}`,
         },
         (payload: any) => {
-          const newStatus = payload.new?.status
-          const mpStatus = payload.new?.metadata?.mp_payment_status
+          const nextRow = payload.new
+          const newStatus = nextRow?.status as string | undefined
+          const nextMeta = nextRow?.metadata || {}
+          const nextUnderpaidOrReview =
+            (nextMeta.action === "held_underpaid" ||
+              nextMeta.mp_payment_status === "held_underpaid" ||
+              nextMeta.review_reason === "underpaid" ||
+              (nextMeta.needs_review === true && newStatus === "awaiting_payment")) &&
+            !Boolean(nextMeta.paid_at) &&
+            !["cancelled", "preparing", "preparo", "ready", "out_for_delivery", "delivered"].includes(
+              newStatus || ""
+            )
+
+          const prevStatus =
+            (payload.old?.status as string | undefined) ||
+            prevStatusRef.current ||
+            orderRef.current?.status
 
           if (
-            (newStatus && newStatus !== "awaiting_payment" && newStatus !== "cancelled") ||
-            mpStatus === "approved"
+            !nextUnderpaidOrReview &&
+            prevStatus === "awaiting_payment" &&
+            newStatus &&
+            newStatus !== "awaiting_payment" &&
+            newStatus !== "cancelled"
           ) {
-            if (
-              orderRef.current?.status === "awaiting_payment" ||
-              orderRef.current?.paymentMethod === "pix"
-            ) {
-              handlePaymentApproved()
-            }
+            handlePaymentApproved()
+          }
+
+          if (newStatus) {
+            prevStatusRef.current = newStatus
           }
           loadOrderRef.current(true)
         }
@@ -319,17 +376,16 @@ export default function DetalhesPedidoPage() {
   }, [orderId, user, handlePaymentApproved])
 
   // Ações
-  const handleCancelOrder = async () => {
-    if (!order) return
-    if (!confirm("Tem certeza que deseja cancelar seu pedido?")) return
-
+  const confirmCancelOrder = async () => {
+    if (!order || cancelling) return
+    setCancelDialogOpen(false)
     setCancelling(true)
     try {
       await ordersManager.cancelOrder(order.id)
       await loadOrder(true)
       appToast.success("Pedido cancelado", "Seu pedido foi cancelado com sucesso.")
     } catch (err: any) {
-      appToast.error("Falha ao cancelar", err.message || "Não foi possível cancelar o pedido. Contate o suporte.")
+      appToast.error("Falha ao cancelar", getCancelErrorMessage(err?.message))
     } finally {
       setCancelling(false)
     }
@@ -351,6 +407,7 @@ export default function DetalhesPedidoPage() {
         quantity: Number(item.quantity) || 1,
         category: item.category || "batata",
         pastaType: item.pastaType || undefined,
+        observacoes: item.notes || item.observacoes || undefined,
         adicionais: (item.adicionais || []).map((a: any) => ({
           id: a.id || String(a.name || a),
           name: a.name || String(a),
@@ -400,22 +457,40 @@ export default function DetalhesPedidoPage() {
 
   // Cálculos visuais
   const num = String(order.orderNumber || order.id.slice(-4).toUpperCase())
+  const isUnderpaidReview =
+    Boolean(
+      order.metadata?.action === "held_underpaid" ||
+        order.metadata?.mp_payment_status === "held_underpaid" ||
+        order.metadata?.pix?.status === "held_underpaid" ||
+        order.metadata?.review_reason === "underpaid" ||
+        (order.metadata?.needs_review === true && order.metadata?.review_reason === "underpaid")
+    ) &&
+    !Boolean(order.metadata?.paid_at) &&
+    !["cancelled", "preparing", "preparo", "ready", "out_for_delivery", "delivered"].includes(
+      order.status
+    )
+
   const isPaid =
-    order.metadata?.mp_payment_status === "approved" ||
-    order.metadata?.pix?.status === "approved" ||
-    Boolean(order.metadata?.paid_at) ||
-    ["preparing", "preparo", "ready", "out_for_delivery", "delivered"].includes(order.status)
+    !isUnderpaidReview &&
+    (order.metadata?.mp_payment_status === "approved" ||
+      order.metadata?.pix?.status === "approved" ||
+      Boolean(order.metadata?.paid_at) ||
+      ["preparing", "preparo", "ready", "out_for_delivery", "delivered"].includes(order.status))
 
   const isPixMethod =
     order.paymentMethod === "pix" ||
     order.paymentMethod?.toLowerCase?.() === "pix" ||
     Boolean(order.metadata?.pix)
 
-  const isPixAwaiting = !isPaid && (order.status === "awaiting_payment" || (order.status === "pending" && isPixMethod))
+  const isPixAwaiting =
+    !isPaid &&
+    !isUnderpaidReview &&
+    (order.status === "awaiting_payment" || (order.status === "pending" && isPixMethod))
 
   const etaMinutes = order.metadata?.eta_minutes
+  const isFinalStatus = order.status === "delivered" || order.status === "cancelled"
   const formattedTimeOrEta = (() => {
-    if (etaMinutes) {
+    if (etaMinutes && !isFinalStatus) {
       const base = order.createdAt ? new Date(order.createdAt).getTime() : Date.now()
       const etaDate = new Date(base + etaMinutes * 60 * 1000)
       return `Previsão de entrega às ${etaDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
@@ -428,6 +503,14 @@ export default function DetalhesPedidoPage() {
 
   // Status Badge & Texts
   const statusConfig = (() => {
+    if (isUnderpaidReview) {
+      return {
+        title: "Pagamento em revisão",
+        badgeBg: "bg-[#FEF3C7]",
+        badgeColor: "text-[#D97706]",
+        icon: <AlertCircle className="w-6 h-6" />,
+      }
+    }
     switch (order.status) {
       case "awaiting_payment":
         return {
@@ -490,14 +573,71 @@ export default function DetalhesPedidoPage() {
     }
   })()
 
-  const isPickup = order.deliveryType === "pickup" || (order.deliveryType as string) === "retirada"
-  const deliveryTypeLabel = isPickup ? "Retirada na Loja" : "Entrega Delivery"
-  const paymentLabel =
-    order.paymentMethod === "pix"
-      ? "Pix"
-      : order.paymentMethod?.toLowerCase?.().includes("cart")
-      ? "Cartão"
-      : "Dinheiro"
+  const isPickup = order.deliveryType === "pickup" || order.deliveryType === "retirada"
+  const pm = String(order.paymentMethod || "").toLowerCase()
+  const isCardMethod =
+    pm === "cartao" ||
+    pm.includes("cart") ||
+    pm === "credit_card" ||
+    pm === "debit_card"
+  const cardLabel =
+    order.metadata?.card_type === "debit" || pm.includes("deb")
+      ? "Cartão de Débito"
+      : order.metadata?.card_type === "credit" || pm.includes("cred")
+      ? "Cartão de Crédito"
+      : "Cartão"
+  const paymentLabel = isPixMethod
+    ? "Pix"
+    : isCardMethod
+    ? cardLabel
+    : "Dinheiro"
+
+  const isOnlinePayment = isPixMethod || order.metadata?.payment_online === true
+  const isPaidOnline =
+    !isUnderpaidReview &&
+    !["awaiting_payment", "cancelled"].includes(order.status) &&
+    (Boolean(order.metadata?.paid_at) ||
+      order.metadata?.mp_payment_status === "approved" ||
+      order.metadata?.pix?.status === "approved" ||
+      (isOnlinePayment &&
+        ["pending", "confirmed", "preparing", "preparo", "ready", "out_for_delivery", "delivered"].includes(
+          order.status
+        )))
+
+  const paymentBadge = (() => {
+    if (isUnderpaidReview) {
+      return { text: "Pagamento em revisão", className: "bg-amber-50 text-amber-800" }
+    }
+    if (isOnlinePayment) {
+      if (isPaidOnline) {
+        return { text: "Pagamento Aprovado", className: "bg-emerald-50 text-emerald-700" }
+      }
+      if (order.status === "cancelled") {
+        return { text: "Cancelado", className: "bg-red-50 text-red-700" }
+      }
+      return { text: "Aguardando Pagamento", className: "bg-amber-50 text-amber-800" }
+    }
+    if (order.status === "cancelled") {
+      return { text: "Cancelado", className: "bg-red-50 text-red-700" }
+    }
+    if (order.status === "delivered") {
+      return { text: "Pago na entrega", className: "bg-emerald-50 text-emerald-700" }
+    }
+    return { text: "Pagamento na entrega", className: "bg-[#FEF8EC] text-[#A16207]" }
+  })()
+
+  const computedItemsSubtotal = (order.items || []).reduce((sum: number, item: any) => {
+    const adicsTotal = (item.adicionais || []).reduce(
+      (s: number, a: any) => s + Number(a.price ?? a.preco ?? 0) * Number(a.quantity || 1),
+      0
+    )
+    return sum + (Number(item.price || 0) + adicsTotal) * Number(item.quantity || 1)
+  }, 0)
+  const rawSubtotal = order.metadata?.subtotal
+  const subtotalValue =
+    rawSubtotal != null && !Number.isNaN(Number(rawSubtotal))
+      ? Number(rawSubtotal)
+      : computedItemsSubtotal
 
   const rawFrete = order.metadata?.delivery_fee ?? order.metadata?.deliveryFee
   const freteValue = rawFrete != null ? Number(rawFrete) : 0
@@ -524,6 +664,25 @@ export default function DetalhesPedidoPage() {
             />
           )}
 
+          {/* 1b. Card de Revisão — Pagamento Pix com valor divergente (held_underpaid) */}
+          {isUnderpaidReview && (
+            <div className="bg-[#FFFBEB] border border-[#FCD34D] rounded-3xl p-5 shadow-xs">
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-2xl bg-[#FEF3C7] text-[#D97706] flex items-center justify-center shrink-0">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-extrabold text-[#92400E]">
+                    Pagamento em revisão
+                  </h3>
+                  <p className="text-xs font-medium text-[#92400E]/90 mt-0.5 leading-relaxed">
+                    Identificamos uma divergência no valor pago. Nossa equipe já foi notificada e analisará seu pedido em breve.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* 2. Card de Status Visual Estilo App Mobile */}
           <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-xs border border-[#ECE7E0]">
             <div className="flex items-center gap-4">
@@ -548,21 +707,59 @@ export default function DetalhesPedidoPage() {
             <ProgressBar status={order.status} isPixAwaiting={isPixAwaiting} />
           </div>
 
-          {/* 3. Card Saiu Para Entrega (Sem mapa, informativo do app) */}
+          {/* 3. Card Saiu Para Entrega + Banner Chegou no Portão + Confirmação Manual */}
           {order.status === "out_for_delivery" && (
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-3xl p-5 shadow-xs">
-              <div className="flex items-start gap-3.5">
-                <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-200">
-                  <Bike className="w-5 h-5" />
+            <div className="space-y-3">
+              {Boolean(order.metadata?.arrived_at) && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-3xl p-4 sm:p-5 shadow-xs flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-extrabold text-emerald-950">
+                      A entregadora chegou no seu portão!
+                    </h3>
+                    <p className="text-xs font-medium text-emerald-800 mt-0.5 leading-relaxed">
+                      Seu pedido está na porta. Após receber, toque em &ldquo;Já recebi meu pedido&rdquo; abaixo.
+                    </p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-extrabold text-blue-950">
-                    A Batata Top saiu para entrega!
-                  </h3>
-                  <p className="text-xs font-medium text-blue-800 mt-0.5 leading-relaxed">
-                    O entregador está a caminho do seu endereço com o pedido quentinho. Fique atento ao interfone ou portão.
-                  </p>
+              )}
+
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-3xl p-5 shadow-xs space-y-3.5">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-200">
+                    <Bike className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-extrabold text-blue-950">
+                      A Batata Top saiu para entrega!
+                    </h3>
+                    <p className="text-xs font-medium text-blue-800 mt-0.5 leading-relaxed">
+                      O entregador está a caminho do seu endereço com o pedido quentinho. Fique atento ao interfone ou portão.
+                    </p>
+                  </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const supabase = getSupabaseBrowserClient()
+                      const { error: confirmErr } = await supabase.rpc("confirm_order_delivered_user", {
+                        p_order_id: order.id,
+                      })
+                      if (confirmErr) throw confirmErr
+                      await loadOrder(true)
+                      setFeedbackModalVisible(true)
+                    } catch {
+                      appToast.error("Não foi possível confirmar", "Tente novamente em alguns instantes.")
+                    }
+                  }}
+                  className="w-full py-3 px-4 rounded-2xl bg-[#E3A008] hover:bg-[#C1440E] text-white font-extrabold text-xs sm:text-sm shadow-sm transition-all active:scale-[0.99] cursor-pointer"
+                >
+                  Já recebi meu pedido
+                </button>
               </div>
             </div>
           )}
@@ -642,6 +839,16 @@ export default function DetalhesPedidoPage() {
                 <p className="text-xs text-[#9C9188] italic">Itens indisponíveis</p>
               )}
 
+              {/* Observação geral do pedido */}
+              {order.notes && (
+                <div className="p-3 rounded-2xl bg-[#FAF8F5] border border-[#ECE7E0] text-xs space-y-0.5">
+                  <p className="font-extrabold text-[#1F1B16] text-[11px] uppercase tracking-wider">
+                    Observações do pedido
+                  </p>
+                  <p className="text-[#6B6157] font-medium leading-relaxed">{order.notes}</p>
+                </div>
+              )}
+
               {/* Cupom de desconto aplicado */}
               {order.couponCode && (
                 <div className="flex items-center justify-between p-3 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-800 text-xs">
@@ -662,7 +869,11 @@ export default function DetalhesPedidoPage() {
               {/* Resumo financeiro */}
               <div className="pt-3 border-t border-[#F5F2ED] space-y-2 text-xs">
                 <div className="flex justify-between text-[#6B6157] font-medium">
-                  <span>Entrega ({order.deliveryType === "pickup" ? "Retirada" : "Delivery"})</span>
+                  <span>Subtotal</span>
+                  <span>R$ {subtotalValue.toFixed(2).replace(".", ",")}</span>
+                </div>
+                <div className="flex justify-between text-[#6B6157] font-medium">
+                  <span>Entrega ({isPickup ? "Retirada" : "Delivery"})</span>
                   <span>{freteText}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm font-black text-[#1F1B16] pt-1 border-t border-[#F5F2ED]">
@@ -681,13 +892,19 @@ export default function DetalhesPedidoPage() {
             <div className="bg-white rounded-3xl p-5 shadow-xs border border-[#ECE7E0] space-y-1.5">
               <h3 className="text-xs font-black text-[#1F1B16] uppercase tracking-wider flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-[#E3A008]" />
-                {order.deliveryType === "pickup" ? "Retirada na Loja" : "Endereço de Entrega"}
+                {isPickup ? "Retirada na Loja" : "Endereço de Entrega"}
               </h3>
-              <p className="text-xs font-medium text-[#6B6157] leading-relaxed">
-                {order.deliveryType === "pickup"
-                  ? "Rua Pedro de Toledo, 540 - Centro, Iacanga-SP"
-                  : order.address || "Endereço informado na compra"}
-              </p>
+              {isPickup ? (
+                <p className="text-xs font-medium text-[#6B6157] leading-relaxed">
+                  Rua Carlos Roberto Crepaldi, 120 - Centro, Iacanga-SP (Portão de ferro preto)
+                </p>
+              ) : (
+                <div className="space-y-0.5 text-xs font-medium text-[#6B6157] leading-relaxed">
+                  <p>{order.address || "Endereço informado na compra"}</p>
+                  {order.complement && <p>Complemento: {order.complement}</p>}
+                  {order.neighborhood && <p>Bairro: {order.neighborhood}</p>}
+                </div>
+              )}
             </div>
 
             {/* Pagamento */}
@@ -701,11 +918,9 @@ export default function DetalhesPedidoPage() {
                 {order.metadata?.troco ? ` • Troco para R$ ${order.metadata.troco}` : ""}
               </p>
               <span
-                className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
-                  isPaid ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"
-                }`}
+                className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${paymentBadge.className}`}
               >
-                {isPaid ? "Pagamento Aprovado" : "Aguardando Pagamento"}
+                {paymentBadge.text}
               </span>
             </div>
           </div>
@@ -725,14 +940,16 @@ export default function DetalhesPedidoPage() {
             )}
 
             {/* Pedir Novamente */}
-            <button
-              type="button"
-              onClick={handleReorder}
-              className="w-full h-12 rounded-2xl bg-[#E3A008] hover:bg-[#B5860A] text-white active:scale-98 text-xs font-extrabold transition-all flex items-center justify-center gap-2 shadow-md shadow-amber-500/20"
-            >
-              <RotateCcw className="w-4 h-4" />
-              <span>Pedir novamente</span>
-            </button>
+            {isFinalStatus && (
+              <button
+                type="button"
+                onClick={handleReorder}
+                className="w-full h-12 rounded-2xl bg-[#E3A008] hover:bg-[#B5860A] text-white active:scale-98 text-xs font-extrabold transition-all flex items-center justify-center gap-2 shadow-md shadow-amber-500/20"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Pedir novamente</span>
+              </button>
+            )}
 
             {/* Preciso de Ajuda (WhatsApp) */}
             <button
@@ -748,7 +965,7 @@ export default function DetalhesPedidoPage() {
             {isCancellable && (
               <button
                 type="button"
-                onClick={handleCancelOrder}
+                onClick={() => setCancelDialogOpen(true)}
                 disabled={cancelling}
                 className="w-full h-11 rounded-2xl bg-white border border-red-200 hover:bg-red-50 text-red-600 active:scale-98 text-xs font-bold transition-all flex items-center justify-center gap-1.5"
               >
@@ -768,6 +985,36 @@ export default function DetalhesPedidoPage() {
 
       <Footer />
       <OrderSummary />
+
+      {/* Modal de confirmação de cancelamento */}
+      <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <AlertDialogContent className="rounded-3xl border-[#ECE7E0] bg-white max-w-sm">
+          <AlertDialogHeader className="items-center text-center sm:text-center">
+            <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mb-1">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <AlertDialogTitle className="text-base font-extrabold text-[#1F1B16]">
+              Cancelar pedido
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs font-medium text-[#6B6157] leading-relaxed">
+              Tem certeza que deseja cancelar o pedido{" "}
+              <span className="font-extrabold text-[#1F1B16]">#{num}</span>? Essa ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="sm:justify-center gap-2">
+            <AlertDialogCancel className="rounded-xl border-[#ECE7E0] text-[#1F1B16] font-bold text-xs">
+              Voltar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmCancelOrder}
+              disabled={cancelling}
+              className="rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs"
+            >
+              Cancelar pedido
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Modal de Avaliação */}
       {feedbackModalVisible && (

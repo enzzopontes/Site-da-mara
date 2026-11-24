@@ -8,21 +8,60 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/lib/auth-context"
-import { User, Mail, Phone, Calendar, ArrowLeft, Save, Download, Trash2, ShieldCheck } from "lucide-react"
+import { User, Mail, Phone, Calendar, ArrowLeft, Save, Download, Trash2, ShieldCheck, FileText } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { MeusDadosSkeleton } from "@/components/skeletons/meus-dados-skeleton"
 import { useEffect, useState } from "react"
 import { OrderSummary } from "@/components/order-summary"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 
+function formatCPF(value: string): string {
+  const d = value.replace(/\D/g, "").slice(0, 11)
+  if (d.length <= 3) return d
+  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`
+  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`
+}
+
+function isValidCPF(raw: string): boolean {
+  const cpf = raw.replace(/\D/g, "")
+  if (cpf.length !== 11) return false
+  if (/^(\d)\1{10}$/.test(cpf)) return false
+
+  let sum = 0
+  for (let i = 0; i < 9; i++) sum += parseInt(cpf[i], 10) * (10 - i)
+  let check1 = 11 - (sum % 11)
+  if (check1 >= 10) check1 = 0
+  if (check1 !== parseInt(cpf[9], 10)) return false
+
+  sum = 0
+  for (let i = 0; i < 10; i++) sum += parseInt(cpf[i], 10) * (11 - i)
+  let check2 = 11 - (sum % 11)
+  if (check2 >= 10) check2 = 0
+  if (check2 !== parseInt(cpf[10], 10)) return false
+
+  return true
+}
+
+function formatPhone(value: string): string {
+  const d = value.replace(/\D/g, "").slice(0, 11)
+  if (d.length === 0) return ""
+  if (d.length <= 2) return `(${d}`
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`
+}
+
 export default function MeusDadosPage() {
   const { user, loading } = useAuth()
   const router = useRouter()
   const supabase = getSupabaseBrowserClient()
   const [saving, setSaving] = useState(false)
+  const [cpfTouched, setCpfTouched] = useState(false)
   const [formData, setFormData] = useState({
     full_name: "",
     phone: "",
+    cpf: "",
     birth_date: "",
   })
 
@@ -33,19 +72,46 @@ export default function MeusDadosPage() {
   }, [user, loading, router])
 
   useEffect(() => {
-    if (user) {
-      setFormData({
-        full_name: user.user_metadata?.full_name || "",
-        phone: user.user_metadata?.phone || "",
-        birth_date: user.user_metadata?.birth_date || "",
+    if (!user) return
+    let mounted = true
+
+    setFormData({
+      full_name: user.user_metadata?.full_name || "",
+      phone: formatPhone(user.user_metadata?.phone || ""),
+      cpf: formatCPF(user.user_metadata?.cpf || ""),
+      birth_date: user.user_metadata?.birth_date || "",
+    })
+
+    supabase
+      .from("profiles")
+      .select("full_name, phone, cpf")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data }: any) => {
+        if (!mounted || !data) return
+        setFormData((prev) => ({
+          full_name: data.full_name || prev.full_name,
+          phone: formatPhone(data.phone || prev.phone),
+          cpf: formatCPF(data.cpf || prev.cpf),
+          birth_date: prev.birth_date,
+        }))
       })
+      .catch(() => {})
+
+    return () => {
+      mounted = false
     }
-  }, [user])
+  }, [user, supabase])
+
+  const cpfDigitsValue = formData.cpf.replace(/\D/g, "")
+  const cpfError =
+    cpfTouched && cpfDigitsValue.length > 0 && !isValidCPF(cpfDigitsValue)
 
   const handleSave = async () => {
     if (!user) return
 
-    if (formData.full_name.trim().length < 3) {
+    const trimmedName = formData.full_name.trim()
+    if (trimmedName.length < 3) {
       appToast.warning("Nome incompleto", "Por favor, insira seu nome completo.")
       return
     }
@@ -55,30 +121,40 @@ export default function MeusDadosPage() {
       appToast.warning("Telefone inválido", "Por favor, insira um telefone válido com DDD.")
       return
     }
+
+    const cpfDigits = formData.cpf.replace(/\D/g, "")
+    if (cpfDigits.length > 0 && !isValidCPF(cpfDigits)) {
+      setCpfTouched(true)
+      appToast.warning("CPF inválido", "Insira um número de CPF válido ou deixe o campo em branco.")
+      return
+    }
     
     setSaving(true)
     try {
+      const { error: profileErr } = await supabase
+        .from("profiles")
+        .upsert(
+          {
+            id: user.id,
+            full_name: trimmedName,
+            phone: phoneDigits || null,
+            cpf: cpfDigits || null,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "id" }
+        )
+      if (profileErr) throw profileErr
+
       const { error } = await supabase.auth.updateUser({
         data: {
-          full_name: formData.full_name.trim(),
-          phone: formData.phone,
+          full_name: trimmedName,
+          phone: phoneDigits || null,
+          cpf: cpfDigits || null,
           birth_date: formData.birth_date,
         }
       })
 
       if (error) throw error
-
-      if (user?.id) {
-        const { error: profileErr } = await supabase
-          .from("profiles")
-          .update({
-            full_name: formData.full_name.trim(),
-            phone: formData.phone.trim() || null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", user.id)
-        if (profileErr) throw profileErr
-      }
       
       appToast.success("Dados atualizados!", "Suas informações foram salvas com sucesso.")
     } catch (error) {
@@ -90,14 +166,11 @@ export default function MeusDadosPage() {
   }
 
   const handlePhoneChange = (value: string) => {
-    const numbers = value.replace(/\D/g, "")
-    if (numbers.length <= 11) {
-      let formatted = ""
-      if (numbers.length > 0) formatted = `(${numbers.substring(0, 2)}`
-      if (numbers.length > 2) formatted += `) ${numbers.substring(2, 7)}`
-      if (numbers.length > 7) formatted += `-${numbers.substring(7, 11)}`
-      setFormData({ ...formData, phone: formatted })
-    }
+    setFormData({ ...formData, phone: formatPhone(value) })
+  }
+
+  const handleCpfChange = (value: string) => {
+    setFormData({ ...formData, cpf: formatCPF(value) })
   }
 
   if (loading) {
@@ -177,6 +250,33 @@ export default function MeusDadosPage() {
               />
             </div>
 
+            {/* CPF */}
+            <div className="space-y-2">
+              <Label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                <FileText className="h-4 w-4 text-yellow-500" />
+                CPF (opcional)
+              </Label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                value={formData.cpf}
+                onChange={(e) => handleCpfChange(e.target.value)}
+                onBlur={() => setCpfTouched(true)}
+                placeholder="000.000.000-00"
+                maxLength={14}
+                className={`h-12 rounded-xl ${
+                  cpfError
+                    ? "border-red-500 focus:border-red-500"
+                    : "border-gray-200 focus:border-yellow-300"
+                }`}
+              />
+              {cpfError && (
+                <p className="text-xs font-semibold text-red-600">
+                  Insira um número de CPF válido.
+                </p>
+              )}
+            </div>
+
             {/* Data de Nascimento */}
             <div className="space-y-2">
               <Label className="text-sm font-bold text-gray-700 flex items-center gap-2">
@@ -224,14 +324,33 @@ export default function MeusDadosPage() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
-              <a
-                href="/api/user/export-data"
-                download
-                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 font-bold rounded-xl text-xs sm:text-sm transition-colors border border-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const res = await fetch("/api/user/export-data", { credentials: "same-origin" })
+                    if (!res.ok) {
+                      const errData = await res.json().catch(() => null)
+                      throw new Error(errData?.error || "Não foi possível exportar seus dados agora.")
+                    }
+                    const blob = await res.blob()
+                    const url = URL.createObjectURL(blob)
+                    const link = document.createElement("a")
+                    link.href = url
+                    link.download = `batata-top-meus-dados-${new Date().toISOString().slice(0, 10)}.json`
+                    document.body.appendChild(link)
+                    link.click()
+                    link.remove()
+                    URL.revokeObjectURL(url)
+                  } catch (err: any) {
+                    appToast.error("Erro ao exportar", err?.message || "Tente novamente em instantes.")
+                  }
+                }}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 bg-[#FAF8F5] hover:bg-amber-50 text-[#1F1B16] font-bold rounded-xl text-xs sm:text-sm transition-colors border border-[#E8E2D9] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008]"
               >
-                <Download className="h-4 w-4 text-amber-700" aria-hidden="true" />
+                <Download className="h-4 w-4 text-[#C1440E]" aria-hidden="true" />
                 Exportar Meus Dados (JSON)
-              </a>
+              </button>
 
               <Button
                 variant="outline"

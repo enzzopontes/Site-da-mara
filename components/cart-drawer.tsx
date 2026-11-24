@@ -1,15 +1,17 @@
 "use client"
 
-import React, { useState, useCallback } from "react"
+import React, { useState, useCallback, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { ShoppingBag, Minus, Plus, Trash2, ArrowRight, Tag, X } from "lucide-react"
+import { ShoppingBag, Minus, Plus, Trash2, ArrowRight, Tag, X, Pencil } from "lucide-react"
 import { appToast } from "@/lib/app-toast"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
-import { useCart } from "@/lib/cart-context"
+import { useCart, type CartItem } from "@/lib/cart-context"
+import { storeStatusManager, type StoreStatus } from "@/lib/store-status-manager"
 import { ClearCartDialog } from "@/components/checkout/clear-cart-dialog"
 import { CouponStatusCard } from "@/components/coupons/coupon-status-card"
+import { AddToCartDialog } from "@/components/add-to-cart-dialog"
 
 interface CartDrawerProps {
   open: boolean
@@ -27,6 +29,7 @@ export function CartDrawer({ open, onOpenChange }: CartDrawerProps) {
   const {
     items,
     updateQuantity,
+    updateItem,
     removeFromCart,
     clearCart,
     getTotalPrice,
@@ -39,6 +42,37 @@ export function CartDrawer({ open, onOpenChange }: CartDrawerProps) {
   } = useCart()
 
   const [showClearConfirm, setShowClearConfirm] = useState(false)
+  const [editingCartItem, setEditingCartItem] = useState<{ item: CartItem; index: number } | null>(null)
+  const [isDeliveryFeeEnabled, setIsDeliveryFeeEnabled] = useState(true)
+  const [deliveryFee, setDeliveryFee] = useState(0)
+  const [statusLoaded, setStatusLoaded] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    const applyStatus = (status?: StoreStatus | null) => {
+      if (!active || !status) return
+      setIsDeliveryFeeEnabled(Boolean(status.isDeliveryFeeEnabled))
+      setDeliveryFee(typeof status.deliveryFee === "number" ? status.deliveryFee : 0)
+      setStatusLoaded(true)
+    }
+
+    storeStatusManager.getStatus().then(applyStatus).catch(() => {})
+
+    const handleStatusChange = (e: Event) => {
+      const detail = (e as CustomEvent<StoreStatus>).detail
+      if (detail) {
+        applyStatus(detail)
+      } else {
+        storeStatusManager.getStatus().then(applyStatus).catch(() => {})
+      }
+    }
+
+    window.addEventListener("store-status-changed", handleStatusChange)
+    return () => {
+      active = false
+      window.removeEventListener("store-status-changed", handleStatusChange)
+    }
+  }, [open])
 
   // Esvaziamento completo da sacola
   const handleEmptyCart = useCallback(() => {
@@ -90,7 +124,9 @@ export function CartDrawer({ open, onOpenChange }: CartDrawerProps) {
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0)
   const subtotal = getTotalPrice()
   const currentDiscount = discountAmount > 0 ? discountAmount : 0
-  const finalTotal = Math.max(0, subtotal - currentDiscount)
+  const effectiveDeliveryFee =
+    statusLoaded && isDeliveryFeeEnabled && deliveryFee > 0 ? deliveryFee : 0
+  const finalTotal = Math.max(0, subtotal - currentDiscount) + effectiveDeliveryFee
 
   const handleCheckout = () => {
     onOpenChange(false)
@@ -182,7 +218,7 @@ export function CartDrawer({ open, onOpenChange }: CartDrawerProps) {
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-3 space-y-4 divide-y divide-gray-100 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {items.map((item) => {
+                {items.map((item, index) => {
                   const adicionaisTotal = item.adicionais.reduce(
                     (sum, a) => sum + a.price * a.quantity,
                     0
@@ -264,13 +300,26 @@ export function CartDrawer({ open, onOpenChange }: CartDrawerProps) {
                             </button>
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveItem(item.id)}
-                            className="text-xs font-medium text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
-                          >
-                            Remover
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditingCartItem({ item, index })}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-[#8A6100] hover:text-[#C1440E] hover:bg-[#FEF8EC] transition-colors cursor-pointer"
+                              aria-label={`Editar ${item.name}`}
+                              title="Editar item"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                              <span>Editar</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveItem(item.id)}
+                              className="text-xs font-medium text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
+                            >
+                              Remover
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -313,7 +362,15 @@ export function CartDrawer({ open, onOpenChange }: CartDrawerProps) {
 
                   <div className="flex items-center justify-between">
                     <span>Taxa de entrega</span>
-                    <span className="font-semibold text-emerald-600">Grátis (Iacanga)</span>
+                    {!statusLoaded ? (
+                      <span className="font-semibold text-gray-500">A calcular</span>
+                    ) : effectiveDeliveryFee > 0 ? (
+                      <span className="font-bold text-gray-900">
+                        R$ {effectiveDeliveryFee.toFixed(2).replace(".", ",")}
+                      </span>
+                    ) : (
+                      <span className="font-semibold text-emerald-600">Grátis</span>
+                    )}
                   </div>
 
                   {currentDiscount > 0 && appliedCoupon && (
@@ -364,6 +421,32 @@ export function CartDrawer({ open, onOpenChange }: CartDrawerProps) {
         onOpenChange={setShowClearConfirm}
         onConfirm={handleEmptyCart}
       />
+
+      {editingCartItem && (
+        <AddToCartDialog
+          product={{
+            id: editingCartItem.item.id.replace(/-\d{13}$/, ""),
+            name: editingCartItem.item.name,
+            description: "",
+            price: editingCartItem.item.price,
+            image: editingCartItem.item.image,
+            category: editingCartItem.item.category,
+          }}
+          open={Boolean(editingCartItem)}
+          onOpenChange={(isOpen) => {
+            if (!isOpen) setEditingCartItem(null)
+          }}
+          editMode={true}
+          initialQuantity={editingCartItem.item.quantity}
+          initialObservacoes={editingCartItem.item.observacoes}
+          initialPastaType={editingCartItem.item.pastaType}
+          initialAdicionais={editingCartItem.item.adicionais}
+          onSaveEdit={(updated: Partial<CartItem>) => {
+            updateItem(editingCartItem.item.id, updated)
+            setEditingCartItem(null)
+          }}
+        />
+      )}
     </>
   )
 }

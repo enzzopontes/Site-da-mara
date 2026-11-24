@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { useAuth } from "@/lib/auth-context"
+import { appToast } from "@/lib/app-toast"
 import { 
   Trash2, 
   FileText, 
@@ -13,7 +14,9 @@ import {
   ArrowLeft,
   ChevronDown,
   Check,
-  Loader2
+  Loader2,
+  LogIn,
+  ShieldAlert
 } from "lucide-react"
 
 const REASON_OPTIONS = [
@@ -25,9 +28,11 @@ const REASON_OPTIONS = [
 ]
 
 export default function ExcluirContaPage() {
-  const { user } = useAuth()
+  const { user, loading: authLoading, signOut } = useAuth()
   const [identifier, setIdentifier] = useState("")
   const [reason, setReason] = useState("")
+  const [confirmText, setConfirmText] = useState("")
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [isOpenSelect, setIsOpenSelect] = useState(false)
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -36,7 +41,7 @@ export default function ExcluirContaPage() {
 
   useEffect(() => {
     if (user?.email) {
-      setIdentifier(user.email)
+      setIdentifier((prev) => prev || user.email || "")
     }
   }, [user])
 
@@ -53,28 +58,40 @@ export default function ExcluirContaPage() {
 
   const selectedReasonObj = REASON_OPTIONS.find((opt) => opt.value === reason)
 
+  const isConfirmed = confirmText.trim().toUpperCase() === "EXCLUIR"
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!identifier.trim()) return
+    if (!identifier.trim() || !isConfirmed) return
 
     setLoading(true)
+    setErrorMsg(null)
 
     try {
       const res = await fetch("/api/user/delete-data", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ identifier, reason })
+        body: JSON.stringify({ identifier, reason, source: "site" })
       })
       const data = await res.json().catch(() => null)
       if (!res.ok || !data?.success || !data?.protocol) {
-        alert(data?.error || "Não foi possível processar sua solicitação. Faça login e tente novamente.")
+        const msg = data?.error || "Não foi possível processar sua solicitação. Faça login e tente novamente."
+        setErrorMsg(msg)
+        appToast.error("Erro na solicitação", msg)
         return
       }
       setProtocol(data.protocol)
       setSubmitted(true)
+      try {
+        await signOut({ forgetAccount: true })
+      } catch {
+        // Mantém o card de protocolo visível mesmo se o encerramento remoto falhar após bloqueio
+      }
     } catch {
-      alert("Falha de comunicação ao enviar solicitação de exclusão. Tente novamente.")
+      const msg = "Falha de comunicação ao enviar solicitação de exclusão. Tente novamente."
+      setErrorMsg(msg)
+      appToast.error("Erro de conexão", msg)
     } finally {
       setLoading(false)
     }
@@ -151,8 +168,49 @@ export default function ExcluirContaPage() {
             </div>
           </section>
 
-          {/* 3. Formulário de Solicitação ou Feedback de Sucesso */}
-          {!submitted ? (
+          {/* 3. Formulário de Solicitação, Gate de Login ou Feedback de Sucesso */}
+          {submitted ? (
+            <div className="mb-8 p-5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs sm:text-sm space-y-2">
+              <div className="flex items-center gap-2 font-bold text-emerald-800 text-sm sm:text-base">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                <span>Solicitação recebida com sucesso!</span>
+              </div>
+              <p className="text-emerald-900 leading-relaxed">
+                Um protocolo de confirmação foi registrado sob o número: <strong className="font-mono bg-emerald-100 px-1.5 py-0.5 rounded text-emerald-900">{protocol}</strong>.
+              </p>
+              <p className="text-emerald-800">
+                Sua sessão foi encerrada e o acesso à conta foi bloqueado. O prazo de anonimização e exclusão total dos dados é de até <strong>7 dias corridos</strong> conforme preconiza a LGPD.
+              </p>
+            </div>
+          ) : authLoading ? (
+            <div className="mb-8 p-6 rounded-xl bg-[#FAFAF8] border border-[#E8E2D9] flex items-center justify-center gap-2.5 text-sm font-medium text-[#6B635B]">
+              <Loader2 className="w-5 h-5 animate-spin text-[#E3A008]" />
+              <span>Verificando sua sessão...</span>
+            </div>
+          ) : !user ? (
+            <div className="mb-8 p-5 sm:p-6 rounded-xl bg-[#FFF7E8] border border-[#F3D8A8] space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-white text-[#C1440E] rounded-lg border border-[#F3D8A8] shrink-0 mt-0.5">
+                  <ShieldAlert className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <h2 className="text-sm sm:text-base font-extrabold text-[#1F1B16]">
+                    Confirmação de identidade obrigatória
+                  </h2>
+                  <p className="text-xs sm:text-sm text-[#6B635B] leading-relaxed">
+                    Por segurança e conformidade com a LGPD, você precisa estar conectado à sua conta para confirmar sua identidade antes de solicitar a exclusão e anonimização dos dados.
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/login?returnUrl=/excluir-conta"
+                className="w-full py-3.5 px-6 rounded-xl bg-[#E3A008] hover:bg-[#C1440E] text-white font-extrabold text-sm sm:text-base shadow-md transition-all duration-200 flex items-center justify-center gap-2 active:scale-[0.99]"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>Entrar na minha conta</span>
+              </Link>
+            </div>
+          ) : (
             <form onSubmit={handleSubmit} className="space-y-4 mb-8">
               <div>
                 <label htmlFor="identifier" className="block text-xs sm:text-sm font-bold text-[#1F1B16] mb-1.5">
@@ -218,10 +276,32 @@ export default function ExcluirContaPage() {
                 )}
               </div>
 
+              <div>
+                <label htmlFor="confirm-delete" className="block text-xs sm:text-sm font-bold text-[#1F1B16] mb-1.5">
+                  Digite <span className="text-red-600 font-black">EXCLUIR</span> para confirmar
+                </label>
+                <input
+                  type="text"
+                  id="confirm-delete"
+                  value={confirmText}
+                  onChange={(e) => setConfirmText(e.target.value)}
+                  required
+                  placeholder="EXCLUIR"
+                  autoComplete="off"
+                  className="w-full px-4 py-3 rounded-xl border border-[#E8E2D9] text-[#1F1B16] bg-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#E3A008] focus:border-transparent transition-all text-sm font-bold uppercase tracking-wider"
+                />
+              </div>
+
+              {errorMsg && (
+                <div role="alert" className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs sm:text-sm font-medium">
+                  {errorMsg}
+                </div>
+              )}
+
               <button
                 type="submit"
-                disabled={loading}
-                className="w-full py-3.5 px-6 rounded-xl bg-[#E3A008] hover:bg-[#C1440E] text-white font-extrabold text-sm sm:text-base shadow-md transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed active:scale-[0.99] mt-2"
+                disabled={loading || !isConfirmed || !identifier.trim()}
+                className="w-full py-3.5 px-6 rounded-xl bg-[#E3A008] hover:bg-[#C1440E] text-white font-extrabold text-sm sm:text-base shadow-md transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99] mt-2"
               >
                 {loading ? (
                   <>
@@ -233,19 +313,6 @@ export default function ExcluirContaPage() {
                 )}
               </button>
             </form>
-          ) : (
-            <div className="mb-8 p-5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs sm:text-sm space-y-2">
-              <div className="flex items-center gap-2 font-bold text-emerald-800 text-sm sm:text-base">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                <span>Solicitação recebida com sucesso!</span>
-              </div>
-              <p className="text-emerald-900 leading-relaxed">
-                Um protocolo de confirmação foi registrado sob o número: <strong className="font-mono bg-emerald-100 px-1.5 py-0.5 rounded text-emerald-900">{protocol}</strong>.
-              </p>
-              <p className="text-emerald-800">
-                O prazo de anonimização e exclusão total dos dados é de até <strong>7 dias corridos</strong> conforme preconiza a LGPD.
-              </p>
-            </div>
           )}
 
           {/* 4. Instruções Alternativas / Suporte */}
@@ -265,10 +332,10 @@ export default function ExcluirContaPage() {
                 <span>
                   Via e-mail de suporte:{" "}
                   <a 
-                    href="mailto:enzzobaraldo2008@gmail.com" 
+                    href="mailto:maraysis9010@gmail.com" 
                     className="text-[#1F1B16] font-bold underline hover:text-[#C1440E] transition-colors"
                   >
-                    enzzobaraldo2008@gmail.com
+                    maraysis9010@gmail.com
                   </a>
                 </span>
               </div>

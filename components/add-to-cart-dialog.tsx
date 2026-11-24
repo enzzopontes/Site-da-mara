@@ -11,10 +11,9 @@ import { useCart } from "@/lib/cart-context"
 import { useAuth } from "@/lib/auth-context"
 import { appToast } from "@/lib/app-toast"
 import { ArrowLeft, Minus, Plus, ShoppingCart, Tag } from "lucide-react"
-import { storeStatusManager } from "@/lib/store-status-manager"
+import { storeStatusManager, type StoreStatus } from "@/lib/store-status-manager"
 import { Skeleton } from "@/components/ui/skeleton"
 import { adicionaisManager } from "@/lib/adicionais-manager"
-import { productsManager } from "@/lib/products-db"
 import { createBrowserClient } from "@/lib/supabase/client"
 import { trackViewContent } from "@/lib/meta-pixel"
 
@@ -33,6 +32,7 @@ export interface Product {
   price: number
   image: string
   category?: "batata" | "bebida" | "macarrao"
+  available?: boolean
   adicionais?: Adicional[]
 }
 
@@ -49,6 +49,18 @@ interface AddToCartDialogProps {
   product: Product
   open: boolean
   onOpenChange: (open: boolean) => void
+  editMode?: boolean
+  initialQuantity?: number
+  initialObservacoes?: string
+  initialPastaType?: "penne" | "parafuso" | "espaguete" | string
+  initialAdicionais?: Array<{ id?: string; name: string; price: number; quantity?: number }>
+  onSaveEdit?: (updated: {
+    price: number
+    quantity: number
+    observacoes?: string
+    pastaType?: "penne" | "parafuso" | "espaguete"
+    adicionais: Array<{ id: string; name: string; price: number; quantity: number }>
+  }) => void
 }
 
 // Frases fixas idênticas ao aplicativo mobile (5 variações cada com sorteio/rodízio a cada abertura)
@@ -93,48 +105,54 @@ const FRASES_GENERICAS = [
   (cat: string) => `Vai de ${cat.toLowerCase()}?`,
 ]
 
-const FALLBACK_BEBIDAS: DrinkProduct[] = [
-  {
-    id: "beb-1",
-    name: "Coca-Cola 200ml",
-    price: 3.5,
-    image: "/products/coca-cola-200ml.png",
-    category: "bebida",
-    description: "Refrigerante Coca-Cola 200ml gelado",
-  },
-  {
-    id: "beb-2",
-    name: "Coca-Cola Lata 350ml",
-    price: 7.0,
-    image: "/products/coca-cola-lata.png",
-    category: "bebida",
-    description: "Refrigerante Coca-Cola lata gelada",
-  },
-  {
-    id: "beb-3",
-    name: "Coca-Cola Lata Zero 350ml",
-    price: 7.0,
-    image: "/products/coca-cola-lata-zero.png",
-    category: "bebida",
-    description: "Refrigerante Coca-Cola Zero lata gelada",
-  },
-  {
-    id: "beb-4",
-    name: "Fanta 2L",
-    price: 15.0,
-    image: "/products/fanta-2l.png",
-    category: "bebida",
-    description: "Refrigerante Fanta 2 litros gelado",
-  },
-  {
-    id: "beb-5",
-    name: "Coca-Cola 2L",
-    price: 15.0,
-    image: "/products/coca-cola-2l.png",
-    category: "bebida",
-    description: "Refrigerante Coca-Cola 2 litros gelado",
-  },
-]
+function resolvePromoPrice(
+  target: { id: string; category?: string },
+  status: StoreStatus | null
+): number | null {
+  if (!status || typeof status !== "object") return null
+
+  if (status.itemPromo?.isActive && Array.isArray(status.promoProducts)) {
+    const match = status.promoProducts.find(
+      (p: any) => String(p?.productId ?? p?.product_id ?? p?.id) === String(target.id)
+    )
+    if (match) {
+      const promoVal = Number((match as any).promoPrice ?? (match as any).promo_price ?? (match as any).price)
+      if (!Number.isNaN(promoVal) && promoVal > 0) return promoVal
+    }
+  }
+
+  const catNorm = String(target.category || "batata").trim().toLowerCase()
+  const isBatataCat = catNorm === "batata" || catNorm === "batatas"
+
+  if (status.superPromo?.isActive && isBatataCat) {
+    const superVal = Number(status.superPromo.price)
+    if (!Number.isNaN(superVal) && superVal > 0) return superVal
+  }
+
+  if (
+    !status.itemPromo?.isActive &&
+    !status.superPromo?.isActive &&
+    status.isPromoActive
+  ) {
+    if (Array.isArray(status.promoProducts)) {
+      const specificMatch = status.promoProducts.find(
+        (p: any) => String(p?.productId ?? p?.product_id ?? p?.id) === String(target.id)
+      )
+      if (specificMatch) {
+        const specificVal = Number(
+          (specificMatch as any).promoPrice ?? (specificMatch as any).promo_price ?? (specificMatch as any).price
+        )
+        if (!Number.isNaN(specificVal) && specificVal > 0) return specificVal
+      }
+    }
+    if (isBatataCat && status.promoPrice != null) {
+      const legacyVal = Number(status.promoPrice)
+      if (!Number.isNaN(legacyVal) && legacyVal > 0) return legacyVal
+    }
+  }
+
+  return null
+}
 
 function getDrinkImage(name: string): string {
   const lower = name.toLowerCase()
@@ -193,17 +211,61 @@ function classifyAdicional(item: Adicional): string {
   return "geral"
 }
 
-export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialogProps) {
+function buildHydratedAdicionais(
+  available: Adicional[],
+  initial?: Array<{ id?: string; name: string; price: number; quantity?: number }>
+): Record<string, number> {
+  if (!initial || initial.length === 0 || available.length === 0) return {}
+
+  const hydrated: Record<string, number> = {}
+  initial.forEach((initItem) => {
+    const qty = Math.max(1, Math.min(10, Number(initItem.quantity ?? 1) || 1))
+    const nameNorm = (initItem.name || "").trim().toLowerCase()
+    const matchById = initItem.id
+      ? available.find((avail) => String(avail.id) === String(initItem.id))
+      : undefined
+    const match =
+      matchById ||
+      (nameNorm !== ""
+        ? available.find((avail) => (avail.name || "").trim().toLowerCase() === nameNorm)
+        : undefined)
+    if (match) {
+      hydrated[match.id] = Math.min(10, (hydrated[match.id] || 0) + qty)
+    }
+  })
+
+  return hydrated
+}
+
+function normalizePastaType(value?: string): "penne" | "parafuso" | "espaguete" {
+  const normalized = (value || "").trim().toLowerCase()
+  if (normalized === "parafuso" || normalized === "espaguete" || normalized === "penne") {
+    return normalized
+  }
+  return "penne"
+}
+
+export function AddToCartDialog({
+  product,
+  open,
+  onOpenChange,
+  editMode = false,
+  initialQuantity,
+  initialObservacoes,
+  initialPastaType,
+  initialAdicionais,
+  onSaveEdit,
+}: AddToCartDialogProps) {
   const [selectedAdicionais, setSelectedAdicionais] = useState<Record<string, number>>({})
   const [adicionaisDisponiveis, setAdicionaisDisponiveis] = useState<Adicional[]>([])
   const [selectedBebidas, setSelectedBebidas] = useState<Record<string, number>>({})
-  const [bebidasDisponiveis, setBebidasDisponiveis] = useState<DrinkProduct[]>(FALLBACK_BEBIDAS)
+  const [bebidasDisponiveis, setBebidasDisponiveis] = useState<DrinkProduct[]>([])
   const [quantity, setQuantity] = useState(1)
   const [observacoes, setObservacoes] = useState("")
   const [pastaType, setPastaType] = useState<"penne" | "parafuso" | "espaguete">("penne")
-  const [isPromoActive, setIsPromoActive] = useState(false)
-  const [promoPrice, setPromoPrice] = useState(24.99)
+  const [storeStatus, setStoreStatus] = useState<StoreStatus | null>(null)
   const [dialogImageLoaded, setDialogImageLoaded] = useState(false)
+  const userInteractedAdicionaisRef = useRef(false)
 
   // Mapas de frases sorteadas a cada abertura da tela
   const [fraseIndices, setFraseIndices] = useState<Record<string, number>>({})
@@ -220,24 +282,30 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
     product.name.toLowerCase().includes("fanta")
 
   const isMacarrao = product.category === "macarrao"
-  const isBatata = product.category === "batata" || !product.category
-  const basePrice = isPromoActive && isBatata ? promoPrice : product.price
+  const isUnavailable = product.available === false
+  const resolvedPromoPrice = useMemo(
+    () => resolvePromoPrice(product, storeStatus),
+    [product.id, product.category, storeStatus]
+  )
+  const hasActivePromo = resolvedPromoPrice !== null
+  const basePrice = hasActivePromo ? resolvedPromoPrice : product.price
   const lastTrackedViewKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
     const checkPromo = async () => {
       try {
         const status = await storeStatusManager.getStatus()
-        setIsPromoActive(status.isPromoActive ?? false)
-        setPromoPrice(status.promoPrice ?? 24.99)
+        setStoreStatus(status)
       } catch (err) {
         console.error("Erro ao verificar promoção:", err)
       }
     }
     checkPromo()
-  }, [])
+  }, [open])
 
   useEffect(() => {
+    let cancelled = false
+
     if (open) {
       const viewKey = String(product.id)
       if (lastTrackedViewKeyRef.current !== viewKey) {
@@ -250,11 +318,11 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
         })
       }
 
-      setSelectedAdicionais({})
+      userInteractedAdicionaisRef.current = false
       setSelectedBebidas({})
-      setQuantity(1)
-      setObservacoes("")
-      setPastaType("penne")
+      setQuantity(editMode ? Math.max(1, initialQuantity ?? 1) : 1)
+      setObservacoes(editMode ? (initialObservacoes ?? "") : "")
+      setPastaType(editMode ? normalizePastaType(initialPastaType) : "penne")
       setDialogImageLoaded(false)
 
       // Sorteia 1 das 5 frases para a seção de bebidas
@@ -279,72 +347,94 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
 
       if (product.adicionais && product.adicionais.length > 0) {
         setAdicionaisDisponiveis(product.adicionais)
+        setSelectedAdicionais(
+          editMode ? buildHydratedAdicionais(product.adicionais, initialAdicionais) : {}
+        )
       } else if (!isBebida) {
+        setSelectedAdicionais(
+          editMode && adicionaisDisponiveis.length > 0
+            ? buildHydratedAdicionais(adicionaisDisponiveis, initialAdicionais)
+            : {}
+        )
         adicionaisManager
           .getAdicionais()
           .then((data) => {
+            if (cancelled) return
             if (data && data.length > 0) {
-              setAdicionaisDisponiveis(data as Adicional[])
+              const loaded = data as Adicional[]
+              setAdicionaisDisponiveis(loaded)
+              if (editMode && !userInteractedAdicionaisRef.current) {
+                setSelectedAdicionais(buildHydratedAdicionais(loaded, initialAdicionais))
+              }
             }
           })
           .catch((err) => console.error("Erro ao carregar adicionais:", err))
+      } else {
+        setSelectedAdicionais({})
       }
 
-      if (!isBebida) {
+      if (!isBebida && !editMode) {
         const fetchDrinks = async () => {
           try {
             const supabase = createBrowserClient()
-            const { data, error } = await supabase
-              .from("products")
-              .select("id, name, price, image_url, category, available")
-              .or("category.eq.bebida,category.eq.bebidas,category.ilike.bebida%")
-              .order("name")
+            const [{ data, error }, latestStatus] = await Promise.all([
+              supabase
+                .from("products")
+                .select("id, name, price, image_url, category, available")
+                .or("category.eq.bebida,category.eq.bebidas,category.ilike.bebida%")
+                .eq("available", true)
+                .neq("id", product.id)
+                .order("name"),
+              storeStatusManager.getStatus().catch(() => null),
+            ])
 
-            if (!error && data && data.length > 0) {
-              const activeDrinks = data.filter((b: any) => b.available !== false)
-              if (activeDrinks.length > 0) {
-                setBebidasDisponiveis(
-                  activeDrinks.map((b: any) => ({
+            if (cancelled) return
+
+            if (!error && Array.isArray(data)) {
+              const activeDrinks = data.filter(
+                (b: any) => b.available !== false && String(b.id) !== String(product.id)
+              )
+              setBebidasDisponiveis(
+                activeDrinks.map((b: any) => {
+                  const drinkPromoPrice = resolvePromoPrice(
+                    { id: b.id, category: b.category || "bebida" },
+                    latestStatus
+                  )
+                  return {
                     id: b.id,
                     name: b.name,
-                    price: Number(b.price),
-                    image: b.image_url ? b.image_url.replace(".jpg", ".png") : getDrinkImage(b.name),
+                    price: drinkPromoPrice !== null ? drinkPromoPrice : Number(b.price),
+                    image: b.image_url || getDrinkImage(b.name),
                     category: "bebida",
-                  }))
-                )
-                return
-              }
+                  }
+                })
+              )
+              return
             }
           } catch (err) {
             console.warn("Falha ao buscar bebidas via Supabase client:", err)
           }
 
-          try {
-            const fallbackDrinks = await productsManager.getBebidas()
-            if (fallbackDrinks && fallbackDrinks.length > 0) {
-              setBebidasDisponiveis(
-                fallbackDrinks.map((b) => ({
-                  id: b.id,
-                  name: b.name,
-                  price: b.price,
-                  image: b.image ? b.image.replace(".jpg", ".png") : getDrinkImage(b.name),
-                  category: "bebida",
-                }))
-              )
-            }
-          } catch (err) {
-            console.error("Erro ao carregar bebidas no fallback:", err)
+          if (!cancelled) {
+            setBebidasDisponiveis([])
           }
         }
 
         fetchDrinks()
+      } else {
+        setBebidasDisponiveis([])
       }
     } else {
       lastTrackedViewKeyRef.current = null
     }
-  }, [open, product.id, product.adicionais, isBebida])
+
+    return () => {
+      cancelled = true
+    }
+  }, [open, product.id, product.adicionais, isBebida, editMode])
 
   const updateAdicionalQuantity = (id: string, delta: number) => {
+    userInteractedAdicionaisRef.current = true
     setSelectedAdicionais((prev) => {
       const currentQty = prev[id] || 0
       const newQty = Math.max(0, Math.min(10, currentQty + delta))
@@ -433,6 +523,40 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
   }, [selectedAdicionais, adicionaisDisponiveis, selectedBebidas, bebidasDisponiveis, basePrice, quantity])
 
   const handleAddToCart = () => {
+    if (isUnavailable) {
+      appToast.error("Produto indisponível", "Este item está temporariamente indisponível no momento.")
+      return
+    }
+
+    const trimmedObservacoes = observacoes.trim() || undefined
+
+    if (editMode) {
+      const adicionais = isBebida
+        ? []
+        : Object.entries(selectedAdicionais)
+            .map(([id, qty]) => {
+              const adicional = adicionaisDisponiveis.find((a) => a.id === id)
+              if (!adicional || qty <= 0) return null
+              return {
+                id: adicional.id,
+                name: adicional.name,
+                price: adicional.price,
+                quantity: qty,
+              }
+            })
+            .filter(Boolean) as Array<{ id: string; name: string; price: number; quantity: number }>
+
+      onSaveEdit?.({
+        price: basePrice,
+        quantity,
+        observacoes: trimmedObservacoes,
+        pastaType: isMacarrao ? pastaType : undefined,
+        adicionais,
+      })
+      onOpenChange(false)
+      return
+    }
+
     // Intercepta ação de adicionar: exige login obrigatório antes de prosseguir
     if (!user) {
       const adicionaisPayload = isBebida
@@ -481,6 +605,7 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
               quantity: quantity,
               category: product.category || "batata",
               pastaType: isMacarrao ? pastaType : undefined,
+              observacoes: trimmedObservacoes,
               adicionais: adicionaisPayload,
             },
             bebidas: bebidasPayload,
@@ -516,6 +641,7 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
       quantity: quantity,
       category: product.category || "batata",
       pastaType: isMacarrao ? pastaType : undefined,
+      observacoes: trimmedObservacoes,
       adicionais,
     })
 
@@ -608,15 +734,20 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
               <div className="text-right shrink-0 pt-0.5">
                 <div
                   className={`text-[20px] font-black tracking-tight ${
-                    isPromoActive && isBatata ? "text-red-600" : "text-[#E3A008]"
+                    hasActivePromo ? "text-red-600" : "text-[#E3A008]"
                   }`}
                 >
                   R$ {(Number.isFinite(Number(basePrice)) ? Number(basePrice) : 0).toFixed(2).replace(".", ",")}
                 </div>
-                {isPromoActive && isBatata && (
+                {hasActivePromo && !isUnavailable && (
                   <div className="bg-red-50 text-red-600 text-[10px] font-black px-2 py-0.5 rounded-full inline-flex items-center gap-1 mt-1">
                     <Tag className="h-3 w-3" />
                     <span>PROMO</span>
+                  </div>
+                )}
+                {isUnavailable && (
+                  <div className="bg-gray-100 text-gray-600 text-[10px] font-black px-2 py-0.5 rounded-full inline-flex items-center gap-1 mt-1 uppercase">
+                    <span>Indisponível</span>
                   </div>
                 )}
               </div>
@@ -757,7 +888,7 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
             )}
 
             {/* SEÇÃO DE CROSS-SELL DE BEBIDAS (EMBAIXO DOS ADICIONAIS COM RODÍZIO DE FRASES) */}
-            {!isBebida && (
+            {!isBebida && !editMode && bebidasDisponiveis.length > 0 && (
               <div className="space-y-2 pt-1">
                 {/* BANNER DE CABEÇALHO */}
                 <div className="-mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-[#F7F5F1] border-y border-gray-100">
@@ -862,7 +993,7 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
               <button
                 type="button"
                 onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                disabled={quantity <= 1}
+                disabled={isUnavailable || quantity <= 1}
                 className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl text-gray-700 hover:bg-white hover:shadow-sm active:scale-95 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:shadow-none flex items-center justify-center transition-all"
                 aria-label="Diminuir quantidade"
               >
@@ -874,7 +1005,8 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
               <button
                 type="button"
                 onClick={() => setQuantity((q) => q + 1)}
-                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl text-gray-700 hover:bg-white hover:shadow-sm active:scale-95 flex items-center justify-center transition-all"
+                disabled={isUnavailable}
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl text-gray-700 hover:bg-white hover:shadow-sm active:scale-95 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:shadow-none flex items-center justify-center transition-all"
                 aria-label="Aumentar quantidade"
               >
                 <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -885,16 +1017,33 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
             <button
               type="button"
               onClick={handleAddToCart}
-              className="flex-1 min-w-0 bg-[#E3A008] hover:bg-[#C68A07] active:scale-[0.98] text-white font-black text-xs sm:text-sm h-12 sm:h-13 rounded-2xl shadow-md transition-all flex items-center justify-between gap-2 px-3 sm:px-4"
+              disabled={isUnavailable}
+              className={`flex-1 min-w-0 font-black text-xs sm:text-sm h-12 sm:h-13 rounded-2xl transition-all flex items-center gap-2 px-3 sm:px-4 ${
+                isUnavailable
+                  ? "bg-gray-200 text-gray-500 cursor-not-allowed justify-center shadow-none"
+                  : "bg-[#E3A008] hover:bg-[#C68A07] active:scale-[0.98] text-white shadow-md justify-between"
+              }`}
             >
-              <span className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-                <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
-                <span className="sm:hidden truncate">Adicionar</span>
-                <span className="hidden sm:inline truncate">Adicionar ao Pedido</span>
-              </span>
-              <span className="font-black text-xs sm:text-sm shrink-0 whitespace-nowrap">
-                R$ {(Number.isFinite(Number(calculateTotal)) ? Number(calculateTotal) : 0).toFixed(2).replace(".", ",")}
-              </span>
+              {isUnavailable ? (
+                <span>Produto indisponível</span>
+              ) : (
+                <>
+                  <span className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                    <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+                    {editMode ? (
+                      <span className="truncate">Salvar alterações</span>
+                    ) : (
+                      <>
+                        <span className="sm:hidden truncate">Adicionar</span>
+                        <span className="hidden sm:inline truncate">Adicionar ao Pedido</span>
+                      </>
+                    )}
+                  </span>
+                  <span className="font-black text-xs sm:text-sm shrink-0 whitespace-nowrap">
+                    R$ {(Number.isFinite(Number(calculateTotal)) ? Number(calculateTotal) : 0).toFixed(2).replace(".", ",")}
+                  </span>
+                </>
+              )}
             </button>
           </div>
         </div>

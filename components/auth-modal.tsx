@@ -95,6 +95,7 @@ export function AuthModal({ isOpen, onClose, initialEmail, returnUrl }: AuthModa
   const [isHelpOpen, setIsHelpOpen] = useState(false)
   const [expandedFaq, setExpandedFaq] = useState<string | null>(null)
   const [savedEmail, setSavedEmail] = useState<string | null>(null)
+  const [savedProvider, setSavedProvider] = useState<string>("email")
   const [googleLoading, setGoogleLoading] = useState(false)
   const [continueLoading, setContinueLoading] = useState(false)
   const isContinuingRef = useRef(false)
@@ -168,9 +169,14 @@ export function AuthModal({ isOpen, onClose, initialEmail, returnUrl }: AuthModa
       const candidateEmail = initialEmail?.trim() || savedProfile?.email
       if (candidateEmail && candidateEmail.includes("@")) {
         setSavedEmail(candidateEmail)
+        const matchesSavedProfile =
+          Boolean(savedProfile?.email) &&
+          savedProfile!.email.toLowerCase() === candidateEmail.toLowerCase()
+        setSavedProvider(matchesSavedProfile ? savedProfile!.provider || "email" : "email")
         setView("saved_account")
       } else {
         setSavedEmail(null)
+        setSavedProvider("email")
         setView("welcome")
       }
     }
@@ -222,6 +228,28 @@ export function AuthModal({ isOpen, onClose, initialEmail, returnUrl }: AuthModa
   // Fluxo "Continuar" na conta recente deslogada (Cenário A: token válido / Cenário B: OTP + cooldown 60s)
   const handleContinueSavedAccount = async () => {
     if (!savedEmail || continueLoading || isNavigatingToAuth || isContinuingRef.current) return
+
+    const savedProfile = readSavedUserProfile()
+    const isGoogleSavedAccount =
+      savedProvider === "google" ||
+      (savedProfile?.provider === "google" &&
+        savedProfile.email.toLowerCase() === savedEmail.toLowerCase())
+
+    if (isGoogleSavedAccount) {
+      isContinuingRef.current = true
+      setContinueLoading(true)
+      try {
+        await signInWithGoogle(resolvedReturnUrl)
+      } catch {
+        if (!isMountedRef.current) return
+        appToast.error("Não foi possível conectar com o Google.")
+        setContinueLoading(false)
+      } finally {
+        isContinuingRef.current = false
+      }
+      return
+    }
+
     isContinuingRef.current = true
     setContinueLoading(true)
 
@@ -266,7 +294,7 @@ export function AuthModal({ isOpen, onClose, initialEmail, returnUrl }: AuthModa
     if (googleLoading || isNavigatingToAuth) return
     setGoogleLoading(true)
     try {
-      await signInWithGoogle()
+      await signInWithGoogle(resolvedReturnUrl)
     } catch {
       if (!isMountedRef.current) return
       appToast.error("Não foi possível conectar com o Google.")

@@ -1,9 +1,28 @@
 "use client";
 
-import { Suspense, useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import Script from "next/script";
 import { META_PIXEL_ID, trackPageView } from "@/lib/meta-pixel";
+
+const COOKIE_CONSENT_KEY = "batata_top_cookie_consent_v1";
+
+function readMarketingConsent(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    const stored = window.localStorage.getItem(COOKIE_CONSENT_KEY);
+    if (!stored) {
+      return false;
+    }
+    const parsed = JSON.parse(stored) as { marketing?: unknown };
+    return parsed?.marketing === true;
+  } catch {
+    return false;
+  }
+}
 
 function MetaPixelRouteTracker() {
   const pathname = usePathname();
@@ -27,7 +46,42 @@ function MetaPixelRouteTracker() {
 }
 
 export function MetaPixel() {
-  if (!META_PIXEL_ID) {
+  const [marketingAllowed, setMarketingAllowed] = useState(false);
+
+  useEffect(() => {
+    const syncConsent = () => {
+      const next = readMarketingConsent();
+      setMarketingAllowed((prev) => {
+        if (prev !== next && typeof window !== "undefined" && typeof window.fbq === "function") {
+          window.fbq("consent", next ? "grant" : "revoke");
+        }
+        return prev === next ? prev : next;
+      });
+    };
+
+    syncConsent();
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === null || event.key === COOKIE_CONSENT_KEY) {
+        syncConsent();
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("cookie-consent-updated", syncConsent);
+    window.addEventListener("focus", syncConsent);
+
+    const intervalId = window.setInterval(syncConsent, 1000);
+
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("cookie-consent-updated", syncConsent);
+      window.removeEventListener("focus", syncConsent);
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  if (!META_PIXEL_ID || !marketingAllowed) {
     return null;
   }
 

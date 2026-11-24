@@ -93,6 +93,52 @@ class LoyaltyManager {
     }
 
     try {
+      const { data: rpcRaw, error: rpcError } = await this.supabase.rpc("get_loyalty_status")
+      const rpcData = Array.isArray(rpcRaw) ? rpcRaw[0] : rpcRaw
+
+      if (!rpcError && rpcData && typeof rpcData === "object") {
+        const target = Math.max(1, Number(rpcData.target_orders) || LOYALTY_TARGET_ORDERS)
+        const count = Math.min(target, Math.max(0, Number(rpcData.orders_count) || 0))
+        const remaining =
+          rpcData.remaining_orders !== undefined && rpcData.remaining_orders !== null
+            ? Math.max(0, Number(rpcData.remaining_orders) || 0)
+            : Math.max(0, target - count)
+        const hasReward =
+          typeof rpcData.has_reward_available === "boolean"
+            ? rpcData.has_reward_available
+            : count >= target
+        const claimedCount = Math.max(0, Number(rpcData.rewards_claimed_count) || 0)
+        const activeCode =
+          typeof rpcData.active_reward_code === "string" && rpcData.active_reward_code.trim()
+            ? rpcData.active_reward_code.trim()
+            : null
+        const history: LoyaltyReward[] = Array.isArray(rpcData.history)
+          ? rpcData.history.map((item: any) => ({
+              id: String(item?.id ?? ""),
+              code: String(item?.code ?? item?.coupon_code ?? ""),
+              claimed: Boolean(item?.claimed),
+              claimedAt: item?.claimedAt ?? item?.claimed_at ?? undefined,
+              createdAt: String(item?.createdAt ?? item?.created_at ?? ""),
+            }))
+          : local.history
+
+        const serverState: LoyaltyState = {
+          ordersCount: count,
+          targetOrders: target,
+          remainingOrders: remaining,
+          hasRewardAvailable: hasReward,
+          rewardsClaimedCount: claimedCount,
+          activeRewardCode: activeCode,
+          history,
+        }
+        this.saveLocalState(serverState)
+        return serverState
+      }
+    } catch {
+      // Fallback para leitura direta em profiles caso a RPC ainda não esteja disponível
+    }
+
+    try {
       const { data, error } = await this.supabase
         .from("profiles")
         .select("loyalty_orders_count, loyalty_rewards_claimed")
@@ -122,6 +168,7 @@ class LoyaltyManager {
 
   /**
    * Contabiliza pedido recém-entregue. Apenas pós corte atual.
+   * O incremento acontece server-side via trigger trg_orders_loyalty_on_delivered.
    */
   async incrementFromOrder(params: {
     orderId: string
@@ -131,18 +178,74 @@ class LoyaltyManager {
   }): Promise<LoyaltyState> {
     const { orderId, orderCreatedAt, orderStatus, userId } = params
 
-    // Apenas pedidos criados a partir de agora
-    // NEW-07 FIX: Infraestrutura de fidelidade (process_order_loyalty / profiles.loyalty_orders_count) não está ativa no banco.
-    // Evita chamar RPC inexistente e remove fallback que corrompia localStorage no navegador do admin.
     void orderId
     void orderCreatedAt
     void orderStatus
-    void userId
+
+    if (userId) {
+      return await this.getLoyaltyState(userId)
+    }
+
     return this.getLocalState()
   }
 
-  async redeemReward(_userId?: string | null): Promise<{ couponCode: string; newState: LoyaltyState }> {
-    throw new Error("O programa de fidelidade está temporariamente indisponível para resgate automático.")
+  async redeemReward(userId?: string | null): Promise<{ couponCode: string; newState: LoyaltyState }> {
+    if (!userId) {
+      throw new Error("Faça login para resgatar sua batata grátis.")
+    }
+
+    const { data, error } = await this.supabase.rpc("redeem_loyalty_reward")
+
+    if (error) {
+      const rawMessage = `${error.message || ""} ${error.details || ""}`.toLowerCase()
+      if (rawMessage.includes("loyalty_not_enough_orders")) {
+        throw new Error("Você ainda não completou 10 pedidos para resgatar.")
+      }
+      if (rawMessage.includes("unauthorized") || error.code === "42501") {
+        throw new Error("Faça login para resgatar sua batata grátis.")
+      }
+      if (rawMessage.includes("profile_not_found")) {
+        throw new Error("Perfil de fidelidade não encontrado. Faça login novamente.")
+      }
+      throw new Error(error.message || "Não foi possível resgatar sua batata grátis. Tente novamente.")
+    }
+
+    const rpcData = Array.isArray(data) ? data[0] : data
+    const couponCode = typeof rpcData?.coupon_code === "string" ? rpcData.coupon_code.trim() : ""
+
+    if (!couponCode) {
+      throw new Error("Não foi possível gerar o cupom de fidelidade. Tente novamente.")
+    }
+
+    const refreshed = await this.getLoyaltyState(userId)
+    const nowIso = new Date().toISOString()
+    const newState: LoyaltyState = {
+      ...refreshed,
+      ordersCount: 0,
+      targetOrders: refreshed.targetOrders || LOYALTY_TARGET_ORDERS,
+      remainingOrders: refreshed.targetOrders || LOYALTY_TARGET_ORDERS,
+      hasRewardAvailable: false,
+      rewardsClaimedCount: Math.max(
+        Number(rpcData?.rewards_claimed_count) || 0,
+        refreshed.rewardsClaimedCount
+      ),
+      activeRewardCode: refreshed.activeRewardCode || couponCode,
+      history: refreshed.history.some((item) => item.code === couponCode)
+        ? refreshed.history
+        : [
+            {
+              id: `reward-${Date.now()}`,
+              code: couponCode,
+              claimed: true,
+              claimedAt: nowIso,
+              createdAt: nowIso,
+            },
+            ...refreshed.history,
+          ],
+    }
+
+    this.saveLocalState(newState)
+    return { couponCode, newState }
   }
 
   setTestCount(count: number) {

@@ -9,6 +9,7 @@ import {
   Plus,
   Minus,
   Sparkles,
+  Pencil,
 } from "lucide-react"
 import { useCart, CartItem } from "@/lib/cart-context"
 import { CouponModal } from "@/components/coupons/coupon-modal"
@@ -26,6 +27,7 @@ interface StepItensProps {
   couponError?: string
   validandoCupom?: boolean
   deliveryType: "delivery" | "pickup"
+  isStoreOpen?: boolean
   recommendedProducts: any[]
   onUpdateQuantity: (id: string, qty: number) => void
   onRemoveItem: (id: string) => void
@@ -33,6 +35,7 @@ interface StepItensProps {
   onApplyCoupon?: () => void
   onRemoveCoupon: () => void
   onAddQuickItem: (product: any) => void
+  onEditItem?: (item: CartItem, index: number) => void
 }
 
 function resolveProductImage(url?: string | null): string {
@@ -58,11 +61,13 @@ export function StepItens({
   appliedCoupon,
   availableCouponsCount,
   deliveryType,
+  isStoreOpen = true,
   recommendedProducts,
   onUpdateQuantity,
   onRemoveItem,
   onRemoveCoupon,
   onAddQuickItem,
+  onEditItem,
 }: StepItensProps) {
   const router = useRouter()
   const { activeTrackCoupon } = useCart()
@@ -95,7 +100,13 @@ export function StepItens({
             <p className="text-xs text-[#8C827A] flex items-center gap-1.5 mt-0.5">
               <span>Cardápio Digital Oficial</span>
               <span>•</span>
-              <span className="text-emerald-600 font-bold">Aberto agora</span>
+              {isStoreOpen ? (
+                <span className="text-emerald-600 font-bold">Aberto agora</span>
+              ) : (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200 font-bold">
+                  Fechado agora
+                </span>
+              )}
             </p>
           </div>
         </div>
@@ -120,7 +131,7 @@ export function StepItens({
         </div>
 
         <div className="divide-y divide-[#F5F2ED]">
-          {items.map((item) => {
+          {items.map((item, itemIndex) => {
             const adicionaisTotal = item.adicionais.reduce(
               (acc, a) => acc + a.price * a.quantity,
               0
@@ -148,9 +159,21 @@ export function StepItens({
                       <h4 className="text-sm sm:text-base font-black text-[#1F1B16] leading-snug line-clamp-2">
                         {item.name}
                       </h4>
-                      <span className="text-sm font-black text-[#1F1B16] flex-shrink-0">
-                        R$ {itemTotal.toFixed(2).replace(".", ",")}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className="text-sm font-black text-[#1F1B16]">
+                          R$ {itemTotal.toFixed(2).replace(".", ",")}
+                        </span>
+                        {onEditItem && (
+                          <button
+                            type="button"
+                            onClick={() => onEditItem(item, itemIndex)}
+                            aria-label={`Editar ${item.name}`}
+                            className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-[#C1440E] transition-colors cursor-pointer"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     {/* Tag de massa se houver */}
@@ -179,6 +202,13 @@ export function StepItens({
                           </li>
                         ))}
                       </ul>
+                    )}
+
+                    {/* Observações do item */}
+                    {item.observacoes && item.observacoes.trim().length > 0 && (
+                      <p className="mt-1.5 text-xs text-[#6B6157] italic line-clamp-2">
+                        Obs: {item.observacoes.trim()}
+                      </p>
                     )}
                   </div>
 
