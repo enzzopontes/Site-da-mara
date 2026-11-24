@@ -125,7 +125,7 @@ export function ProductCard({
               price: currentPrice,
               image: product.image,
               quantity: 1,
-              category: product.category === "macarrao" ? "batata" : (product.category || "batata"),
+              category: product.category || "batata",
               adicionais: [],
             },
           })
@@ -164,7 +164,11 @@ export function ProductCard({
 
   const imageUrl = imageError ? "" : getImageUrl()
 
-  const formatBRL = (val: number) => `R$ ${val.toFixed(2).replace(".", ",")}`
+  const formatBRL = (value: number | string | null | undefined) => {
+    const n = Number(value)
+    const safe = Number.isFinite(n) ? n : 0
+    return `R$ ${safe.toFixed(2).replace(".", ",")}`
+  }
 
   // =========================================================================
   // LAYOUT HORIZONTAL (Item de Lista com foto à direita - Estilo Promoções iFood)
@@ -202,7 +206,7 @@ export function ProductCard({
                 </div>
               )}
 
-              <h3 className="font-bold text-sm sm:text-base text-[#1F1B16] leading-snug line-clamp-1 group-hover:text-[#C1440E] transition-colors">
+              <h3 className="font-bold text-sm sm:text-base text-[#1F1B16] leading-snug line-clamp-2 group-hover:text-[#C1440E] transition-colors">
                 {product.name}
               </h3>
 
@@ -354,7 +358,7 @@ export function ProductCard({
 
           {/* Conteúdo do Card */}
           <div className="p-3 sm:p-4">
-            <h3 className="font-bold text-xs sm:text-base text-[#1F1B16] mb-1 line-clamp-1 leading-snug group-hover:text-[#C1440E] transition-colors">
+            <h3 className="font-bold text-xs sm:text-base text-[#1F1B16] mb-1 line-clamp-2 leading-snug group-hover:text-[#C1440E] transition-colors">
               {product.name}
             </h3>
 

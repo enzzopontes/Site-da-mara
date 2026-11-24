@@ -51,7 +51,7 @@ class AdicionaisManagerClient {
         console.error("[Supabase] Erro ao buscar adicionais disponíveis:", error.message)
         throw new Error("Erro ao buscar adicionais no banco de dados: " + error.message)
       }
-      return data || []
+      return (data || []).map((a: any) => ({ ...a, price: Number(a.price) || 0 }))
     } catch (error) {
       console.error("[AdicionaisManager] Falha no getAdicionais:", error)
       throw error
@@ -70,7 +70,7 @@ class AdicionaisManagerClient {
         console.error("[Supabase] Erro ao buscar todos os adicionais:", error.message)
         throw new Error("Erro ao carregar lista completa de adicionais: " + error.message)
       }
-      return data || []
+      return (data || []).map((a: any) => ({ ...a, price: Number(a.price) || 0 }))
     } catch (error) {
       console.error("[AdicionaisManager] Falha no getAllAdicionais:", error)
       throw error
@@ -181,11 +181,11 @@ class AdicionaisManagerClient {
 
   private getDefaultAdicionais(): Adicional[] {
     return [
-      { id: "1", name: "Catupiry", price: 4.0 },
-      { id: "2", name: "Cheddar", price: 3.5 },
-      { id: "3", name: "Bacon", price: 5.0 },
-      { id: "4", name: "Calabresa", price: 4.0 },
-      { id: "5", name: "Frango Desfiado", price: 5.0 },
+      { id: "1", name: "Requeijão Scala Catupiry", price: 4.0 },
+      { id: "2", name: "Cheddar", price: 4.0 },
+      { id: "3", name: "Mussarela", price: 4.0 },
+      { id: "4", name: "Bacon", price: 3.0 },
+      { id: "5", name: "Calabresa", price: 3.0 },
     ]
   }
 }

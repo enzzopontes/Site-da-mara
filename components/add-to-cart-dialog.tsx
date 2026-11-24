@@ -104,7 +104,7 @@ const FALLBACK_BEBIDAS: DrinkProduct[] = [
   {
     id: "beb-2",
     name: "Coca-Cola Lata 350ml",
-    price: 5.0,
+    price: 7.0,
     image: "/products/coca-cola-lata.png",
     category: "bebida",
     description: "Refrigerante Coca-Cola lata gelada",
@@ -112,7 +112,7 @@ const FALLBACK_BEBIDAS: DrinkProduct[] = [
   {
     id: "beb-3",
     name: "Coca-Cola Lata Zero 350ml",
-    price: 5.0,
+    price: 7.0,
     image: "/products/coca-cola-lata-zero.png",
     category: "bebida",
     description: "Refrigerante Coca-Cola Zero lata gelada",
@@ -120,7 +120,7 @@ const FALLBACK_BEBIDAS: DrinkProduct[] = [
   {
     id: "beb-4",
     name: "Fanta 2L",
-    price: 12.0,
+    price: 15.0,
     image: "/products/fanta-2l.png",
     category: "bebida",
     description: "Refrigerante Fanta 2 litros gelado",
@@ -128,7 +128,7 @@ const FALLBACK_BEBIDAS: DrinkProduct[] = [
   {
     id: "beb-5",
     name: "Coca-Cola 2L",
-    price: 12.0,
+    price: 15.0,
     image: "/products/coca-cola-2l.png",
     category: "bebida",
     description: "Refrigerante Coca-Cola 2 litros gelado",
@@ -465,7 +465,7 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
               price: basePrice,
               image: product.image,
               quantity: quantity,
-              category: product.category === "macarrao" ? "batata" : (product.category || "batata"),
+              category: product.category || "batata",
               pastaType: isMacarrao ? pastaType : undefined,
               adicionais: adicionaisPayload,
             },
@@ -500,7 +500,7 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
       price: basePrice,
       image: product.image,
       quantity: quantity,
-      category: product.category === "macarrao" ? "batata" : (product.category || "batata"),
+      category: product.category || "batata",
       pastaType: isMacarrao ? pastaType : undefined,
       adicionais,
     })
@@ -581,8 +581,8 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
           {/* CONTEÚDO PRINCIPAL SOBREPONDO A FOTO */}
           <div className="relative -mt-6 rounded-t-[28px] bg-white px-4 sm:px-6 pt-5 pb-8 space-y-6 shadow-[0_-8px_20px_rgba(0,0,0,0.04)]">
             {/* CABEÇALHO DO PRODUTO: NOME E PREÇO */}
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1">
+            <div className="flex items-start justify-between gap-2 sm:gap-4">
+              <div className="flex-1 min-w-0">
                 <ResponsiveModalTitle className="text-[22px] font-black text-[#1F1B16] leading-tight tracking-tight">
                   {product.name}
                 </ResponsiveModalTitle>
@@ -597,7 +597,7 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
                     isPromoActive && isBatata ? "text-red-600" : "text-[#E3A008]"
                   }`}
                 >
-                  R$ {basePrice.toFixed(2).replace(".", ",")}
+                  R$ {(Number.isFinite(Number(basePrice)) ? Number(basePrice) : 0).toFixed(2).replace(".", ",")}
                 </div>
                 {isPromoActive && isBatata && (
                   <div className="bg-red-50 text-red-600 text-[10px] font-black px-2 py-0.5 rounded-full inline-flex items-center gap-1 mt-1">
@@ -685,19 +685,19 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
                             return (
                               <div
                                 key={adicional.id}
-                                className="flex items-center justify-between py-3"
+                                className="flex items-center justify-between gap-2 py-3"
                               >
-                                <div className="flex-1 pr-3">
+                                <div className="flex-1 min-w-0">
                                   <p className="text-[15px] font-semibold text-[#1F1B16]">
                                     {adicional.name}
                                   </p>
                                   <p className="text-sm font-bold text-[#E3A008] mt-0.5">
-                                    + R$ {adicional.price.toFixed(2).replace(".", ",")}
+                                    + R$ {(Number.isFinite(Number(adicional.price)) ? Number(adicional.price) : 0).toFixed(2).replace(".", ",")}
                                   </p>
                                 </div>
 
                                 {/* PÍLULA DE QUANTIDADE INTERATIVA */}
-                                <div>
+                                <div className="shrink-0">
                                   {qty === 0 ? (
                                     <button
                                       type="button"
@@ -758,9 +758,9 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
                     return (
                       <div
                         key={bebida.id}
-                        className="flex items-center justify-between py-3"
+                        className="flex items-center justify-between gap-2 py-3"
                       >
-                        <div className="flex items-center gap-3 min-w-0 flex-1 pr-3">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
                           <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center overflow-hidden shrink-0 border border-gray-100">
                             <img
                               src={bebida.image}
@@ -774,11 +774,11 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
                             />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-[15px] font-semibold text-[#1F1B16] truncate">
+                            <p className="text-[15px] font-semibold text-[#1F1B16] line-clamp-2 leading-snug">
                               {bebida.name}
                             </p>
                             <p className="text-sm font-bold text-[#E3A008] mt-0.5">
-                              R$ {bebida.price.toFixed(2).replace(".", ",")}
+                              R$ {(Number.isFinite(Number(bebida.price)) ? Number(bebida.price) : 0).toFixed(2).replace(".", ",")}
                             </p>
                           </div>
                         </div>
@@ -842,9 +842,9 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
 
         {/* FOOTER FIXO PINNED COM ERGONOMIA */}
         <div className="shrink-0 bg-white border-t border-gray-100 px-4 sm:px-6 pt-3.5 sm:pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-8px_20px_rgba(0,0,0,0.06)] z-20">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {/* SELETOR DE QUANTIDADE DO PRODUTO PRINCIPAL */}
-            <div className="flex items-center gap-1.5 bg-[#F4F4F5] rounded-2xl p-1 shrink-0">
+            <div className="flex items-center gap-1 sm:gap-1.5 bg-[#F4F4F5] rounded-2xl p-1 shrink-0">
               <button
                 type="button"
                 onClick={() => setQuantity((q) => Math.max(1, q - 1))}
@@ -871,14 +871,15 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
             <button
               type="button"
               onClick={handleAddToCart}
-              className="flex-1 bg-[#E3A008] hover:bg-[#C68A07] active:scale-[0.98] text-white font-black text-sm sm:text-base h-12 sm:h-13 rounded-2xl shadow-md transition-all flex items-center justify-between px-4 sm:px-5"
+              className="flex-1 min-w-0 bg-[#E3A008] hover:bg-[#C68A07] active:scale-[0.98] text-white font-black text-xs sm:text-sm h-12 sm:h-13 rounded-2xl shadow-md transition-all flex items-center justify-between gap-2 px-3 sm:px-4"
             >
-              <span className="flex items-center gap-2">
-                <ShoppingCart className="w-5 h-5 shrink-0" />
-                <span>Adicionar ao Pedido</span>
+              <span className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+                <span className="sm:hidden truncate">Adicionar</span>
+                <span className="hidden sm:inline truncate">Adicionar ao Pedido</span>
               </span>
-              <span className="font-black text-sm sm:text-base">
-                R$ {calculateTotal.toFixed(2).replace(".", ",")}
+              <span className="font-black text-xs sm:text-sm shrink-0 whitespace-nowrap">
+                R$ {(Number.isFinite(Number(calculateTotal)) ? Number(calculateTotal) : 0).toFixed(2).replace(".", ",")}
               </span>
             </button>
           </div>

@@ -174,7 +174,7 @@ export function StepEntrega({
                       </strong>
                     ) : (
                       <span className="inline-flex items-center gap-1">
-                        <span className="line-through text-stone-400 text-[11px] font-normal">R$ 5,00</span>
+                        <span className="line-through text-stone-400 text-[11px] font-normal">R$ {(deliveryFee > 0 ? deliveryFee : 3).toFixed(2).replace(".", ",")}</span>
                         <strong className="text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 text-[11px]">
                           Grátis
                         </strong>

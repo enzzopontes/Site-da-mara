@@ -168,12 +168,12 @@ export function StepItens({
                         {item.adicionais.map((adicional, idx) => (
                           <li
                             key={idx}
-                            className="text-xs text-[#6B6157] flex items-center justify-between"
+                            className="text-xs text-[#6B6157] flex items-center justify-between gap-2"
                           >
-                            <span>
+                            <span className="min-w-0">
                               + {adicional.quantity}x {adicional.name}
                             </span>
-                            <span className="text-[11px] font-semibold text-[#8C827A]">
+                            <span className="text-[11px] font-semibold text-[#8C827A] shrink-0 whitespace-nowrap">
                               (+R$ {(adicional.price * adicional.quantity).toFixed(2).replace(".", ",")})
                             </span>
                           </li>
@@ -351,7 +351,7 @@ export function StepItens({
                 `R$ ${deliveryFee.toFixed(2).replace(".", ",")}`
               ) : (
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="line-through text-stone-400 text-xs font-normal">R$ 5,00</span>
+                  <span className="line-through text-stone-400 text-xs font-normal">R$ {(deliveryFee > 0 ? deliveryFee : 3).toFixed(2).replace(".", ",")}</span>
                   <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 text-xs">
                     Grátis
                   </span>

@@ -9,7 +9,7 @@ export interface CartItem {
   price: number
   image: string
   quantity: number
-  category: "batata" | "bebida"
+  category: "batata" | "macarrao" | "bebida"
   pastaType?: "penne" | "parafuso" | "espaguete" // Tipo de macarrão (apenas para categoria macarrao)
   observacoes?: string
   adicionais: Array<{
@@ -68,20 +68,25 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   // Subtotal dinâmico da sacola
   const subtotal = useMemo(() => {
-    return items.reduce((total, item) => {
-      const adicionaisTotal = item.adicionais.reduce((sum, add) => sum + (add.price * add.quantity), 0)
-      return total + (item.price + adicionaisTotal) * item.quantity
+    const sum = items.reduce((total, item) => {
+      const adicionaisTotal = (item.adicionais || []).reduce(
+        (acc, a) => acc + (Number(a.price) || 0) * (Number(a.quantity) || 0),
+        0
+      )
+      const lineTotal = Math.round(((Number(item.price) || 0) + adicionaisTotal) * (Number(item.quantity) || 0) * 100) / 100
+      return total + lineTotal
     }, 0)
+    return Math.round(sum * 100) / 100
   }, [items])
 
   // Desconto dinâmico calculado somente quando appliedCoupon estiver ativo
   const discountAmount = useMemo(() => {
     // Base oficial: subtotal bruto dos itens (sem frete). Pendente => desconto 0.
-    return evaluateCoupon(appliedCoupon, subtotal, items).discount
+    return Math.round((Number(evaluateCoupon(appliedCoupon, subtotal, items).discount) || 0) * 100) / 100
   }, [appliedCoupon, subtotal, items])
 
   const total = useMemo(() => {
-    return Math.max(0, subtotal - discountAmount)
+    return Math.max(0, Math.round((subtotal - discountAmount) * 100) / 100)
   }, [subtotal, discountAmount])
 
   // Carregar carrinho do localStorage e cupom do sessionStorage (sessão única)

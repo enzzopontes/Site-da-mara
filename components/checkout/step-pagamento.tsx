@@ -283,11 +283,11 @@ export function StepPagamento({
         {/* Resumo de Itens */}
         <div className="space-y-1.5 text-xs text-[#6B6157] max-h-40 overflow-y-auto">
           {items.map((i) => (
-            <div key={i.id} className="flex justify-between items-center py-1 border-b border-[#F3F0EB] last:border-none">
-              <span className="font-bold text-[#1F1B16]">
+            <div key={i.id} className="flex justify-between items-center gap-2 py-1 border-b border-[#F3F0EB] last:border-none">
+              <span className="font-bold text-[#1F1B16] min-w-0">
                 {i.quantity}x {i.name}
               </span>
-              <span>
+              <span className="shrink-0 whitespace-nowrap">
                 R$ {((i.price + (i.adicionais || []).reduce((s, a) => s + a.price * a.quantity, 0)) * i.quantity).toFixed(2).replace(".", ",")}
               </span>
             </div>
@@ -315,7 +315,7 @@ export function StepPagamento({
                 `R$ ${deliveryFee.toFixed(2).replace(".", ",")}`
               ) : (
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="line-through text-stone-400 text-xs font-normal">R$ 5,00</span>
+                  <span className="line-through text-stone-400 text-xs font-normal">R$ {(deliveryFee > 0 ? deliveryFee : 3).toFixed(2).replace(".", ",")}</span>
                   <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 text-xs">
                     Grátis
                   </span>
