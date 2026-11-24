@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, useMemo, useCallback, type ReactNode } from "react"
 import { evaluateCoupon } from "@/lib/coupon-rules"
+import { trackAddToCart } from "@/lib/meta-pixel"
 
 export interface CartItem {
   id: string
@@ -208,6 +209,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const addItem = (newItem: CartItem) => {
+    const qty = Number(newItem.quantity) || 1
+    const adicionaisTotal = (newItem.adicionais || []).reduce(
+      (acc, a) => acc + (Number(a.price) || 0) * (Number(a.quantity) || 0),
+      0
+    )
+    const totalValue = Math.round(((Number(newItem.price) || 0) + adicionaisTotal) * qty * 100) / 100
+
+    trackAddToCart({
+      id: String(newItem.id),
+      name: newItem.name,
+      category: newItem.category,
+      value: totalValue,
+      quantity: qty,
+    })
+
     setItems((prev) => {
       const sortAdicionais = (ads: any[]) =>
         [...ads]

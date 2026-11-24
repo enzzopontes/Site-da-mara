@@ -10,6 +10,7 @@ import { CartBar } from "@/components/cart-bar"
 import { GuestTopbar } from "@/components/guest-topbar"
 import { AuthModal } from "@/components/auth-modal"
 import { CookieConsent } from "@/components/cookie-consent"
+import { MetaPixel } from "@/components/meta-pixel"
 import "./globals.css"
 
 const geist = Geist({ subsets: ["latin"] })
@@ -45,6 +46,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className={`${geist.className} font-sans antialiased`}>
+        <MetaPixel />
         <AuthProvider>
           <CartProvider>
             <OfflineDetector>

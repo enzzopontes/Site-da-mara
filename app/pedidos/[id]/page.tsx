@@ -13,6 +13,7 @@ import { ordersManager, type Order } from "@/lib/orders-manager"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { PixPaymentBox } from "@/components/pix-payment-box"
 import { triggerPixConfettiCannons } from "@/lib/pix-confetti"
+import { trackPurchase } from "@/lib/meta-pixel"
 import { FeedbackModal } from "@/components/feedback-modal"
 import { PedidoDetalheSkeleton } from "@/components/skeletons/pedido-detalhe-skeleton"
 import {
@@ -241,6 +242,23 @@ export default function DetalhesPedidoPage() {
       hasCelebratedRef.current = true
       appToast.success("Pagamento confirmado!", "Seu pedido já está sendo preparado.", { duration: 4000 })
       triggerPixConfettiCannons()
+      const currentOrder = orderRef.current
+      if (currentOrder) {
+        const orderItems = Array.isArray(currentOrder.items) ? currentOrder.items : []
+        const contentIds = orderItems
+          .map((item: any) => String(item.product_id || item.id || ""))
+          .filter(Boolean)
+        const numItems = orderItems.reduce(
+          (sum: number, item: any) => sum + (Number(item.quantity) || 1),
+          0
+        )
+        trackPurchase({
+          orderId: String(currentOrder.id),
+          value: Number(currentOrder.total) || 0,
+          contentIds,
+          numItems,
+        })
+      }
     }
     loadOrderRef.current(true)
   }, [])

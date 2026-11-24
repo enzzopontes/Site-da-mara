@@ -17,6 +17,7 @@ import { ordersManager } from "@/lib/orders-manager"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { usePaymentCards } from "@/hooks/use-payment-cards"
 import { tokenizeSavedCardCvv, isValidCpf } from "@/lib/mercado-pago-client"
+import { trackInitiateCheckout, trackPurchase } from "@/lib/meta-pixel"
 
 import { CartHeader, type CheckoutStep } from "@/components/checkout/cart-header"
 import { CartFooter } from "@/components/checkout/cart-footer"
@@ -229,6 +230,18 @@ export default function CheckoutPage() {
   const currentDeliveryFee = deliveryType === "pickup" ? 0 : deliveryFee
   const finalTotal = Math.max(0, subtotal - discountAmount + currentDeliveryFee)
   const totalItemCount = items.reduce((sum, item) => sum + item.quantity, 0)
+
+  const hasTrackedCheckoutRef = useRef(false)
+  useEffect(() => {
+    if (!authLoading && !isLoadingData && items.length > 0 && !hasTrackedCheckoutRef.current) {
+      hasTrackedCheckoutRef.current = true
+      trackInitiateCheckout({
+        contentIds: items.map((i) => String(i.id)),
+        numItems: totalItemCount,
+        value: Number(finalTotal) || 0,
+      })
+    }
+  }, [authLoading, isLoadingData, items, totalItemCount, finalTotal])
 
   // ─── Formatação de Máscaras ────────────────────────────────────────────────
   const handleTelefoneChange = (value: string) => {
@@ -762,6 +775,14 @@ export default function CheckoutPage() {
           return
         }
 
+        if (cardData.status === "approved") {
+          trackPurchase({
+            orderId: String(orderId),
+            value: Number(authoritativeOrderTotal) || 0,
+            contentIds: items.map((i) => String(i.id)),
+            numItems: totalItemCount,
+          })
+        }
         pendingOrderIdRef.current = null
         pendingOrderTotalRef.current = null
         clearCart()
@@ -808,6 +829,12 @@ export default function CheckoutPage() {
           return
         }
       } else {
+        trackPurchase({
+          orderId: String(orderId),
+          value: Number(authoritativeOrderTotal) || 0,
+          contentIds: items.map((i) => String(i.id)),
+          numItems: totalItemCount,
+        })
         // Dispara notificação push para os administradores
         getSupabaseBrowserClient()
           .auth.getSession()

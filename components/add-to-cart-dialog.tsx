@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import {
   ResponsiveModal,
   ResponsiveModalContent,
@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { adicionaisManager } from "@/lib/adicionais-manager"
 import { productsManager } from "@/lib/products-db"
 import { createBrowserClient } from "@/lib/supabase/client"
+import { trackViewContent } from "@/lib/meta-pixel"
 
 export interface Adicional {
   id: string
@@ -220,6 +221,8 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
 
   const isMacarrao = product.category === "macarrao"
   const isBatata = product.category === "batata" || !product.category
+  const basePrice = isPromoActive && isBatata ? promoPrice : product.price
+  const lastTrackedViewKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
     const checkPromo = async () => {
@@ -236,6 +239,17 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
 
   useEffect(() => {
     if (open) {
+      const viewKey = String(product.id)
+      if (lastTrackedViewKeyRef.current !== viewKey) {
+        lastTrackedViewKeyRef.current = viewKey
+        trackViewContent({
+          id: String(product.id),
+          name: product.name,
+          category: product.category,
+          value: Number(basePrice) || 0,
+        })
+      }
+
       setSelectedAdicionais({})
       setSelectedBebidas({})
       setQuantity(1)
@@ -325,10 +339,10 @@ export function AddToCartDialog({ product, open, onOpenChange }: AddToCartDialog
 
         fetchDrinks()
       }
+    } else {
+      lastTrackedViewKeyRef.current = null
     }
   }, [open, product.id, product.adicionais, isBebida])
-
-  const basePrice = isPromoActive && isBatata ? promoPrice : product.price
 
   const updateAdicionalQuantity = (id: string, delta: number) => {
     setSelectedAdicionais((prev) => {
