@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { ScrollReveal } from "@/components/ui/scroll-reveal"
 import { ProductCard } from "@/components/product-card"
 import { ChevronRight, Sparkles, Tag, Flame } from "lucide-react"
 import type { Product } from "@/lib/products-db"
@@ -60,7 +61,7 @@ export function FeaturedProducts({
            ======================================================== */}
         {displayFeatured.length > 0 && (
           <div>
-            <div className="flex items-center justify-between gap-4 mb-4 sm:mb-6 pb-3 border-b border-[#ECE7E0]">
+            <ScrollReveal className="flex items-center justify-between gap-4 mb-4 sm:mb-6 pb-3 border-b border-[#ECE7E0]">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="p-1.5 rounded-lg bg-[#FEF8EC] text-[#E3A008]">
@@ -81,10 +82,10 @@ export function FeaturedProducts({
                   <ChevronRight className="w-4 h-4" />
                 </span>
               </Link>
-            </div>
+            </ScrollReveal>
 
             {/* Carrossel Horizontal com Snap e Scroll Suave */}
-            <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 pt-1 snap-x snap-mandatory scroll-smooth no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
+            <ScrollReveal className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 pt-1 snap-x snap-mandatory scroll-smooth no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
               {displayFeatured.map((product) => (
                 <div
                   key={`feat-${product.id}`}
@@ -97,7 +98,7 @@ export function FeaturedProducts({
                   />
                 </div>
               ))}
-            </div>
+            </ScrollReveal>
           </div>
         )}
 
@@ -106,7 +107,7 @@ export function FeaturedProducts({
            ======================================================== */}
         {displayPromos.length > 0 && (
           <div>
-            <div className="flex items-center justify-between gap-4 mb-4 sm:mb-6 pb-3 border-b border-[#ECE7E0]">
+            <ScrollReveal className="flex items-center justify-between gap-4 mb-4 sm:mb-6 pb-3 border-b border-[#ECE7E0]">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700">
@@ -127,16 +128,14 @@ export function FeaturedProducts({
                   <ChevronRight className="w-4 h-4" />
                 </span>
               </Link>
-            </div>
+            </ScrollReveal>
 
             {/* Grade 2 Colunas no Desktop com foto à direita */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               {displayPromos.map((product) => (
-                <ProductCard
-                  key={`promo-${product.id}`}
-                  product={product}
-                  layout="horizontal"
-                />
+                <ScrollReveal key={`promo-${product.id}`} className="grid">
+                  <ProductCard product={product} layout="horizontal" />
+                </ScrollReveal>
               ))}
             </div>
           </div>
@@ -147,7 +146,7 @@ export function FeaturedProducts({
            ======================================================== */}
         {batatasList.length > 0 && (
           <div>
-            <div className="flex items-center justify-between gap-4 mb-4 sm:mb-6 pb-3 border-b border-[#ECE7E0]">
+            <ScrollReveal className="flex items-center justify-between gap-4 mb-4 sm:mb-6 pb-3 border-b border-[#ECE7E0]">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="p-1.5 rounded-lg bg-[#FEF8EC] text-[#8A6100]">
@@ -168,11 +167,11 @@ export function FeaturedProducts({
                   <ChevronRight className="w-4 h-4" />
                 </span>
               </Link>
-            </div>
+            </ScrollReveal>
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
               {batatasList.map((product, index) => (
-                <div key={product.id} className="relative group">
+                <ScrollReveal key={product.id} className="relative group">
                   <div className="absolute top-2 left-2 z-10 pointer-events-none">
                     <span
                       className={`inline-flex items-center justify-center font-black text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full shadow-2xs ${
@@ -194,7 +193,7 @@ export function FeaturedProducts({
                     isMostRequested={product.id === mostRequestedProductId}
                     layout="vertical"
                   />
-                </div>
+                </ScrollReveal>
               ))}
             </div>
           </div>
@@ -205,7 +204,7 @@ export function FeaturedProducts({
            ======================================================== */}
         {macarraoList.length > 0 && (
           <div>
-            <div className="flex items-center justify-between gap-4 mb-4 sm:mb-6 pb-3 border-b border-[#ECE7E0]">
+            <ScrollReveal className="flex items-center justify-between gap-4 mb-4 sm:mb-6 pb-3 border-b border-[#ECE7E0]">
               <div>
                 <h2 className="text-lg sm:text-xl font-bold text-[#1F1B16] tracking-tight">
                   Massas e Macarrão Mais Pedidos
@@ -221,11 +220,11 @@ export function FeaturedProducts({
                   <ChevronRight className="w-4 h-4" />
                 </span>
               </Link>
-            </div>
+            </ScrollReveal>
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
               {macarraoList.map((product, index) => (
-                <div key={product.id} className="relative group">
+                <ScrollReveal key={product.id} className="relative group">
                   <div className="absolute top-2 left-2 z-10 pointer-events-none">
                     <span
                       className={`inline-flex items-center justify-center font-black text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full shadow-2xs ${
@@ -247,14 +246,14 @@ export function FeaturedProducts({
                     isMostRequested={product.id === mostRequestedProductId}
                     layout="vertical"
                   />
-                </div>
+                </ScrollReveal>
               ))}
             </div>
           </div>
         )}
 
         {/* Banner de Personalização / Montar do seu jeito */}
-        <div className="rounded-2xl bg-[#F7F4EF] border border-[#ECE7E0] p-6 text-center flex flex-col sm:flex-row items-center justify-between gap-4">
+        <ScrollReveal className="rounded-2xl bg-[#F7F4EF] border border-[#ECE7E0] p-6 text-center flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="text-center sm:text-left">
             <h3 className="text-base font-bold text-[#1F1B16]">
               Quer montar do seu jeito?
@@ -268,7 +267,7 @@ export function FeaturedProducts({
               Abrir cardápio
             </Button>
           </Link>
-        </div>
+        </ScrollReveal>
       </div>
     </section>
   )

@@ -5,6 +5,7 @@ import { CategoryBar } from "@/components/category-bar"
 import { HomeCouponBanner } from "@/components/home-coupon-banner"
 import { FeaturedProducts } from "@/components/featured-products"
 import { Footer } from "@/components/footer"
+import { ScrollReveal } from "@/components/ui/scroll-reveal"
 import { OrderSummary } from "@/components/order-summary"
 import { productsManager } from "@/lib/products-db"
 import { couponsManager } from "@/lib/cupons-manager"
@@ -68,15 +69,19 @@ export default async function Home() {
 
       <main className="flex-1 flex flex-col">
         {/* Hero com dados reais, status da loja e chamada de alta conversão */}
+        <ScrollReveal>
         <Hero
           mostRequestedProduct={mostRequestedData.product}
           totalOrders={mostRequestedData.totalOrders}
           customerPhotos={mostRequestedData.customerPhotos}
           totalCustomers={totalCustomers}
         />
+        </ScrollReveal>
 
         {/* Banner de Campanhas Promocionais Sincronizado com App */}
-        <CampaignBanner />
+        <ScrollReveal>
+          <CampaignBanner />
+        </ScrollReveal>
 
         {/* Barra de Categorias Rápidas (Chips estilo iFood com espaço reservado CLS = 0) */}
         <section aria-label="Navegação por categorias" className="w-full min-h-[60px] bg-white">
@@ -84,6 +89,7 @@ export default async function Home() {
         </section>
 
         {/* Carrossel Rotativo de Cupons da Home (Estilo Mobile iFood) */}
+        <ScrollReveal>
         <HomeCouponBanner
           coupons={activeCoupons}
           couponCode={homeCoupon?.code || "PRIMEIRACOMPRA"}
@@ -93,6 +99,7 @@ export default async function Home() {
           discountType={homeCoupon?.type || "percentage"}
           minOrderValue={homeCoupon?.minOrderValue}
         />
+        </ScrollReveal>
 
         {/* Blocos de Produtos em Destaque divididos por categoria */}
         <FeaturedProducts

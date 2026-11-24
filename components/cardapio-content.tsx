@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
 import { ProductCard } from "@/components/product-card"
+import { ScrollReveal } from "@/components/ui/scroll-reveal"
 import { Utensils, GlassWater, Soup, Sparkles, SearchX } from "lucide-react"
 import { CardapioSkeleton } from "@/components/skeletons/cardapio-skeleton"
 import { MenuStickyNav, type MenuCategory } from "@/components/menu-sticky-nav"
@@ -388,7 +389,7 @@ export function CardapioContent({
               className="w-full px-0.5 scroll-mt-28 sm:scroll-mt-32"
               aria-labelledby="heading-batatas"
             >
-              <div className="mb-4">
+              <ScrollReveal className="mb-4">
                 <h2
                   id="heading-batatas"
                   className="text-xl sm:text-2xl font-black text-[#1A1A1A] mb-1 flex items-center gap-2"
@@ -400,7 +401,7 @@ export function CardapioContent({
                   <Sparkles className="h-3.5 w-3.5 text-[#E3A008]" />
                   <span className="font-medium">Personalize com seus adicionais favoritos!</span>
                 </p>
-              </div>
+              </ScrollReveal>
 
               {filteredBatatas.length > 0 ? (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -411,11 +412,9 @@ export function CardapioContent({
                     const rank = rankIdx !== -1 ? ((rankIdx + 1) as 1 | 2 | 3) : null
 
                     return (
-                      <ProductCard
-                        key={product.id}
-                        product={product}
-                        rank={rank}
-                      />
+                      <ScrollReveal key={product.id} className="grid">
+                        <ProductCard product={product} rank={rank} />
+                      </ScrollReveal>
                     )
                   })}
                 </div>
@@ -437,7 +436,7 @@ export function CardapioContent({
               className="w-full px-0.5 scroll-mt-28 sm:scroll-mt-32"
               aria-labelledby="heading-macarrao"
             >
-              <div className="mb-4">
+              <ScrollReveal className="mb-4">
                 <h2
                   id="heading-macarrao"
                   className="text-xl sm:text-2xl font-black text-[#1A1A1A] mb-1 flex items-center gap-2"
@@ -449,7 +448,7 @@ export function CardapioContent({
                   <Sparkles className="h-3.5 w-3.5 text-[#E3A008]" />
                   <span className="font-medium">Adicione proteínas e queijo gratinado!</span>
                 </p>
-              </div>
+              </ScrollReveal>
 
               {filteredMacarrao.length > 0 ? (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -460,11 +459,9 @@ export function CardapioContent({
                     const rank = rankIdx !== -1 ? ((rankIdx + 1) as 1 | 2 | 3) : null
 
                     return (
-                      <ProductCard
-                        key={product.id}
-                        product={product}
-                        rank={rank}
-                      />
+                      <ScrollReveal key={product.id} className="grid">
+                        <ProductCard product={product} rank={rank} />
+                      </ScrollReveal>
                     )
                   })}
                 </div>
@@ -486,7 +483,7 @@ export function CardapioContent({
               className="w-full px-0.5 scroll-mt-28 sm:scroll-mt-32"
               aria-labelledby="heading-bebidas"
             >
-              <div className="mb-4">
+              <ScrollReveal className="mb-4">
                 <h2
                   id="heading-bebidas"
                   className="text-xl sm:text-2xl font-black text-[#1A1A1A] mb-1 flex items-center gap-2"
@@ -497,12 +494,14 @@ export function CardapioContent({
                 <p className="text-xs sm:text-sm text-[#717171]">
                   Refrigerantes, sucos e complementos para o seu pedido.
                 </p>
-              </div>
+              </ScrollReveal>
 
               {filteredBebidas.length > 0 ? (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                   {filteredBebidas.map((product) => (
-                    <ProductCard key={product.id} product={product} rank={null} />
+                    <ScrollReveal key={product.id} className="grid">
+                      <ProductCard product={product} rank={null} />
+                    </ScrollReveal>
                   ))}
                 </div>
               ) : (

@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { AddressCardSkeleton } from "@/components/skeletons/address-skeleton"
 import Link from "next/link"
 import { HeaderWrapper } from "@/components/header-wrapper"
+import { ScrollReveal } from "@/components/ui/scroll-reveal"
 import { Footer } from "@/components/footer"
 import { OrderSummary } from "@/components/order-summary"
 import { Button } from "@/components/ui/button"
@@ -722,7 +723,7 @@ export default function PerfilPage() {
             {!user ? (
               <div>
                 {/* Top Card Visitante */}
-                <div className="p-5 rounded-2xl bg-[#F7F5F0] border border-[#ECE7E0] mb-6">
+                <ScrollReveal className="p-5 rounded-2xl bg-[#F7F5F0] border border-[#ECE7E0] mb-6">
                   <div className="flex items-center gap-4 mb-4">
                     <div className="h-14 w-14 rounded-full bg-[#F3F0EB] border border-[#ECE7E0] flex items-center justify-center text-[#717171] shrink-0">
                       <User className="h-7 w-7" />
@@ -744,10 +745,11 @@ export default function PerfilPage() {
                   >
                     Entrar ou cadastrar
                   </button>
-                </div>
+                </ScrollReveal>
 
                 {/* Acordeões acessíveis no modo visitante */}
                 <div className="divide-y divide-[#ECE7E0]">
+                  <ScrollReveal>
                   <ProfileAccordionItem
                     icon={<Settings className="h-5 w-5" />}
                     title="Configurações"
@@ -784,7 +786,9 @@ export default function PerfilPage() {
                       },
                     ]}
                   />
+                  </ScrollReveal>
 
+                  <ScrollReveal>
                   <ProfileAccordionItem
                     icon={<HelpCircle className="h-5 w-5" />}
                     title="Ajuda e Termos"
@@ -819,6 +823,7 @@ export default function PerfilPage() {
                       },
                     ]}
                   />
+                  </ScrollReveal>
                 </div>
 
                 {/* Rodapé institucional do Perfil */}
@@ -837,7 +842,7 @@ export default function PerfilPage() {
                  ========================================================= */
               <div>
                 {/* 1. Cabeçalho de Perfil */}
-                <div className="flex items-start sm:items-center gap-4 p-4 rounded-2xl bg-[#F3F0EB] md:bg-white border border-[#ECE7E0] mb-6">
+                <ScrollReveal className="flex items-start sm:items-center gap-4 p-4 rounded-2xl bg-[#F3F0EB] md:bg-white border border-[#ECE7E0] mb-6">
                   <div className="h-16 w-16 rounded-full border-2 border-[#E3A008]/40 bg-[#FEF8EC] flex items-center justify-center text-[#A16207] font-bold text-lg overflow-hidden shrink-0 shadow-xs">
                     {customAvatarUrl ? (
                       <img
@@ -880,10 +885,10 @@ export default function PerfilPage() {
                       </span>
                     </div>
                   </div>
-                </div>
+                </ScrollReveal>
 
                 {/* 2. Card de Pagamento (Fiel ao App Mobile) */}
-                <div className="mb-6">
+                <ScrollReveal className="mb-6">
                   <button
                     type="button"
                     onClick={() => router.push("/perfil/pagamentos")}
@@ -909,10 +914,10 @@ export default function PerfilPage() {
                       Gerencie suas formas de pagamento
                     </div>
                   </button>
-                </div>
+                </ScrollReveal>
 
                 {/* Atalho Notificações (Fiel ao App Mobile) */}
-                <div className={isAdmin ? "mb-4 border-b border-[#ECE7E0]" : "border-b border-[#ECE7E0]"}>
+                <ScrollReveal className={isAdmin ? "mb-4 border-b border-[#ECE7E0]" : "border-b border-[#ECE7E0]"}>
                   <Link
                     href="/notificacoes"
                     className="w-full flex items-center justify-between py-4 px-1 text-left active:scale-[0.98] transition-transform group"
@@ -939,11 +944,11 @@ export default function PerfilPage() {
                       <ChevronRight className="h-4 w-4 text-[#717171] group-hover:translate-x-0.5 transition-transform shrink-0" />
                     </div>
                   </Link>
-                </div>
+                </ScrollReveal>
 
                 {/* Atalho Painel Admin (Apenas Administradores) */}
                 {isAdmin && (
-                  <div className="mb-4">
+                  <ScrollReveal className="mb-4">
                     <button
                       type="button"
                       onClick={() => router.push("/admin")}
@@ -964,12 +969,13 @@ export default function PerfilPage() {
                       </div>
                       <ChevronRight className="h-4 w-4 text-[#A16207]" />
                     </button>
-                  </div>
+                  </ScrollReveal>
                 )}
 
                 {/* 3. Lista de Acordeões Expansíveis (Idêntico ao App Mobile) */}
                 <div className="divide-y divide-[#ECE7E0]">
                   {/* ACORDEÃO 1: Recompensas */}
+                  <ScrollReveal>
                   <ProfileAccordionItem
                     icon={<Gift className="h-5 w-5" />}
                     title="Recompensas"
@@ -991,8 +997,10 @@ export default function PerfilPage() {
                       },
                     ]}
                   />
+                  </ScrollReveal>
 
                   {/* ACORDEÃO 2: Minha Conta */}
+                  <ScrollReveal>
                   <ProfileAccordionItem
                     icon={<User className="h-5 w-5" />}
                     title="Minha Conta"
@@ -1287,8 +1295,10 @@ export default function PerfilPage() {
                       },
                     ]}
                   />
+                  </ScrollReveal>
 
                   {/* ACORDEÃO 3: Configurações & Segurança */}
+                  <ScrollReveal>
                   <ProfileAccordionItem
                     icon={<Settings className="h-5 w-5" />}
                     title="Configurações & Segurança"
@@ -1429,8 +1439,10 @@ export default function PerfilPage() {
                       },
                     ]}
                   />
+                  </ScrollReveal>
 
                   {/* ACORDEÃO 4: Ajuda e Termos */}
+                  <ScrollReveal>
                   <ProfileAccordionItem
                     icon={<HelpCircle className="h-5 w-5" />}
                     title="Ajuda e Termos"
@@ -1463,6 +1475,7 @@ export default function PerfilPage() {
                       },
                     ]}
                   />
+                  </ScrollReveal>
                 </div>
 
                 {/* 4. Botão Sair da Conta com Modal de Confirmação */}

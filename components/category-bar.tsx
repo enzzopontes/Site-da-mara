@@ -1,5 +1,6 @@
 "use client"
 
+import { ScrollReveal } from "@/components/ui/scroll-reveal"
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 
@@ -106,8 +107,8 @@ export function CategoryBar() {
             {CATEGORIES.map((cat) => {
               const isActive = activeId === cat.id
               return (
+                <ScrollReveal key={cat.id} className="grid">
                 <Link
-                  key={cat.id}
                   href={cat.href}
                   onClick={() => setActiveId(cat.id)}
                   className={`group flex flex-col items-center justify-center p-3 sm:p-4 rounded-2xl border transition-all active:scale-[0.95] ${
@@ -131,6 +132,7 @@ export function CategoryBar() {
                     {cat.name}
                   </span>
                 </Link>
+                </ScrollReveal>
               )
             })}
           </div>

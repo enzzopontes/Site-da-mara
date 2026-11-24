@@ -10,6 +10,7 @@ import { useCart } from "@/lib/cart-context"
 import { ordersManager, type Order } from "@/lib/orders-manager"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { FeedbackModal } from "@/components/feedback-modal"
+import { ScrollReveal } from "@/components/ui/scroll-reveal"
 import { PedidosSkeleton } from "@/components/skeletons/pedidos-skeleton"
 import {
   ChevronLeft,
@@ -705,7 +706,7 @@ export default function PedidosPage() {
         <div className="container mx-auto px-4 max-w-2xl py-5">
           {!user || orders.length === 0 ? (
             /* Estado Vazio Idêntico ao App Mobile */
-            <div className="flex flex-col items-center justify-center py-12 lg:py-20 text-center">
+            <ScrollReveal className="flex flex-col items-center justify-center py-12 lg:py-20 text-center">
               <img
                 src="/assets/batatadormindo.png"
                 alt="Poxa, você não tem nenhum pedido"
@@ -735,7 +736,7 @@ export default function PedidosPage() {
                   </button>
                 )}
               </div>
-            </div>
+            </ScrollReveal>
           ) : (
             <div className="space-y-6">
               {/* Seção Em Andamento */}
@@ -746,11 +747,9 @@ export default function PedidosPage() {
                   </h2>
                   <div className="space-y-3.5">
                     {activeOrders.map((order) => (
-                      <ActiveOrderCard
-                        key={order.id}
-                        order={order}
-                        onDetails={handleDetails}
-                      />
+                      <ScrollReveal key={order.id}>
+                        <ActiveOrderCard order={order} onDetails={handleDetails} />
+                      </ScrollReveal>
                     ))}
                   </div>
                 </div>
@@ -764,8 +763,8 @@ export default function PedidosPage() {
                   </h2>
                   <div className="space-y-3.5">
                     {completedOrders.map((order) => (
+                      <ScrollReveal key={order.id}>
                       <CompletedOrderCard
-                        key={order.id}
                         order={order}
                         onDetails={handleDetails}
                         onOpenFeedback={handleOpenFeedback}
@@ -773,6 +772,7 @@ export default function PedidosPage() {
                         onReorder={handleReorder}
                         onHelp={handleHelp}
                       />
+                      </ScrollReveal>
                     ))}
                   </div>
                 </div>
