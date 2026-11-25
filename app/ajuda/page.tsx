@@ -30,7 +30,7 @@ export default function AjudaPage() {
     {
       question: "Qual o tempo de entrega?",
       answer:
-        "O tempo médio de entrega em Iacanga - SP é de 30 a 60 minutos, variando conforme a demanda. Se preferir, a retirada no local é mais rápida no Portão de Ferro Preto — Rua Carlos Roberto Crepaldi, 120 - Centro.",
+        "O tempo médio de entrega em Iacanga - SP é de 30 a 45 minutos, variando conforme a demanda. Se preferir, a retirada no local é mais rápida no Portão de Ferro Preto — Rua Carlos Roberto Crepaldi, 120 - Centro.",
     },
     {
       question: "Como adiciono ou altero meu endereço?",
@@ -181,7 +181,7 @@ export default function AjudaPage() {
               <Clock className="h-5 w-5 text-[#E3A008]" />
               <p className="font-bold text-gray-800">Horário</p>
             </div>
-            <p className="text-sm text-gray-600">Segunda a Segunda: 10:00 - 01:30</p>
+            <p className="text-sm text-gray-600">Segunda a Segunda: 10:00 às 22:30</p>
           </div>
         </div>
       </main>

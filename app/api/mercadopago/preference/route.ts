@@ -74,6 +74,7 @@ export async function POST(req: NextRequest) {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
+      signal: AbortSignal.timeout(15000),
       body: JSON.stringify({
         items,
         external_reference: orderId,
@@ -98,11 +99,18 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    return NextResponse.json({
-      success: false,
-      error: data.message || 'Erro ao criar preferência de pagamento no Mercado Pago',
-    });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message || 'Erro de conexão com o Mercado Pago' });
+    return NextResponse.json(
+      {
+        success: false,
+        error: data.message || 'Erro ao criar preferência de pagamento no Mercado Pago',
+      },
+      { status: mpRes.status >= 400 ? mpRes.status : 502 }
+    );
+  } catch (err) {
+    console.error('[MercadoPago Preference] Error:', err);
+    return NextResponse.json(
+      { success: false, error: 'Erro de conexão com o Mercado Pago' },
+      { status: 500 }
+    );
   }
 }

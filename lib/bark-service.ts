@@ -62,6 +62,7 @@ export async function sendBarkNotification(order: BarkOrderData): Promise<{ succ
         "Content-Type": "application/json; charset=utf-8",
       },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(8000),
     })
 
     if (!res.ok) {
@@ -102,6 +103,7 @@ export async function sendBarkTestNotification(): Promise<{ success: boolean; er
         "Content-Type": "application/json; charset=utf-8",
       },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(8000),
     })
 
     if (!res.ok) {

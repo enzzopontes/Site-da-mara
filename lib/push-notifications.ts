@@ -125,6 +125,7 @@ export async function sendExpoPush(messages: Record<string, unknown>[]) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(messages),
+    signal: AbortSignal.timeout(8000),
   });
 
   const result = await response.json();

@@ -43,8 +43,8 @@ interface RestaurantHeaderCardProps {
 
 export function RestaurantHeaderCard({
   isOpen = true,
-  waitTimeMin = 15,
-  waitTimeMax = 22,
+  waitTimeMin = 30,
+  waitTimeMax = 45,
   isDeliveryFeeEnabled = false,
   deliveryFee = 0,
   totalOrders = 0,

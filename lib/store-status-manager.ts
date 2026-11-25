@@ -51,12 +51,12 @@ class StoreStatusManager {
     return getSupabaseBrowserClient()
   }
   private settingKey = "store_status"
-  private defaultWaitTime = { min: 15, max: 22 }
+  private defaultWaitTime = { min: 30, max: 45 }
   private cachedStatus: StoreStatus | null = null
 
   // Horários padrão de fallback
   private readonly DEFAULT_OPEN_TIME = "10:00"
-  private readonly DEFAULT_CLOSE_TIME = "22:00"
+  private readonly DEFAULT_CLOSE_TIME = "22:30"
 
   // Métodos síncronos para UI rápida
   isStoreOpenSync(): boolean {
@@ -93,7 +93,7 @@ class StoreStatusManager {
 
     const curTotal = (isNaN(curH) ? 0 : curH) * 60 + (isNaN(curM) ? 0 : curM)
     const openTotal = (isNaN(openH) ? 10 : openH) * 60 + (isNaN(openM) ? 0 : openM)
-    const closeTotal = (isNaN(closeH) ? 22 : closeH) * 60 + (isNaN(closeM) ? 0 : closeM)
+    const closeTotal = (isNaN(closeH) ? 22 : closeH) * 60 + (isNaN(closeM) ? 30 : closeM)
 
     if (openTotal <= closeTotal) {
       // Janela no mesmo dia (ex: 10:00 às 22:00)
@@ -475,13 +475,16 @@ class StoreStatusManager {
     }
   }
 
+  private autoScheduleIntervalId: ReturnType<typeof setInterval> | null = null
+
   /**
    * Inicia verificação periódica do horário automático
    * Deve ser chamado uma vez quando a aplicação inicia
    */
   startAutoScheduleCheck(): void {
+    if (this.autoScheduleIntervalId !== null) return
     // Verifica a cada minuto se o status deve mudar
-    setInterval(async () => {
+    this.autoScheduleIntervalId = setInterval(async () => {
       const status = await this.getStatus()
       // O método getStatus já aplica a lógica de horário automático
     }, 60000) // A cada 60 segundos

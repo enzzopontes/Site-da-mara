@@ -109,6 +109,7 @@ export async function POST(req: NextRequest) {
     try {
       mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${dataId}`, {
         headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(10000),
       });
     } catch (fetchErr: any) {
       console.error('[webhook] Falha de rede ao consultar pagamento no MP:', fetchErr?.message);

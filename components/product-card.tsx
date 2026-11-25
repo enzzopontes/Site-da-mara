@@ -363,7 +363,7 @@ export function ProductCard({
               </span>
 
               {hasDiscount && discountPercentage && discountPercentage > 0 && (
-                <span className="inline-flex sm:hidden items-center bg-[#008941] text-white text-[9px] font-black px-1.5 py-0.2 rounded-full">
+                <span className="inline-flex sm:hidden items-center bg-[#008941] text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">
                   -{discountPercentage}%
                 </span>
               )}

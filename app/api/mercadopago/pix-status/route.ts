@@ -101,6 +101,7 @@ export async function GET(req: NextRequest) {
     // Consulta na API de pagamentos (/v1/payments)
     let mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${targetPaymentId}`, {
       headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(10000),
     });
 
     if (mpRes.ok) {
@@ -156,6 +157,7 @@ export async function GET(req: NextRequest) {
     // Fallback para orders legadas (/v1/orders)
     mpRes = await fetch(`https://api.mercadopago.com/v1/orders/${targetPaymentId}`, {
       headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(10000),
     });
 
     if (mpRes.ok) {

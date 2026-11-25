@@ -51,7 +51,10 @@ export async function POST(req: NextRequest) {
 
       const mpCardRes = await fetch(
         `https://api.mercadopago.com/v1/customers/${savedCard.mp_customer_id}/cards/${savedCard.mp_card_id}`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: AbortSignal.timeout(10000),
+        }
       );
       const mpCard = await mpCardRes.json().catch(() => ({}));
       if (!mpCardRes.ok || !mpCard.first_six_digits) {
@@ -71,6 +74,7 @@ export async function POST(req: NextRequest) {
 
     const mpRes = await fetch(`https://api.mercadopago.com/v1/payment_methods/installments?${params.toString()}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(10000),
     });
     const data = await mpRes.json().catch(() => null);
 

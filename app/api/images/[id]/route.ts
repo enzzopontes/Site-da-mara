@@ -15,7 +15,14 @@ export async function GET(
       )
     }
 
-    const supabase = await getSupabase()
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return NextResponse.json(
+        { error: "Invalid image ID" },
+        { status: 400 }
+      )
+    }
+
+    const supabase = getSupabase()
 
     // Busca a imagem no banco de dados
     const { data, error } = await supabase

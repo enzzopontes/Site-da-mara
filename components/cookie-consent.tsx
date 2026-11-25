@@ -53,6 +53,7 @@ export function CookieConsent() {
     }
     try {
       localStorage.setItem(COOKIE_CONSENT_KEY, JSON.stringify(preferences))
+      window.dispatchEvent(new Event("cookie-consent-updated"))
     } catch {}
 
     setAnalyticsAllowed(analytics)

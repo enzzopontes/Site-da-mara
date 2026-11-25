@@ -84,7 +84,10 @@ export async function POST(req: NextRequest) {
 
       const searchRes = await fetch(
         `https://api.mercadopago.com/v1/customers/search?email=${encodeURIComponent(email)}`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: AbortSignal.timeout(10000),
+        }
       );
 
       if (searchRes.ok) {
@@ -106,6 +109,7 @@ export async function POST(req: NextRequest) {
             email,
             first_name: user.user_metadata?.nome || user.user_metadata?.full_name || email.split('@')[0],
           }),
+          signal: AbortSignal.timeout(10000),
         });
 
         if (!createRes.ok) {
@@ -136,6 +140,7 @@ export async function POST(req: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ token }),
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!mpCardRes.ok) {
@@ -188,6 +193,7 @@ export async function POST(req: NextRequest) {
         await fetch(`https://api.mercadopago.com/v1/customers/${mpCustomerId}/cards/${mpCard.id}`, {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${accessToken}` },
+          signal: AbortSignal.timeout(10000),
         });
       } catch (compErr: any) {
         console.error('[cards] Falha na exclusão compensatória:', compErr?.message);
@@ -268,6 +274,7 @@ export async function DELETE(req: NextRequest) {
         await fetch(`https://api.mercadopago.com/v1/customers/${card.mp_customer_id}/cards/${card.mp_card_id}`, {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${accessToken}` },
+          signal: AbortSignal.timeout(10000),
         });
       } catch (mpErr: any) {
         console.warn('[cards] Falha não impeditiva ao remover cartão do MP:', mpErr?.message);

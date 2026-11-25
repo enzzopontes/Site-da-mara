@@ -130,7 +130,7 @@ export function Footer() {
                 <Clock className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" aria-hidden="true" />
                 <div>
                   <p className="font-black text-gray-900">Segunda a Segunda</p>
-                  <p className="font-medium text-gray-700">10:00 às 01:30</p>
+                  <p className="font-medium text-gray-700">10:00 às 22:30</p>
                 </div>
               </li>
               <li className="flex items-center gap-3 text-gray-700 text-sm">

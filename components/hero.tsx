@@ -29,7 +29,7 @@ export function Hero({
 }: HeroProps) {
   const [storeStatus, setStoreStatus] = useState<StoreStatus | null>(null)
   const [isStoreOpen, setIsStoreOpen] = useState(true)
-  const [waitTime, setWaitTime] = useState({ min: 15, max: 22 })
+  const [waitTime, setWaitTime] = useState({ min: 30, max: 45 })
   const [deliveryFee, setDeliveryFee] = useState(0)
   const [isDeliveryFeeEnabled, setIsDeliveryFeeEnabled] = useState(false)
 
@@ -44,7 +44,7 @@ export function Hero({
         const status = await storeStatusManager.getStatus()
         setStoreStatus(status)
         setIsStoreOpen(status.isOpen ?? true)
-        setWaitTime({ min: status.waitTimeMin || 15, max: status.waitTimeMax || 22 })
+        setWaitTime({ min: status.waitTimeMin || 30, max: status.waitTimeMax || 45 })
         setIsDeliveryFeeEnabled(status.isDeliveryFeeEnabled ?? false)
         setDeliveryFee(Number(status.deliveryFee) || 0)
 

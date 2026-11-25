@@ -22,7 +22,7 @@ export function BusinessHours({ showToggle = false }: BusinessHoursProps) {
   const [currentTime, setCurrentTime] = useState<string>("")
   const [status, setStatus] = useState<StoreStatus | null>(null)
   const [openTimeInput, setOpenTimeInput] = useState<string>("10:00")
-  const [closeTimeInput, setCloseTimeInput] = useState<string>("22:00")
+  const [closeTimeInput, setCloseTimeInput] = useState<string>("22:30")
   const [autoScheduleInput, setAutoScheduleInput] = useState<boolean>(true)
   const [isSaving, setIsSaving] = useState<boolean>(false)
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState<boolean>(false)
@@ -67,7 +67,7 @@ export function BusinessHours({ showToggle = false }: BusinessHoursProps) {
   const handleToggleStoreManual = async () => {
     const newOpenState = await storeStatusManager.toggleStoreStatus()
     await updateStatus()
-    appToast.info(newOpenState ? "Loja Aberta Manualmente" : "Loja Fechada Manualmente", `Sobreposição manual ativa. O status retornará ao agendamento automático no próximo ciclo (${newOpenState ? status?.closeTime || "22:00" : status?.openTime || "10:00"}).`)
+    appToast.info(newOpenState ? "Loja Aberta Manualmente" : "Loja Fechada Manualmente", `Sobreposição manual ativa. O status retornará ao agendamento automático no próximo ciclo (${newOpenState ? status?.closeTime || "22:30" : status?.openTime || "10:00"}).`)
   }
 
   const handleResetToAuto = async () => {
@@ -105,11 +105,11 @@ export function BusinessHours({ showToggle = false }: BusinessHoursProps) {
   const isDeliveryEnabled = status?.isDeliveryEnabled ?? true
   const isDeliveryFeeEnabled = status?.isDeliveryFeeEnabled ?? true
   const deliveryFee = status?.deliveryFee ?? 3.0
-  const waitTime = { min: status?.waitTimeMin ?? 15, max: status?.waitTimeMax ?? 22 }
+  const waitTime = { min: status?.waitTimeMin ?? 30, max: status?.waitTimeMax ?? 45 }
   const isManualOverride = status?.manualOverride ?? false
   const autoSchedule = status?.autoSchedule ?? true
   const openTime = status?.openTime || "10:00"
-  const closeTime = status?.closeTime || "22:00"
+  const closeTime = status?.closeTime || "22:30"
 
   // Se for apenas visualização simples (ex: cabeçalhos ou rodapés não-admin)
   if (!showToggle) {

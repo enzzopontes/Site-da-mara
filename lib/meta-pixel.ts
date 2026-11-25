@@ -1,5 +1,10 @@
-export const META_PIXEL_ID =
-  process.env.NEXT_PUBLIC_META_PIXEL_ID || "2434353287337404";
+const rawPixelId = (
+  process.env.NEXT_PUBLIC_META_PIXEL_ID || "2434353287337404"
+).trim();
+
+export const META_PIXEL_ID = /^\d{5,25}$/.test(rawPixelId) ? rawPixelId : "";
+
+export const COOKIE_CONSENT_KEY = "batata_top_cookie_consent_v1";
 
 declare global {
   interface Window {
@@ -8,12 +13,33 @@ declare global {
   }
 }
 
+export function hasMarketingConsent(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    const stored = window.localStorage.getItem(COOKIE_CONSENT_KEY) || "";
+    if (!stored) {
+      return false;
+    }
+    const parsed = JSON.parse(stored) as { marketing?: unknown } | null;
+    return parsed?.marketing === true;
+  } catch {
+    return false;
+  }
+}
+
 export function fbqTrack(
   event: string,
   params?: Record<string, unknown>,
   options?: { eventID?: string }
 ): void {
-  if (typeof window === "undefined" || typeof window.fbq !== "function") {
+  if (
+    typeof window === "undefined" ||
+    typeof window.fbq !== "function" ||
+    !hasMarketingConsent()
+  ) {
     return;
   }
 
@@ -84,7 +110,11 @@ export function trackPurchase(params: {
   contentIds: string[];
   numItems: number;
 }): void {
-  if (typeof window === "undefined" || typeof window.fbq !== "function") {
+  if (
+    typeof window === "undefined" ||
+    typeof window.fbq !== "function" ||
+    !hasMarketingConsent()
+  ) {
     return;
   }
 

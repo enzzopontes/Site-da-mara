@@ -122,6 +122,7 @@ export async function POST(req: NextRequest) {
         notification_url: `${siteUrl}/api/mercadopago/webhook`,
         date_of_expiration: expirationDate,
       }),
+      signal: AbortSignal.timeout(15000),
     });
 
     const data = await mpRes.json();

@@ -17,14 +17,25 @@ const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_
 
 function getCorsOrigin(req: NextRequest): string {
   const origin = req.headers.get('origin') || '';
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || '';
-  const isAllowed =
-    !origin ||
-    origin === siteUrl ||
-    origin.startsWith('http://localhost:') ||
-    origin.startsWith('http://127.0.0.1:');
+  const defaultOrigin =
+    process.env.NEXT_PUBLIC_SITE_URL || 'https://www.batatatopiacanga.com.br';
 
-  return isAllowed && origin ? origin : (siteUrl || '*');
+  if (!origin) {
+    return defaultOrigin;
+  }
+
+  const allowedOrigins = [
+    process.env.NEXT_PUBLIC_SITE_URL,
+    'https://batatatopiacanga.com.br',
+    'https://www.batatatopiacanga.com.br',
+    'https://batatatop.vercel.app',
+  ].filter(Boolean) as string[];
+
+  const isLocalOrigin =
+    process.env.NODE_ENV !== 'production' &&
+    /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
+
+  return allowedOrigins.includes(origin) || isLocalOrigin ? origin : defaultOrigin;
 }
 
 function getSupabaseAdmin() {
@@ -45,13 +56,14 @@ export async function OPTIONS(req: NextRequest) {
       'Access-Control-Allow-Origin': getCorsOrigin(req),
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Vary': 'Origin',
     },
   });
 }
 
 export async function POST(req: NextRequest) {
   const corsOrigin = getCorsOrigin(req);
-  const corsHeaders = { 'Access-Control-Allow-Origin': corsOrigin };
+  const corsHeaders = { 'Access-Control-Allow-Origin': corsOrigin, 'Vary': 'Origin' };
 
   try {
     const supabase = getSupabaseAdmin();
@@ -91,7 +103,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Dono do pedido OU admin pelos e-mails mestres ou profile.role
-    let isAdmin = ADMIN_EMAILS.includes((user.email || '').toLowerCase());
+    let isAdmin =
+      Boolean(user.email_confirmed_at) &&
+      ADMIN_EMAILS.includes((user.email || '').toLowerCase());
     if (!isAdmin) {
       const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).single();
       if (prof?.role === 'admin') {
@@ -140,8 +154,9 @@ export async function POST(req: NextRequest) {
       .select('expo_push_token');
 
     if (tokenError) {
+      console.error('[notify-new-order] Erro ao buscar tokens de push:', tokenError);
       return NextResponse.json(
-        { success: false, error: tokenError.message },
+        { success: false, error: 'Erro ao buscar destinatários de notificação' },
         { status: 500, headers: corsHeaders },
       );
     }
@@ -182,8 +197,8 @@ export async function POST(req: NextRequest) {
       const content = buildNewOrderPushContent(order, order.order_items || []);
       adminMessages = buildExpoPushMessages(uniqueAdminTokens, content);
 
-      const etaMin = order.metadata?.eta_minutes || 40;
-      const etaMax = etaMin + 20;
+      const etaMin = Number(order.metadata?.eta_minutes) || 30;
+      const etaMax = order.metadata?.eta_minutes ? etaMin + 15 : 45;
       customerMessages = uniqueUserTokens.map((to) => ({
         to,
         title: 'Pedido confirmado',
@@ -212,6 +227,7 @@ export async function POST(req: NextRequest) {
         throw new Error('Falha retornada pelo serviço Expo Push');
       }
     } catch (pushErr: any) {
+      console.error('[notify-new-order] Falha no envio de push:', pushErr);
       // Se o envio falhar, regrava admin_push_sent = false
       await supabase.rpc('merge_order_metadata', {
         order_id: order.id,
@@ -221,7 +237,7 @@ export async function POST(req: NextRequest) {
         },
       });
       return NextResponse.json(
-        { success: false, error: 'Falha no envio de push: ' + (pushErr?.message || 'erro desconhecido') },
+        { success: false, error: 'Falha no envio de notificações push' },
         { status: 500, headers: corsHeaders },
       );
     }
@@ -260,9 +276,9 @@ export async function POST(req: NextRequest) {
       { headers: corsHeaders },
     );
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Erro interno';
+    console.error('[notify-new-order] Erro interno:', err);
     return NextResponse.json(
-      { success: false, error: message },
+      { success: false, error: 'Erro interno ao processar notificação' },
       { status: 500, headers: corsHeaders },
     );
   }

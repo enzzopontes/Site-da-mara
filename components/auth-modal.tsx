@@ -42,7 +42,7 @@ const FAQ_ITEMS = [
     id: "tempo-entrega",
     question: "Quanto tempo demora a entrega?",
     answer:
-      "Geralmente os pedidos em Iacanga-SP levam de 30 a 60 minutos após a confirmação. Em dias de grande movimento (sexta e sábado), o tempo pode variar.",
+      "Geralmente os pedidos em Iacanga-SP levam de 30 a 45 minutos após a confirmação. Em dias de grande movimento (sexta e sábado), o tempo pode variar.",
   },
   {
     id: "formas-pagamento",

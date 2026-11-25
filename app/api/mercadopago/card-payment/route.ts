@@ -224,6 +224,7 @@ export async function POST(req: NextRequest) {
           'X-Idempotency-Key': idempotencyKey,
         },
         body: JSON.stringify(mpBody),
+        signal: AbortSignal.timeout(15000),
       });
 
       data = await mpRes.json();

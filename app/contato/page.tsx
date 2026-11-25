@@ -103,7 +103,7 @@ export default function ContatoPage() {
                   <p className="text-xs font-black text-yellow-500 uppercase tracking-widest mb-4">Horário de Funcionamento</p>
                   <div className="space-y-2">
                     <p className="text-xl font-black">Segunda a Segunda</p>
-                    <p className="text-3xl font-black text-yellow-500">10:00 às 01:30</p>
+                    <p className="text-3xl font-black text-yellow-500">10:00 às 22:30</p>
                   </div>
                 </div>
               </div>

@@ -2,7 +2,6 @@ import { NextResponse } from "next/server"
 import { getSupabase } from "@/lib/supabase-fix"
 import { createClient } from "@supabase/supabase-js"
 
-export const dynamic = "force-dynamic"
 export const revalidate = 30
 
 export async function GET() {
@@ -84,23 +83,34 @@ export async function GET() {
       console.warn("Erro ao calcular média de estrelas:", err)
     }
 
-    return NextResponse.json({
-      success: true,
-      totalOrders,
-      totalReviews,
-      averageRating,
-      distribution: ratingDistribution,
-      reviews: reviewsList,
-    })
+    return NextResponse.json(
+      {
+        success: true,
+        totalOrders,
+        totalReviews,
+        averageRating,
+        distribution: ratingDistribution,
+        reviews: reviewsList,
+      },
+      {
+        headers: {
+          "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
+        },
+      }
+    )
   } catch (error: any) {
-    return NextResponse.json({
-      success: false,
-      totalOrders: 0,
-      totalReviews: 0,
-      averageRating: 5.0,
-      distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
-      reviews: [],
-      error: error.message,
-    })
+    console.error("[feedbacks/public] Falha ao carregar avaliações:", error)
+    return NextResponse.json(
+      {
+        success: false,
+        totalOrders: 0,
+        totalReviews: 0,
+        averageRating: 5.0,
+        distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+        reviews: [],
+        error: "Falha ao carregar avaliações",
+      },
+      { status: 500 }
+    )
   }
 }

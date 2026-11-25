@@ -188,7 +188,7 @@ export default async function SobrePage() {
                   <div className="bg-white/5 backdrop-blur-md p-6 rounded-2xl border border-white/10 text-center">
                     <p className="text-xs font-bold text-yellow-500 uppercase mb-2 tracking-widest">Horário de Funcionamento</p>
                     <p className="font-black text-xl">Segunda a Segunda</p>
-                    <p className="text-gray-400">10:00 às 01:30</p>
+                    <p className="text-gray-400">10:00 às 22:30</p>
                   </div>
                 </div>
               </div>

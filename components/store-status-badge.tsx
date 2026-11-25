@@ -6,7 +6,7 @@ import { storeStatusManager } from "@/lib/store-status-manager"
 
 export function StoreStatusBadge() {
   const [mounted, setMounted] = useState(false)
-  const [waitTime, setWaitTime] = useState({ min: 15, max: 22 })
+  const [waitTime, setWaitTime] = useState({ min: 30, max: 45 })
   const [isOpen, setIsOpen] = useState(true)
   const [loading, setLoading] = useState(true)
 
