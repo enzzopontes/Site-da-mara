@@ -8,6 +8,16 @@ import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
 import { AdminTableSkeleton } from "@/components/skeletons/admin-skeleton"
@@ -131,6 +141,11 @@ export default function AdminPedidosPage() {
   const lastOrdersCount = useRef<number>(0)
   const [isTestingBark, setIsTestingBark] = useState(false)
   const [adicionaisCatalog, setAdicionaisCatalog] = useState<Record<string, Adicional>>({})
+  const [pendingConfirm, setPendingConfirm] = useState<
+    | { type: "delete"; orderId: string; orderNumber?: number }
+    | { type: "cancel"; orderId: string; orderNumber?: number }
+    | null
+  >(null)
 
   useEffect(() => {
     adicionaisManager
@@ -277,7 +292,6 @@ export default function AdminPedidosPage() {
   }
 
   const handleDeleteOrder = async (orderId: string) => {
-    if (!confirm("Tem certeza que deseja DELETAR este pedido permanentemente?")) return
     try {
       await ordersManager.deleteOrder(orderId)
       setOrders(prev => prev.filter(o => o.id !== orderId))
@@ -285,6 +299,17 @@ export default function AdminPedidosPage() {
     } catch (error: any) {
       console.error("Erro ao deletar pedido:", error)
       appToast.error("Erro ao deletar pedido", error?.message || "Falha inesperada")
+    }
+  }
+
+  const handleConfirmAction = async () => {
+    if (!pendingConfirm) return
+    const action = pendingConfirm
+    setPendingConfirm(null)
+    if (action.type === "delete") {
+      await handleDeleteOrder(action.orderId)
+    } else {
+      await handleStatusChange(action.orderId, "cancelled")
     }
   }
 
@@ -743,11 +768,13 @@ export default function AdminPedidosPage() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => {
-                                  if (confirm(`Deseja realmente cancelar o pedido #${order.orderNumber}?`)) {
-                                    handleStatusChange(order.id, "cancelled")
-                                  }
-                                }}
+                                onClick={() =>
+                                  setPendingConfirm({
+                                    type: "cancel",
+                                    orderId: order.id,
+                                    orderNumber: order.orderNumber,
+                                  })
+                                }
                                 disabled={updatingId === order.id}
                                 className="text-rose-600 border-rose-200 hover:bg-rose-50 font-bold rounded-xl gap-1 h-9"
                               >
@@ -772,7 +799,13 @@ export default function AdminPedidosPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => handleDeleteOrder(order.id)}
+                            onClick={() =>
+                              setPendingConfirm({
+                                type: "delete",
+                                orderId: order.id,
+                                orderNumber: order.orderNumber,
+                              })
+                            }
                             className="text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl h-9 w-9 p-0"
                             title="Excluir Registro"
                           >
@@ -1047,6 +1080,37 @@ export default function AdminPedidosPage() {
       </main>
 
       <Footer />
+
+      <AlertDialog
+        open={Boolean(pendingConfirm)}
+        onOpenChange={(open) => {
+          if (!open) setPendingConfirm(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingConfirm?.type === "delete"
+                ? "Excluir pedido permanentemente?"
+                : "Cancelar pedido?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingConfirm?.type === "delete"
+                ? "Tem certeza que deseja DELETAR este pedido permanentemente?"
+                : `Deseja realmente cancelar o pedido #${pendingConfirm?.orderNumber ?? ""}?`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmAction}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              {pendingConfirm?.type === "delete" ? "Deletar pedido" : "Cancelar pedido"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Regras CSS Globais para Impressão de Comanda Térmica 80mm */}
       <style>{`

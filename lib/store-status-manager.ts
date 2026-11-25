@@ -104,10 +104,28 @@ class StoreStatusManager {
     }
   }
 
+  private resolveBaseWaitTime(status: StoreStatus): { min: number; max: number } {
+    const prevOrdersCount = Array.isArray(status.activeOrders) ? status.activeOrders.length : 0
+    const prevQueueOffset = prevOrdersCount * 5
+    const rawMin =
+      typeof status.waitTimeMin === "number" && Number.isFinite(status.waitTimeMin)
+        ? status.waitTimeMin - prevQueueOffset
+        : this.defaultWaitTime.min
+    const rawMax =
+      typeof status.waitTimeMax === "number" && Number.isFinite(status.waitTimeMax)
+        ? status.waitTimeMax - prevQueueOffset
+        : this.defaultWaitTime.max
+
+    const baseMin = Math.max(this.defaultWaitTime.min, rawMin)
+    const baseMax = Math.max(this.defaultWaitTime.max, rawMax, baseMin)
+    return { min: baseMin, max: baseMax }
+  }
+
   private processActiveOrders(status: StoreStatus): StoreStatus {
     const now = Date.now()
     const tenMinutesInMs = 10 * 60 * 1000
     const orders = status.activeOrders || []
+    const baseWait = this.resolveBaseWaitTime(status)
     
     // Filtra apenas pedidos feitos nos últimos 10 minutos
     const validOrders = orders.filter(timestamp => (now - timestamp) < tenMinutesInMs)
@@ -116,8 +134,8 @@ class StoreStatusManager {
     return {
       ...status,
       activeOrders: validOrders,
-      waitTimeMin: this.defaultWaitTime.min + additionalTime,
-      waitTimeMax: this.defaultWaitTime.max + additionalTime
+      waitTimeMin: baseWait.min + additionalTime,
+      waitTimeMax: baseWait.max + additionalTime
     }
   }
 
@@ -392,14 +410,15 @@ class StoreStatusManager {
    */
   async addOrderIncrement(): Promise<StoreStatus> {
     const currentStatus = await this.getStatus()
+    const baseWait = this.resolveBaseWaitTime(currentStatus)
     const newOrders = [...(currentStatus.activeOrders || []), Date.now()]
     const additionalTime = newOrders.length * 5
     
     const newStatus = {
       ...currentStatus,
       activeOrders: newOrders,
-      waitTimeMin: this.defaultWaitTime.min + additionalTime,
-      waitTimeMax: this.defaultWaitTime.max + additionalTime
+      waitTimeMin: baseWait.min + additionalTime,
+      waitTimeMax: baseWait.max + additionalTime
     }
     
     await this.saveStatus(newStatus)
@@ -420,6 +439,7 @@ class StoreStatusManager {
    */
   async decrementWaitTime(minutes: number = 5): Promise<StoreStatus> {
     const status = await this.getStatus()
+    const baseWait = this.resolveBaseWaitTime(status)
     const orders = status.activeOrders || []
     // Remove o pedido mais antigo se houver
     const newOrders = orders.length > 0 ? orders.slice(1) : []
@@ -428,8 +448,8 @@ class StoreStatusManager {
     const newStatus = {
       ...status,
       activeOrders: newOrders,
-      waitTimeMin: this.defaultWaitTime.min + additionalTime,
-      waitTimeMax: this.defaultWaitTime.max + additionalTime
+      waitTimeMin: baseWait.min + additionalTime,
+      waitTimeMax: baseWait.max + additionalTime
     }
     await this.saveStatus(newStatus)
     return newStatus

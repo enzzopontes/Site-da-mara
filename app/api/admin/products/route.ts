@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { z } from "zod"
-import { createServerClient } from "@/lib/supabase/server"
-import { isSecureAdminCheck } from "@/lib/security-auth"
+import { authenticateRequestUser } from "@/lib/supabase/route-auth"
+import { isAdminUser } from "@/lib/supabase/admin"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -27,18 +27,11 @@ function getServiceClient() {
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
 }
 
-async function requireAdmin(service: ReturnType<typeof getServiceClient>) {
-  const supabase = await createServerClient()
-  const { data, error } = await supabase.auth.getUser()
-  if (error || !data.user) throw new ApiError(401, "Sessão inválida. Faça login novamente.")
+async function requireAdmin(request: NextRequest, service: ReturnType<typeof getServiceClient>) {
+  const user = await authenticateRequestUser(request, service)
+  if (!user) throw new ApiError(401, "Sessão inválida. Faça login novamente.")
 
-  const user = data.user
-  // Mesmos admins hardcoded usados nas páginas do painel (fallback quando não há env).
-  const emails =
-    process.env.ADMIN_EMAILS ||
-    process.env.NEXT_PUBLIC_ADMIN_EMAILS ||
-    "enzzobaraldo2008@gmail.com,maraysis9010@gmail.com"
-  if (isSecureAdminCheck(user, emails)) return user
+  if (isAdminUser(user)) return user
 
   const { data: profile } = await service.from("profiles").select("role").eq("id", user.id).maybeSingle()
   if (profile?.role === "admin") return user
@@ -207,7 +200,7 @@ async function syncAdicionais(
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     let body: Json
     try {
@@ -217,7 +210,7 @@ export async function POST(request: Request) {
     }
 
     const service = getServiceClient()
-    await requireAdmin(service)
+    await requireAdmin(request, service)
 
     const action = body.action as string
 

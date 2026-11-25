@@ -2,12 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { z } from "zod"
 import { authenticateRequestUser } from "@/lib/supabase/route-auth"
-import { isSecureAdminCheck } from "@/lib/security-auth"
+import { isAdminUser } from "@/lib/supabase/admin"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
-
-const FALLBACK_ADMIN_EMAILS = "enzzobaraldo2008@gmail.com,maraysis9010@gmail.com"
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -20,11 +18,7 @@ async function requireAdminUser(req: NextRequest, service: NonNullable<ReturnTyp
   const user = await authenticateRequestUser(req, service)
   if (!user) return { ok: false as const, status: 401, error: "Sessão inválida. Faça login novamente." }
 
-  const emails =
-    process.env.ADMIN_EMAILS ||
-    process.env.NEXT_PUBLIC_ADMIN_EMAILS ||
-    FALLBACK_ADMIN_EMAILS
-  if (isSecureAdminCheck(user, emails)) return { ok: true as const, user }
+  if (isAdminUser(user)) return { ok: true as const, user }
 
   const { data: profile } = await service.from("profiles").select("role").eq("id", user.id).maybeSingle()
   if (profile?.role === "admin") return { ok: true as const, user }

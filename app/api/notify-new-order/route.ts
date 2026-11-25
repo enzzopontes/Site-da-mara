@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { authenticateRequestUser } from '@/lib/supabase/route-auth';
+import { isAdminUser } from '@/lib/supabase/admin';
 import { sendBarkNotification } from '@/lib/bark-service';
 
 import {
@@ -9,11 +10,6 @@ import {
   buildNewOrderPushContent,
   sendExpoPush,
 } from '@/lib/push-notifications';
-
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAILS || '')
-  .split(',')
-  .map((e) => e.trim().toLowerCase())
-  .filter(Boolean);
 
 function getCorsOrigin(req: NextRequest): string {
   const origin = req.headers.get('origin') || '';
@@ -103,9 +99,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Dono do pedido OU admin pelos e-mails mestres ou profile.role
-    let isAdmin =
-      Boolean(user.email_confirmed_at) &&
-      ADMIN_EMAILS.includes((user.email || '').toLowerCase());
+    let isAdmin = isAdminUser(user);
     if (!isAdmin) {
       const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).single();
       if (prof?.role === 'admin') {

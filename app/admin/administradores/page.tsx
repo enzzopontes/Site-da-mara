@@ -10,6 +10,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
 import { AdminTableSkeleton } from "@/components/skeletons/admin-skeleton"
@@ -36,8 +46,6 @@ interface AdminItem {
   email: string
   is_owner: boolean
 }
-
-const OWNER_EMAILS = ["enzzobaraldo2008@gmail.com", "maraysis9010@gmail.com"]
 
 const ERROR_MESSAGES_ADD: Record<string, string> = {
   forbidden: "Você não tem permissão para adicionar administradores.",
@@ -79,6 +87,7 @@ export default function AdminAdministradoresPage() {
   const [newEmail, setNewEmail] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [removingEmail, setRemovingEmail] = useState<string | null>(null)
+  const [confirmRemoveEmail, setConfirmRemoveEmail] = useState<string | null>(null)
 
   useEffect(() => {
     if (loading) return
@@ -164,11 +173,9 @@ export default function AdminAdministradoresPage() {
   }
 
   const handleRemoveAdmin = async (targetEmail: string) => {
+    setConfirmRemoveEmail(null)
     setErrorMessage(null)
     setSuccessMessage(null)
-
-    const confirmed = window.confirm(`Tem certeza que deseja remover o acesso administrativo de ${targetEmail}?`)
-    if (!confirmed) return
 
     setRemovingEmail(targetEmail)
     try {
@@ -198,8 +205,7 @@ export default function AdminAdministradoresPage() {
 
   const isCurrentUserOwner = Boolean(
     user?.email &&
-    (OWNER_EMAILS.includes(user.email.toLowerCase()) ||
-     admins.some((adm) => adm.is_owner === true && adm.email?.toLowerCase() === user.email?.toLowerCase()))
+    admins.some((adm) => adm.is_owner === true && adm.email?.toLowerCase() === user.email?.toLowerCase())
   )
 
   const filteredAdmins = useMemo(() => {
@@ -397,7 +403,7 @@ export default function AdminAdministradoresPage() {
                 <div className="divide-y divide-gray-100">
                   {filteredAdmins.map((adm) => {
                     const isSelf = user?.email?.toLowerCase() === adm.email?.toLowerCase()
-                    const isOwner = adm.is_owner === true || OWNER_EMAILS.includes(adm.email?.toLowerCase())
+                    const isOwner = adm.is_owner === true
                     const initials = getInitials(adm.email)
 
                     return (
@@ -469,7 +475,7 @@ export default function AdminAdministradoresPage() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleRemoveAdmin(adm.email)}
+                              onClick={() => setConfirmRemoveEmail(adm.email)}
                               disabled={removingEmail === adm.email}
                               className="text-red-600 hover:text-red-700 hover:bg-red-50 font-bold rounded-lg text-xs gap-1.5 h-8 px-3 transition-colors"
                             >
@@ -487,6 +493,34 @@ export default function AdminAdministradoresPage() {
           </Card>
         </div>
       </main>
+      <AlertDialog
+        open={confirmRemoveEmail !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmRemoveEmail(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revogar acesso administrativo</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja remover o acesso administrativo de {confirmRemoveEmail}?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => {
+                if (confirmRemoveEmail) {
+                  void handleRemoveAdmin(confirmRemoveEmail)
+                }
+              }}
+            >
+              Revogar Acesso
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <Footer />
     </div>
   )

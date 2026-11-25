@@ -23,7 +23,7 @@ import { AddressModal } from "@/components/address-modal"
 import { GuestTopbar } from "@/components/guest-topbar"
 import { addressesManager } from "@/lib/addresses-manager"
 import { storeStatusManager } from "@/lib/store-status-manager"
-import { isAdminUser, isAdmin as checkIsAdmin } from "@/lib/supabase/admin"
+import { isAdmin as checkIsAdmin } from "@/lib/supabase/admin"
 
 interface HeaderProps {
   variant?: "default" | "simple"
@@ -78,10 +78,6 @@ export function Header({ variant = "default" }: HeaderProps) {
   useEffect(() => {
     if (!user) {
       setIsAdmin(false)
-      return
-    }
-    if (isAdminUser(user)) {
-      setIsAdmin(true)
       return
     }
     let active = true

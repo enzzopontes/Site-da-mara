@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import {
   buildExpoPushMessages,
@@ -7,6 +6,7 @@ import {
   sendExpoPush,
 } from '@/lib/push-notifications';
 import { sendBarkNotification } from '@/lib/bark-service';
+import { validateWebhookSignature } from '@/lib/security-transport';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -20,16 +20,6 @@ function getSupabaseAdmin() {
   return createClient(url, serviceRole);
 }
 
-function parseXSignature(header: string | null): { ts: string | null; v1: string | null } {
-  if (!header) return { ts: null, v1: null };
-  const parts: Record<string, string> = {};
-  for (const part of header.split(',')) {
-    const [k, v] = part.split('=');
-    if (k && v) parts[k.trim()] = v.trim();
-  }
-  return { ts: parts['ts'] || null, v1: parts['v1'] || null };
-}
-
 export async function POST(req: NextRequest) {
   try {
     const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
@@ -41,20 +31,10 @@ export async function POST(req: NextRequest) {
     // 1. Assinatura x-signature OBRIGATÓRIA antes de qualquer checagem de dados
     const signatureHeader = req.headers.get('x-signature');
     const requestId = req.headers.get('x-request-id') || '';
-    const { ts, v1 } = parseXSignature(signatureHeader);
 
-    if (!ts || !v1) {
+    if (!signatureHeader) {
       console.error('[webhook] Assinatura ausente ou incompleta');
       return NextResponse.json({ error: 'Assinatura inválida ou ausente' }, { status: 401 });
-    }
-
-    // Validação de tolerância a replay-attack (janela de 10 minutos / 600 segundos)
-    const rawTs = Number(ts);
-    const tsSeconds = rawTs > 1e11 ? Math.floor(rawTs / 1000) : rawTs;
-    const nowSeconds = Math.floor(Date.now() / 1000);
-    if (!Number.isFinite(tsSeconds) || Math.abs(nowSeconds - tsSeconds) > 600) {
-      console.error('[webhook] Timestamp expirado ou fora da janela de tolerância');
-      return NextResponse.json({ error: 'Assinatura expirada' }, { status: 401 });
     }
 
     // 2. Extração de dataId e type
@@ -77,15 +57,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Identificador do evento ausente' }, { status: 401 });
     }
 
-    const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
-    const hmac = crypto.createHmac('sha256', secret).update(manifest).digest('hex');
+    // 3. Validação consolidada de assinatura HMAC + janela de tolerância anti-replay
+    const signatureCheck = validateWebhookSignature({
+      secret,
+      signatureHeader,
+      requestId,
+      dataId: String(dataId),
+      toleranceSeconds: 600,
+    });
 
-    const hmacBuf = Buffer.from(hmac, 'utf8');
-    const v1Buf = Buffer.from(v1, 'utf8');
-
-    if (hmacBuf.length !== v1Buf.length || !crypto.timingSafeEqual(hmacBuf, v1Buf)) {
-      console.error('[webhook] Assinatura HMAC inválida');
-      return NextResponse.json({ error: 'Assinatura inválida' }, { status: 401 });
+    if (!signatureCheck.isValid) {
+      console.error('[webhook] Falha na validação de assinatura:', signatureCheck.error);
+      return NextResponse.json({ error: signatureCheck.error || 'Assinatura inválida' }, { status: 401 });
     }
 
     // Simulação ou teste disparado pelo painel do Mercado Pago (id 123456)

@@ -179,7 +179,7 @@ export default function ExcluirContaPage() {
                 Um protocolo de confirmação foi registrado sob o número: <strong className="font-mono bg-emerald-100 px-1.5 py-0.5 rounded text-emerald-900">{protocol}</strong>.
               </p>
               <p className="text-emerald-800">
-                Sua sessão foi encerrada e o acesso à conta foi bloqueado. O prazo de anonimização e exclusão total dos dados é de até <strong>7 dias corridos</strong> conforme preconiza a LGPD.
+                Sua sessão foi encerrada e o acesso à conta foi bloqueado. O prazo de anonimização e exclusão total dos dados é de até <strong>15 dias úteis</strong> conforme preconiza a LGPD.
               </p>
             </div>
           ) : authLoading ? (

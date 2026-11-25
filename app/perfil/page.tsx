@@ -49,8 +49,6 @@ import {
   CreditCard,
 } from "lucide-react"
 
-const ADMIN_EMAILS = ["enzzobaraldo2008@gmail.com", "maraysis9010@gmail.com"]
-
 function getInitials(nameOrEmail?: string | null): string {
   if (!nameOrEmail) return "BT"
   const cleaned = nameOrEmail.trim()
@@ -347,10 +345,6 @@ export default function PerfilPage() {
     setProfilePhone(formatPhone(user.user_metadata?.phone || ""))
     setProfileCpf(formatCPF(user.user_metadata?.cpf || ""))
 
-    if (user.email && ADMIN_EMAILS.includes(user.email)) {
-      setIsAdmin(true)
-    }
-
     const supabase = getSupabaseBrowserClient()
     supabase
       .from("profiles")
@@ -360,8 +354,11 @@ export default function PerfilPage() {
       .eq("id", user.id)
       .maybeSingle()
       .then(({ data }: any) => {
-        if (!data) return
-        if (data.role === "admin") setIsAdmin(true)
+        if (!data) {
+          setIsAdmin(false)
+          return
+        }
+        setIsAdmin(data.role === "admin")
         if (data.full_name) setProfileName(data.full_name)
         if (data.phone) setProfilePhone(formatPhone(data.phone))
         if (data.cpf) setProfileCpf(formatCPF(data.cpf))
@@ -1674,7 +1671,7 @@ export default function PerfilPage() {
                     Protocolo: <strong className="font-mono">{deleteProtocol}</strong>
                   </p>
                   <p>
-                    Seus dados serão anonimizados em até 7 dias corridos conforme a LGPD.
+                    Seus dados serão anonimizados em até 15 dias úteis conforme a LGPD.
                   </p>
                 </div>
                 <button

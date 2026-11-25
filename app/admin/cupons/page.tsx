@@ -8,6 +8,16 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
 import { AdminTableSkeleton } from "@/components/skeletons/admin-skeleton"
@@ -353,6 +363,7 @@ export default function AdminCuponsPage() {
   const [rulesText, setRulesText] = useState("")
   const [rulesEdited, setRulesEdited] = useState(false)
   const [templateOrigin, setTemplateOrigin] = useState("custom")
+  const [couponToDelete, setCouponToDelete] = useState<Coupon | null>(null)
 
   const loadCoupons = useCallback(async () => {
     const list = await couponsManager.getCoupons()
@@ -811,8 +822,14 @@ export default function AdminCuponsPage() {
     }
   }
 
-  const handleDelete = async (coupon: Coupon) => {
-    if (!confirm(`Excluir o cupom "${coupon.code}"?`)) return
+  const handleDelete = (coupon: Coupon) => {
+    setCouponToDelete(coupon)
+  }
+
+  const confirmDeleteCoupon = async () => {
+    if (!couponToDelete) return
+    const coupon = couponToDelete
+    setCouponToDelete(null)
     try {
       const deleted = await couponsManager.deleteCoupon(coupon.id)
       if (!deleted) {
@@ -1836,6 +1853,33 @@ export default function AdminCuponsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={Boolean(couponToDelete)}
+        onOpenChange={(open) => {
+          if (!open) setCouponToDelete(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir cupom?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Excluir o cupom &quot;{couponToDelete?.code}&quot;? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={() => {
+                void confirmDeleteCoupon()
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

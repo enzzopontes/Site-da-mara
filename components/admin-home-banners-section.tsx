@@ -14,6 +14,16 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Plus, Trash2, Edit2, Image as ImageIcon, Tag, ArrowUpDown, Sparkles, Upload, CheckCircle2, Link2, X } from "lucide-react"
 
 export function AdminHomeBannersSection() {
@@ -27,6 +37,7 @@ export function AdminHomeBannersSection() {
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [showUrlInput, setShowUrlInput] = useState(false)
+  const [bannerToDeleteId, setBannerToDeleteId] = useState<string | null>(null)
 
   const [imageUrl, setImageUrl] = useState("")
   const [title, setTitle] = useState("")
@@ -159,7 +170,7 @@ export function AdminHomeBannersSection() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Remover este banner?")) return
+    setBannerToDeleteId(null)
     try {
       await bannersManager.deleteBanner(id)
       await loadData()
@@ -238,7 +249,7 @@ export function AdminHomeBannersSection() {
                     <Button size="icon" variant="ghost" className="h-7 w-7 text-stone-600 hover:text-stone-900" onClick={() => handleOpenEdit(b)}>
                       <Edit2 className="w-3.5 h-3.5" />
                     </Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:text-red-700" onClick={() => handleDelete(b.id)}>
+                    <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:text-red-700" onClick={() => setBannerToDeleteId(b.id)}>
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   </div>
@@ -460,6 +471,35 @@ export function AdminHomeBannersSection() {
             </form>
           </DialogContent>
         </Dialog>
+
+        <AlertDialog
+          open={bannerToDeleteId !== null}
+          onOpenChange={(open) => {
+            if (!open) setBannerToDeleteId(null)
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remover banner</AlertDialogTitle>
+              <AlertDialogDescription>
+                Remover este banner?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="text-xs cursor-pointer">Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-600 hover:bg-red-700 text-white text-xs cursor-pointer"
+                onClick={() => {
+                  if (bannerToDeleteId) {
+                    void handleDelete(bannerToDeleteId)
+                  }
+                }}
+              >
+                Remover
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   )

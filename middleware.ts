@@ -78,7 +78,61 @@ export default async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // 1. Proteção de Rotas Administrativas
+  // 1. Proteção de Rotas Administrativas (Web e API)
+  const isAdminApiRoute =
+    url.pathname === "/api/admin" || url.pathname.startsWith("/api/admin/")
+
+  if (isAdminApiRoute) {
+    let apiUser = user
+    const authHeader = request.headers.get("authorization") || ""
+    const bearerToken = authHeader.replace(/^Bearer\s+/i, "").trim()
+
+    if (!apiUser && bearerToken) {
+      const { data: bearerData } = await supabase.auth.getUser(bearerToken)
+      apiUser = bearerData?.user ?? null
+    }
+
+    if (!apiUser) {
+      return NextResponse.json(
+        { success: false, error: "Sessão inválida. Faça login novamente." },
+        { status: 401 }
+      )
+    }
+
+    let isApiAdmin = isAdminUser(apiUser)
+    if (!isApiAdmin) {
+      const profileClient =
+        !user && bearerToken
+          ? createServerClient(supabaseUrl, supabaseKey, {
+              global: { headers: { Authorization: `Bearer ${bearerToken}` } },
+              cookies: {
+                getAll() {
+                  return []
+                },
+                setAll() {},
+              },
+            })
+          : supabase
+
+      const { data: profile } = await profileClient
+        .from("profiles")
+        .select("role")
+        .eq("id", apiUser.id)
+        .maybeSingle()
+
+      if (profile?.role === "admin") {
+        isApiAdmin = true
+      }
+    }
+
+    if (!isApiAdmin) {
+      return NextResponse.json(
+        { success: false, error: "Acesso negado: apenas administradores." },
+        { status: 403 }
+      )
+    }
+  }
+
   if (url.pathname.startsWith("/admin")) {
     if (!user) {
       const redirectUrl = new URL("/login", request.url)

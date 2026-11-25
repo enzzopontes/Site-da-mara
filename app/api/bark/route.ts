@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { createServerClient } from "@/lib/supabase/server"
-import { isSecureAdminCheck } from "@/lib/security-auth"
+import { isAdminUser } from "@/lib/supabase/admin"
 import { sendBarkNotification, sendBarkTestNotification } from "@/lib/bark-service"
 
 function getSupabaseAdmin() {
@@ -32,19 +32,15 @@ async function resolveAuthenticatedUser(req: NextRequest, service: ReturnType<ty
 }
 
 async function checkIsAdminUser(user: any, service: ReturnType<typeof getSupabaseAdmin>): Promise<boolean> {
+  if (isAdminUser(user)) return true
+
   const { data: profile } = await service
     .from("profiles")
     .select("role")
     .eq("id", user.id)
     .maybeSingle()
 
-  if (profile?.role === "admin") return true
-
-  const allowedEmails =
-    process.env.ADMIN_EMAILS ||
-    process.env.NEXT_PUBLIC_ADMIN_EMAILS ||
-    ""
-  return isSecureAdminCheck(user, allowedEmails)
+  return profile?.role === "admin"
 }
 
 export async function POST(req: NextRequest) {

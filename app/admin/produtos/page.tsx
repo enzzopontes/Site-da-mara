@@ -33,6 +33,16 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { productsManager, type Product, type Adicional } from "@/lib/products-db"
 import { adicionaisManager } from "@/lib/adicionais-manager"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -68,6 +78,11 @@ export default function AdminProdutosPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isAdicionalDialogOpen, setIsAdicionalDialogOpen] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<
+    | { type: "product"; id: string }
+    | { type: "adicional"; id: string }
+    | null
+  >(null)
   const [activeTab, setActiveTab] = useState<"batata" | "macarrao" | "bebida" | "adicionais">("batata")
   const [searchQuery, setSearchQuery] = useState("")
 
@@ -393,22 +408,30 @@ export default function AdminProdutosPage() {
     }
   }
 
-  const handleDeleteProduct = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir este produto do cardápio?")) {
+  const handleDeleteProduct = (id: string) => {
+    setPendingDelete({ type: "product", id })
+  }
+
+  const handleDeleteAdicional = (id: string) => {
+    setPendingDelete({ type: "adicional", id })
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!pendingDelete) return
+    const target = pendingDelete
+    setPendingDelete(null)
+
+    if (target.type === "product") {
       try {
-        await productsManager.deleteProduct(id)
+        await productsManager.deleteProduct(target.id)
         await loadProducts()
         appToast.success("Produto excluído", "O produto foi removido do cardápio.")
       } catch (err) {
         appToast.error("Não foi possível excluir o produto", err instanceof Error ? err.message : String(err))
       }
-    }
-  }
-
-  const handleDeleteAdicional = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir este adicional?")) {
+    } else {
       try {
-        const deleted = await adicionaisManager.deleteAdicional(id)
+        const deleted = await adicionaisManager.deleteAdicional(target.id)
         if (deleted) {
           await loadAdicionais()
           appToast.success("Adicional excluído", "O adicional foi removido com sucesso.")
@@ -1152,6 +1175,35 @@ export default function AdminProdutosPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingDelete?.type === "product" ? "Excluir produto?" : "Excluir adicional?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDelete?.type === "product"
+                ? "Tem certeza que deseja excluir este produto do cardápio?"
+                : "Tem certeza que deseja excluir este adicional?"}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

@@ -4,11 +4,8 @@ import { isSecureAdminCheck } from "../security-auth"
 const OWNER_FALLBACK_EMAILS = "enzzobaraldo2008@gmail.com,maraysis9010@gmail.com"
 
 export function isAdminUser(user: any): boolean {
-  if (!user) return false
-  const adminEmails =
-    process.env.ADMIN_EMAILS ||
-    process.env.NEXT_PUBLIC_ADMIN_EMAILS ||
-    OWNER_FALLBACK_EMAILS
+  if (!user || typeof window !== "undefined") return false
+  const adminEmails = process.env.ADMIN_EMAILS || OWNER_FALLBACK_EMAILS
   return isSecureAdminCheck(user, adminEmails)
 }
 
@@ -20,12 +17,7 @@ export async function isAdmin(userId: string): Promise<boolean> {
 
   if (!user || user.id !== userId) return false
 
-  // 1. Verificação instantânea baseada no e-mail confirmado e metadados de autenticação
-  if (isAdminUser(user)) {
-    return true
-  }
-
-  // 2. Verificação de segurança no banco de dados (tabela profiles.role)
+  // Verificação autoritativa no banco de dados (tabela profiles.role)
   try {
     const { data, error } = await supabase
       .from("profiles")

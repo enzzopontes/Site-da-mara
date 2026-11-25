@@ -842,7 +842,7 @@ export default function SegurancaContaPage() {
                 </p>
                 <p className="text-green-800 leading-relaxed">
                   O processo de anonimização e remoção definitiva dos seus dados cadastrais ocorre em até{" "}
-                  <strong>7 dias corridos</strong>, conforme previsto na LGPD.
+                  <strong>15 dias úteis</strong>, conforme previsto na LGPD.
                 </p>
                 {user && (
                   <div className="pt-2">

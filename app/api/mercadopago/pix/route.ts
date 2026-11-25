@@ -93,9 +93,20 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 5. Resolver e-mail do pagador
+    // 5. Resolver e-mail do pagador e incrementar pix_attempts atomicamente no banco
     const payerEmail = await resolvePayerEmail(supabase, user);
-    const pixN = (order.metadata?.pix_attempts || 0) + 1;
+    const { data: atomicAttempt, error: attemptError } = await supabase.rpc(
+      'increment_order_pix_attempts',
+      { p_order_id: orderId }
+    );
+    if (attemptError || typeof atomicAttempt !== 'number' || atomicAttempt < 1) {
+      console.error('[pix] Erro ao incrementar pix_attempts atomicamente:', attemptError?.message);
+      return NextResponse.json(
+        { success: false, error: 'Erro ao iniciar tentativa de pagamento Pix' },
+        { status: 500 }
+      );
+    }
+    const pixN = atomicAttempt;
     const idempotencyKey = `order_${orderId}_pix_${pixN}`;
 
     // 6. Expiração: agora + 30 min, fuso -03:00
@@ -132,9 +143,8 @@ export async function POST(req: NextRequest) {
       const qrCodeBase64 = data.point_of_interaction?.transaction_data?.qr_code_base64;
       const ticketUrl = data.point_of_interaction?.transaction_data?.ticket_url;
 
-      // 8. APP-10: Persistência autoritativa server-side via service_role (dispensa escrita client-side em merge_order_metadata)
+      // 8. APP-10: Persistência autoritativa server-side via service_role (pix_attempts já persistido atomicamente)
       const pixPatch = {
-        pix_attempts: pixN,
         pix: {
           payment_id: String(data.id),
           qr_code: qrCode,
@@ -154,7 +164,7 @@ export async function POST(req: NextRequest) {
         const { error: fallbackErr } = await supabase
           .from('orders')
           .update({
-            metadata: { ...(order.metadata || {}), ...pixPatch },
+            metadata: { ...(order.metadata || {}), pix_attempts: pixN, ...pixPatch },
             updated_at: new Date().toISOString(),
           })
           .eq('id', orderId);

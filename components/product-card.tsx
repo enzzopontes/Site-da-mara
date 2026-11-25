@@ -154,18 +154,8 @@ export function ProductCard({
   if (layout === "horizontal") {
     return (
       <>
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={handleAddClick}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault()
-              handleAddClick()
-            }
-          }}
-          aria-label={`Ver detalhes e adicionar ${product.name} ao pedido`}
-          className={`bg-white rounded-2xl p-3.5 sm:p-4 border border-[#ECE7E0] hover:border-[#E3A008]/60 transition-all duration-200 cursor-pointer group flex items-stretch justify-between gap-3 sm:gap-4 shadow-2xs hover:shadow-md ${className}`}
+        <article
+          className={`relative bg-white rounded-2xl p-3.5 sm:p-4 border border-[#ECE7E0] hover:border-[#E3A008]/60 focus-within:ring-2 focus-within:ring-[#E3A008] focus-within:ring-offset-1 transition-all duration-200 cursor-pointer group flex items-stretch justify-between gap-3 sm:gap-4 shadow-2xs hover:shadow-md ${className}`}
         >
           {/* Lado Esquerdo: Textos, Badges e Preços */}
           <div className="flex-1 min-w-0 flex flex-col justify-between">
@@ -238,19 +228,21 @@ export function ProductCard({
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                handleAddClick()
-              }}
-              aria-label={`Adicionar ${product.name}`}
-              className="absolute bottom-1.5 right-1.5 h-7 w-7 rounded-full bg-[#E3A008] text-white flex items-center justify-center shadow-md hover:bg-[#C1440E] transition-transform active:scale-90"
+            <span
+              aria-hidden="true"
+              className="absolute bottom-1.5 right-1.5 h-7 w-7 rounded-full bg-[#E3A008] text-white flex items-center justify-center shadow-md group-hover:bg-[#C1440E] transition-transform group-active:scale-90 pointer-events-none"
             >
               <Plus className="w-4 h-4 stroke-[3]" />
-            </button>
+            </span>
           </div>
-        </div>
+
+          <button
+            type="button"
+            onClick={handleAddClick}
+            aria-label={`Ver detalhes e adicionar ${product.name} ao pedido`}
+            className="absolute inset-0 z-10 rounded-2xl cursor-pointer focus-visible:outline-none"
+          />
+        </article>
 
         <AddToCartDialog
           product={{
@@ -271,18 +263,8 @@ export function ProductCard({
   // =========================================================================
   return (
     <>
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={handleAddClick}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault()
-            handleAddClick()
-          }
-        }}
-        aria-label={`Ver detalhes e adicionar ${product.name} ao pedido`}
-        className={`bg-white rounded-2xl overflow-hidden border border-[#ECE7E0] hover:border-[#E3A008]/60 transition-all duration-200 cursor-pointer group flex flex-col justify-between shadow-2xs hover:shadow-md ${className}`}
+      <article
+        className={`relative bg-white rounded-2xl overflow-hidden border border-[#ECE7E0] hover:border-[#E3A008]/60 focus-within:ring-2 focus-within:ring-[#E3A008] focus-within:ring-offset-1 transition-all duration-200 cursor-pointer group flex flex-col justify-between shadow-2xs hover:shadow-md ${className}`}
       >
         <div>
           {/* Imagem do Produto com Aspect Ratio 16/10 Padronizado */}
@@ -372,18 +354,15 @@ export function ProductCard({
 
           <button
             type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              handleAddClick()
-            }}
-            aria-label={`Adicionar ${product.name} ao pedido`}
-            className="shrink-0 h-7 w-7 sm:h-8 sm:w-auto sm:px-3 rounded-full sm:rounded-lg bg-[#E3A008] text-white sm:bg-[#FEF8EC] sm:border sm:border-[#E3A008] sm:text-[#A16207] hover:bg-[#E3A008] hover:text-white font-bold text-xs flex items-center justify-center gap-1 transition-all active:scale-95 shadow-xs"
+            onClick={handleAddClick}
+            aria-label={`Ver detalhes e adicionar ${product.name} ao pedido`}
+            className="shrink-0 h-7 w-7 sm:h-8 sm:w-auto sm:px-3 rounded-full sm:rounded-lg bg-[#E3A008] text-white sm:bg-[#FEF8EC] sm:border sm:border-[#E3A008] sm:text-[#A16207] hover:bg-[#E3A008] hover:text-white font-bold text-xs flex items-center justify-center gap-1 transition-all active:scale-95 shadow-xs focus-visible:outline-none after:absolute after:inset-0 after:content-[''] after:rounded-2xl"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
             <span className="hidden sm:inline">Adicionar</span>
           </button>
         </div>
-      </div>
+      </article>
 
       <AddToCartDialog
         product={{

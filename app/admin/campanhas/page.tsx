@@ -35,6 +35,16 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 // Templates Oficiais de Campanhas (Paridade com App Mobile)
@@ -136,6 +146,13 @@ export default function AdminCampanhasPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    title: string
+    description: string
+    confirmLabel: string
+    destructive: boolean
+    onConfirm: () => Promise<void> | void
+  } | null>(null)
 
   // Form State
   const [title, setTitle] = useState("")
@@ -322,65 +339,81 @@ export default function AdminCampanhasPage() {
     setHasCoupon(true)
   }
 
-  const handleTriggerNow = async (campaignId: string) => {
-    if (!confirm(`Deseja disparar esta notificação agora para os ${tokenCount} dispositivos cadastrados?`)) {
-      return
-    }
+  const handleTriggerNow = (campaignId: string) => {
+    setPendingConfirm({
+      title: "Disparar campanha agora?",
+      description: `Deseja disparar esta notificação agora para os ${tokenCount} dispositivos cadastrados?`,
+      confirmLabel: "Disparar Agora",
+      destructive: false,
+      onConfirm: async () => {
+        setActionLoadingId(campaignId)
+        try {
+          await supabase
+            .from("campaigns")
+            .update({ status: "processing", updated_at: new Date().toISOString() })
+            .eq("id", campaignId)
 
-    setActionLoadingId(campaignId)
-    try {
-      await supabase
-        .from("campaigns")
-        .update({ status: "processing", updated_at: new Date().toISOString() })
-        .eq("id", campaignId)
+          const { error } = await supabase.functions.invoke("dispatch-campaign-push", {
+            body: { campaignId },
+          })
 
-      const { error } = await supabase.functions.invoke("dispatch-campaign-push", {
-        body: { campaignId },
-      })
+          if (error) throw error
 
-      if (error) throw error
-
-      appToast.success("Disparo Iniciado", "Notificações transmitidas em background!")
-      loadData()
-    } catch (err: any) {
-      appToast.error("Erro no Disparo", err.message || "Falha ao acionar Edge Function.")
-    } finally {
-      setActionLoadingId(null)
-    }
+          appToast.success("Disparo Iniciado", "Notificações transmitidas em background!")
+          loadData()
+        } catch (err: any) {
+          appToast.error("Erro no Disparo", err.message || "Falha ao acionar Edge Function.")
+        } finally {
+          setActionLoadingId(null)
+        }
+      },
+    })
   }
 
-  const handleCancelCampaign = async (campaignId: string) => {
-    if (!confirm("Deseja cancelar o envio desta campanha agendada?")) return
+  const handleCancelCampaign = (campaignId: string) => {
+    setPendingConfirm({
+      title: "Cancelar campanha agendada?",
+      description: "Deseja cancelar o envio desta campanha agendada?",
+      confirmLabel: "Cancelar Envio",
+      destructive: true,
+      onConfirm: async () => {
+        setActionLoadingId(campaignId)
+        try {
+          await supabase
+            .from("campaigns")
+            .update({ status: "cancelled", updated_at: new Date().toISOString() })
+            .eq("id", campaignId)
 
-    setActionLoadingId(campaignId)
-    try {
-      await supabase
-        .from("campaigns")
-        .update({ status: "cancelled", updated_at: new Date().toISOString() })
-        .eq("id", campaignId)
-
-      appToast.info("Campanha Cancelada", "O agendamento foi desativado.")
-      loadData()
-    } catch {
-      appToast.error("Erro", "Não foi possível cancelar a campanha.")
-    } finally {
-      setActionLoadingId(null)
-    }
+          appToast.info("Campanha Cancelada", "O agendamento foi desativado.")
+          loadData()
+        } catch {
+          appToast.error("Erro", "Não foi possível cancelar a campanha.")
+        } finally {
+          setActionLoadingId(null)
+        }
+      },
+    })
   }
 
-  const handleDeleteCampaign = async (campaignId: string) => {
-    if (!confirm("Excluir definitivamente o histórico desta campanha?")) return
-
-    setActionLoadingId(campaignId)
-    try {
-      await supabase.from("campaigns").delete().eq("id", campaignId)
-      appToast.success("Removida", "Campanha excluída com sucesso.")
-      loadData()
-    } catch {
-      appToast.error("Erro", "Não foi possível excluir o registro.")
-    } finally {
-      setActionLoadingId(null)
-    }
+  const handleDeleteCampaign = (campaignId: string) => {
+    setPendingConfirm({
+      title: "Excluir histórico da campanha?",
+      description: "Excluir definitivamente o histórico desta campanha?",
+      confirmLabel: "Excluir",
+      destructive: true,
+      onConfirm: async () => {
+        setActionLoadingId(campaignId)
+        try {
+          await supabase.from("campaigns").delete().eq("id", campaignId)
+          appToast.success("Removida", "Campanha excluída com sucesso.")
+          loadData()
+        } catch {
+          appToast.error("Erro", "Não foi possível excluir o registro.")
+        } finally {
+          setActionLoadingId(null)
+        }
+      },
+    })
   }
 
   if (authLoading || checking || !isAdmin) {
@@ -1001,6 +1034,37 @@ export default function AdminCampanhasPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={Boolean(pendingConfirm)}
+        onOpenChange={(open) => {
+          if (!open) setPendingConfirm(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{pendingConfirm?.title}</AlertDialogTitle>
+            <AlertDialogDescription>{pendingConfirm?.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              className={
+                pendingConfirm?.destructive
+                  ? "bg-destructive text-white hover:bg-destructive/90"
+                  : "bg-[#C1440E] hover:bg-[#A0360A] text-white"
+              }
+              onClick={() => {
+                const action = pendingConfirm?.onConfirm
+                setPendingConfirm(null)
+                if (action) void action()
+              }}
+            >
+              {pendingConfirm?.confirmLabel || "Confirmar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
