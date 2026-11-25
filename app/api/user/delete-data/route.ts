@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js"
 import { authenticateRequestUser } from "@/lib/supabase/route-auth"
 import { evaluateOriginForCors } from "@/lib/security-transport"
 import { checkRateLimit } from "@/lib/rate-limit"
+import { secureRandomBetween } from "@/lib/secure-random"
 
 const ALLOWED_ORIGINS = [
   "https://batatatop.vercel.app",
@@ -157,7 +158,7 @@ export async function POST(req: NextRequest) {
 
     // Registra protocolo formal de solicitação de exclusão
     const nowIso = new Date().toISOString()
-    const protocol = `LGPD-EXC-${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`
+    const protocol = `LGPD-EXC-${Date.now().toString(36).toUpperCase()}-${secureRandomBetween(1000, 9999)}`
 
     // NEW-02 FIX: Remove coluna inexistente is_deleted, limpa cpf, payment_cards e user_push_tokens, e valida erros
     const [addrRes, cardsRes, tokensRes, adminTokensRes, notifReadsRes, loyaltyRes] = await Promise.all([

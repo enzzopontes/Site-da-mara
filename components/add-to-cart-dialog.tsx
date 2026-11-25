@@ -8,6 +8,7 @@ import {
   ResponsiveModalDescription,
 } from "@/components/ui/responsive-modal"
 import { useCart } from "@/lib/cart-context"
+import { secureRandomInt } from "@/lib/secure-random"
 import { useAuth } from "@/lib/auth-context"
 import { appToast } from "@/lib/app-toast"
 import { ArrowLeft, Minus, Plus, ShoppingCart, Tag } from "lucide-react"
@@ -330,22 +331,22 @@ export function AddToCartDialog({
       setDialogImageLoaded(false)
 
       // Sorteia 1 das 5 frases para a seção de bebidas
-      setFraseBebidaIndex(Math.floor(Math.random() * 5))
+      setFraseBebidaIndex(secureRandomInt(5))
 
       // Sorteia aleatoriamente novas frases para cada categoria de adicionais
       const randomMap: Record<string, number> = {
-        molho: Math.floor(Math.random() * 5),
-        molhos: Math.floor(Math.random() * 5),
-        queijo: Math.floor(Math.random() * 5),
-        queijos: Math.floor(Math.random() * 5),
-        carne: Math.floor(Math.random() * 5),
-        carnes: Math.floor(Math.random() * 5),
-        proteina: Math.floor(Math.random() * 5),
-        proteinas: Math.floor(Math.random() * 5),
-        bacon: Math.floor(Math.random() * 5),
-        geral: Math.floor(Math.random() * 5),
-        adicionais: Math.floor(Math.random() * 5),
-        extra: Math.floor(Math.random() * 5),
+        molho: secureRandomInt(5),
+        molhos: secureRandomInt(5),
+        queijo: secureRandomInt(5),
+        queijos: secureRandomInt(5),
+        carne: secureRandomInt(5),
+        carnes: secureRandomInt(5),
+        proteina: secureRandomInt(5),
+        proteinas: secureRandomInt(5),
+        bacon: secureRandomInt(5),
+        geral: secureRandomInt(5),
+        adicionais: secureRandomInt(5),
+        extra: secureRandomInt(5),
       }
       setFraseIndices(randomMap)
 
@@ -503,7 +504,7 @@ export function AddToCartDialog({
   // Gerador de frase humanizada no padrão exato do aplicativo
   const getFraseCategoria = (categoriaKey: string) => {
     const chave = categoriaKey.trim().toLowerCase()
-    const idx = fraseIndices[chave] ?? Math.floor(Math.random() * 5)
+    const idx = fraseIndices[chave] ?? secureRandomInt(5)
     if (FRASES_CATEGORIA[chave]) {
       const lista = FRASES_CATEGORIA[chave]
       return lista[idx % lista.length]
