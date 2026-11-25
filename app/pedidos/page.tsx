@@ -6,6 +6,7 @@ import { Footer } from "@/components/footer"
 import { OrderSummary } from "@/components/order-summary"
 import { useAuth } from "@/lib/auth-context"
 import { useCart } from "@/lib/cart-context"
+import { secureRandomHex } from "@/lib/secure-random"
 import { ordersManager, type Order } from "@/lib/orders-manager"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { isOrderAwaitingPix, isOrderUnderpaidReview } from "@/lib/order-status-helpers"
@@ -677,7 +678,7 @@ export default function PedidosPage() {
             })
         : []
       addItem({
-        id: String(item.product_id || item.id || `reorder-${Date.now()}-${Math.random()}`),
+        id: String(item.product_id || item.id || `reorder-${Date.now()}-${secureRandomHex(6)}`),
         name: item.name || item.product_name,
         price: Number(item.price || item.product_price || 0),
         image: item.image || item.image_url || "/logo.png",

@@ -8,6 +8,7 @@ import { HeaderWrapper } from "@/components/header-wrapper"
 import { Footer } from "@/components/footer"
 import { OrderSummary } from "@/components/order-summary"
 import { useAuth } from "@/lib/auth-context"
+import { secureRandomBetween } from "@/lib/secure-random"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import {
   ArrowLeft,
@@ -299,7 +300,7 @@ export default function SegurancaContaPage() {
       if (!res.ok) {
         throw new Error(data?.error || "Não foi possível registrar a solicitação de exclusão.")
       }
-      setProtocol(data.protocol || `BT-${Math.floor(100000 + Math.random() * 900000)}`)
+      setProtocol(data.protocol || `BT-${secureRandomBetween(100000, 999999)}`)
       setSubmitted(true)
     } catch (err: any) {
       setDeleteError(err?.message || "Erro ao processar solicitação. Verifique sua conexão e tente novamente.")

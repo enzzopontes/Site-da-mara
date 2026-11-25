@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/lib/auth-context"
+import { secureRandomBetween } from "@/lib/secure-random"
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications"
 import { addressesManager, type Address } from "@/lib/addresses-manager"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
@@ -663,7 +664,7 @@ export default function PerfilPage() {
         throw new Error(data?.error || "Não foi possível processar a solicitação.")
       }
       setDeleteProtocol(
-        data.protocol || `BT-${Math.floor(100000 + Math.random() * 900000)}`
+        data.protocol || `BT-${secureRandomBetween(100000, 999999)}`
       )
       try {
         await signOut({ forgetAccount: true })
