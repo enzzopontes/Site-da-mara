@@ -1,4 +1,5 @@
 import { getSupabase } from "./supabase-fix"
+import { normalizeLegacyCategorySlug } from "@/lib/category-icons"
 
 // Converte "12,50" ou 12.5 em number; vazio vira null.
 function toNumber(v: unknown): number | null {
@@ -59,7 +60,9 @@ export interface Product {
   isFeatured?: boolean
   is_featured?: boolean
   image: string
-  category: "batata" | "bebida" | "macarrao"
+  category: string
+  categoryId?: string | null
+  category_id?: string | null
   available: boolean
   adicionais: Adicional[]
   createdAt: Date
@@ -362,6 +365,8 @@ class ProductsManager {
         is_featured: Boolean(p.is_featured),
         image: p.image_url || "/products/placeholder.jpg",
         category: p.category,
+        categoryId: p.category_id ?? null,
+        category_id: p.category_id ?? null,
         available: p.available,
         adicionais: (p.product_adicionais || [])
           .map((pa: any) => pa.adicionais)
@@ -379,6 +384,22 @@ class ProductsManager {
       if (options?.strict) throw err
       return [...DEFAULT_PRODUCTS, ...DEFAULT_BEBIDAS]
     }
+  }
+
+  async getProductsByCategory(
+    slug: string,
+    preloadedProducts?: Product[],
+    includeInactive = false,
+  ): Promise<Product[]> {
+    if (!slug || !slug.trim()) return []
+    const products = preloadedProducts ?? (await this.getProducts())
+    const normalizedTarget = normalizeLegacyCategorySlug(slug)
+    return products.filter((p) => {
+      if (!includeInactive && p.available !== true) return false
+      if (p.category_id && p.category_id === slug) return true
+      if (p.categoryId && p.categoryId === slug) return true
+      return normalizeLegacyCategorySlug(p.category) === normalizedTarget
+    })
   }
 
   async getBatatas(includeInactive = false) {
@@ -457,6 +478,7 @@ class ProductsManager {
       price: toNumber(product.price),
       image: product.image,
       category: product.category,
+      category_id: product.category_id ?? product.categoryId ?? undefined,
       available: product.available ?? true,
       originalPrice: toNumber(product.originalPrice ?? (product as any).original_price),
       discountPercentage: toNumber(product.discountPercentage ?? (product as any).discount_percentage),
@@ -477,20 +499,23 @@ class ProductsManager {
     } else {
       // Fallback (API indisponivel): insert direto, sujeito a RLS
       const supabase = await getSupabase()
+      const insertRow: Record<string, unknown> = {
+        name: payload.name,
+        description: payload.description,
+        price: payload.price,
+        image_url: payload.image,
+        category: payload.category,
+        available: payload.available,
+        original_price: payload.originalPrice,
+        discount_percentage: payload.discountPercentage,
+        badge_text: payload.badgeText,
+        is_featured: payload.isFeatured,
+      }
+      if (payload.category_id !== undefined) insertRow.category_id = payload.category_id
+
       const { data: row, error } = await supabase
         .from("products")
-        .insert([{
-          name: payload.name,
-          description: payload.description,
-          price: payload.price,
-          image_url: payload.image,
-          category: payload.category,
-          available: payload.available,
-          original_price: payload.originalPrice,
-          discount_percentage: payload.discountPercentage,
-          badge_text: payload.badgeText,
-          is_featured: payload.isFeatured,
-        }])
+        .insert([insertRow])
         .select()
         .single()
       if (error) throw new Error(`Erro ao criar produto: ${error.message}`)
@@ -502,6 +527,8 @@ class ProductsManager {
       ...data,
       id: data.id,
       image: data.image_url,
+      categoryId: data.category_id ?? null,
+      category_id: data.category_id ?? null,
       adicionais: [],
       createdAt: new Date(data.created_at),
       updatedAt: new Date(data.updated_at),
@@ -521,6 +548,8 @@ class ProductsManager {
     if (u.price !== undefined) payload.price = toNumber(u.price)
     if (u.image !== undefined) payload.image = u.image
     if (u.category !== undefined) payload.category = u.category
+    if (u.category_id !== undefined || u.categoryId !== undefined)
+      payload.category_id = u.category_id ?? u.categoryId ?? undefined
     if (u.available !== undefined) payload.available = u.available
     if (u.originalPrice !== undefined || u.original_price !== undefined)
       payload.originalPrice = toNumber(u.originalPrice ?? u.original_price)
@@ -546,6 +575,7 @@ class ProductsManager {
     if (payload.price !== undefined) row.price = payload.price
     if (payload.image !== undefined) row.image_url = payload.image
     if (payload.category !== undefined) row.category = payload.category
+    if (payload.category_id !== undefined) row.category_id = payload.category_id
     if (payload.available !== undefined) row.available = payload.available
     if (payload.originalPrice !== undefined) row.original_price = payload.originalPrice
     if (payload.discountPercentage !== undefined) row.discount_percentage = payload.discountPercentage
@@ -667,7 +697,28 @@ class ProductsManager {
     }
   }
 
-  async getRealRankingByCategory(category: string): Promise<string[]> {
+  async getGlobalRankingNames(limit = 50, preloadedProducts?: Product[]): Promise<string[]> {
+    try {
+      const supabase = await getSupabase()
+      const { data, error } = await supabase.rpc("get_product_ranking", { p_limit: limit })
+      if (error || !Array.isArray(data) || data.length === 0) return []
+
+      const directNames = data
+        .map((item: any) => item.product_name ?? item.name)
+        .filter((n: unknown): n is string => typeof n === "string" && n.trim().length > 0)
+      if (directNames.length > 0) return directNames
+
+      const products = preloadedProducts ?? (await this.getProducts())
+      const byId = new Map(products.map((p) => [p.id, p.name]))
+      return data
+        .map((item: any) => (item.product_id ? byId.get(String(item.product_id)) : undefined))
+        .filter((n: string | undefined): n is string => Boolean(n))
+    } catch {
+      return []
+    }
+  }
+
+  async getRealRankingByCategory(category: string, preloadedProducts?: Product[]): Promise<string[]> {
     try {
       const supabase = await getSupabase()
       
@@ -675,8 +726,14 @@ class ProductsManager {
         .rpc("get_product_ranking", { p_limit: 100 })
       
       // Filtra apenas produtos que pertencem à categoria solicitada e estão disponíveis
-      const products = await this.getProducts()
-      const categoryProducts = products.filter(p => p.category === category && p.available)
+      const products = preloadedProducts ?? (await this.getProducts())
+      const normalizedTarget = normalizeLegacyCategorySlug(category)
+      const categoryProducts = products.filter((p) => {
+        if (!p.available) return false
+        if (p.category_id && p.category_id === category) return true
+        if (p.categoryId && p.categoryId === category) return true
+        return normalizeLegacyCategorySlug(p.category) === normalizedTarget
+      })
       const categoryProductNames = categoryProducts.map(p => p.name)
 
       if (error || !data || data.length === 0) {

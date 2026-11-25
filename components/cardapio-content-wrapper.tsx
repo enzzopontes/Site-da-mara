@@ -3,28 +3,24 @@
 import { Suspense } from "react"
 import { CardapioContent } from "./cardapio-content"
 import { CardapioSkeleton } from "@/components/skeletons/cardapio-skeleton"
+import type { Category } from "@/lib/categories-db"
+import type { Product } from "@/lib/products-db"
 
-interface Product {
-  id: string
-  name: string
-  description: string
-  price: number
-  image: string
-  category?: "batata" | "bebida" | "macarrao"
+export interface MenuSectionData {
+  category: Category
+  products: Product[]
+  topNames: string[]
 }
 
-interface CardapioContentProps {
-  batatas: Product[]
-  macarrao: Product[]
-  bebidas: Product[]
-  topBatatasNames?: string[]
-  topMacarraoNames?: string[]
+export interface CardapioContentProps {
+  sections: MenuSectionData[]
+  loadError?: string | null
 }
 
-export function CardapioContentWrapper(props: CardapioContentProps) {
+export function CardapioContentWrapper({ sections, loadError }: CardapioContentProps) {
   return (
     <Suspense fallback={<CardapioSkeleton />}>
-      <CardapioContent {...props} />
+      <CardapioContent sections={sections} loadError={loadError} />
     </Suspense>
   )
 }

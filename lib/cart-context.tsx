@@ -10,7 +10,7 @@ export interface CartItem {
   price: number
   image: string
   quantity: number
-  category: "batata" | "macarrao" | "bebida"
+  category: string
   pastaType?: "penne" | "parafuso" | "espaguete" // Tipo de macarrão (apenas para categoria macarrao)
   observacoes?: string
   adicionais: Array<{

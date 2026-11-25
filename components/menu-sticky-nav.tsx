@@ -2,12 +2,15 @@
 
 import { memo, useState, useEffect, useRef } from "react"
 import { AnimatedSearchBar } from "./animated-search-bar"
+import { CategoryIcon } from "@/components/category-icon"
+import type { Category } from "@/lib/categories-db"
 
 export interface MenuCategory {
   id: string
   label: string
   iconSrc: string
   count: number
+  category?: Category
 }
 
 interface MenuStickyNavProps {
@@ -133,13 +136,33 @@ export const MenuStickyNav = memo(function MenuStickyNav({
                     : "bg-[#F7F5F0] border-[#ECE7E0] text-[#1A1A1A] hover:border-[#E3A008]/50 hover:bg-[#FFF9EE]"
                 }`}
               >
-                <img
-                  src={cat.iconSrc}
-                  alt=""
-                  aria-hidden="true"
-                  className="w-5 h-5 md:w-5.5 md:h-5.5 object-contain shrink-0 drop-shadow-xs"
-                />
+                {cat.category ? (
+                  <CategoryIcon
+                    iconUrl={cat.category.icon_url}
+                    iconType={cat.category.icon_type}
+                    fallbackIcon={cat.category.fallback_icon}
+                    accentColor={cat.category.accent_color}
+                    sizeClassName="w-5 h-5 md:w-5.5 md:h-5.5"
+                    iconClassName="w-3.5 h-3.5"
+                    className="shrink-0 drop-shadow-xs"
+                  />
+                ) : (
+                  <img
+                    src={cat.iconSrc}
+                    alt=""
+                    aria-hidden="true"
+                    className="w-5 h-5 md:w-5.5 md:h-5.5 object-contain shrink-0 drop-shadow-xs"
+                  />
+                )}
                 <span>{cat.label}</span>
+                {cat.category?.badge_text && (
+                  <span
+                    className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full text-white leading-none"
+                    style={{ backgroundColor: cat.category.badge_color || "#C1440E" }}
+                  >
+                    {cat.category.badge_text}
+                  </span>
+                )}
                 <span
                   className={`px-1.5 py-0.5 rounded-full text-[10px] md:text-xs font-bold leading-none ${
                     isActive

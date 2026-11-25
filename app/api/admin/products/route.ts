@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
+import { revalidatePath, revalidateTag } from "next/cache"
 import { createClient } from "@supabase/supabase-js"
 import { z } from "zod"
 import { authenticateRequestUser } from "@/lib/supabase/route-auth"
 import { isAdminUser } from "@/lib/supabase/admin"
+import { CATEGORIES_CACHE_TAG } from "@/lib/categories-server"
+import { normalizeLegacyCategorySlug } from "@/lib/category-icons"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -50,12 +53,14 @@ function pick(obj: Json, camel: string, snake: string) {
   return obj[camel] !== undefined ? obj[camel] : obj[snake]
 }
 
-const CategorySchema = z.enum(["batata", "macarrao", "bebida"], {
-  message: "Categoria inválida. Use batata, macarrao ou bebida.",
-})
+const CategorySchema = z
+  .string({ message: "Categoria é obrigatória." })
+  .trim()
+  .min(1, "Categoria é obrigatória.")
+  .max(64, "Categoria muito longa.")
 
-const AdicionalCategoriaSchema = z.enum(["proteinas", "molhos", "queijos"], {
-  message: "Categoria de adicional inválida. Use proteinas, molhos ou queijos.",
+const AdicionalCategoriaSchema = z.enum(["proteinas", "molhos", "queijos", "complementos"], {
+  message: "Categoria de adicional inválida. Use proteinas, molhos, queijos ou complementos.",
 })
 
 const SafeImageUrlSchema = z
@@ -73,6 +78,7 @@ const ProductCreateSchema = z
     description: z.string().max(1000, "Descrição muito longa.").nullable().optional(),
     price: z.number({ message: "Preço do produto é obrigatório." }).positive("Preço deve ser maior que zero.").max(10000, "Preço inválido."),
     category: CategorySchema,
+    category_id: z.string().uuid().optional().nullable(),
     image_url: SafeImageUrlSchema.nullable().optional(),
     available: z.boolean().default(true),
     original_price: z.number().positive("Preço original deve ser maior que zero.").max(10000).nullable().optional(),
@@ -91,6 +97,7 @@ const ProductUpdateSchema = z
     description: z.string().max(1000, "Descrição muito longa.").nullable().optional(),
     price: z.number().positive("Preço deve ser maior que zero.").max(10000, "Preço inválido.").optional(),
     category: CategorySchema.optional(),
+    category_id: z.string().uuid().optional().nullable(),
     image_url: SafeImageUrlSchema.nullable().optional(),
     available: z.boolean().optional(),
     original_price: z.number().positive("Preço original deve ser maior que zero.").max(10000).nullable().optional(),
@@ -136,6 +143,8 @@ function buildProductRow(input: Json, partial: boolean) {
   const image = pick(input, "image", "image_url")
   if (has(image)) raw.image_url = image === null ? null : String(image).trim() || null
   if (has(input.category)) raw.category = String(input.category).trim()
+  const categoryId = pick(input, "categoryId", "category_id")
+  if (has(categoryId)) raw.category_id = categoryId === null || categoryId === "" ? null : String(categoryId).trim()
   if (has(input.available)) raw.available = Boolean(input.available)
 
   const original = pick(input, "originalPrice", "original_price")
@@ -167,6 +176,99 @@ function cleanIds(ids: unknown): string[] {
   if (ids === undefined || ids === null) return []
   if (!Array.isArray(ids)) throw new ApiError(400, "adicionalIds deve ser uma lista.")
   return [...new Set(ids.map((i) => String(i).trim()).filter(Boolean))]
+}
+
+function isMissingCategoryIdColumnError(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false
+  const msg = (error.message || "").toLowerCase()
+  return (
+    (error.code === "42703" || error.code === "PGRST204" || msg.includes("column") || msg.includes("schema cache")) &&
+    msg.includes("category_id")
+  )
+}
+
+async function resolveCategoryMeta(
+  service: ReturnType<typeof getServiceClient>,
+  categorySlug?: string | null,
+  categoryId?: string | null,
+): Promise<{ id: string | null; slug: string; allowsAddons: boolean }> {
+  const rawSlug = typeof categorySlug === "string" ? categorySlug.trim() : ""
+  const normalizedSlug = normalizeLegacyCategorySlug(rawSlug) || rawSlug
+  const fallback = {
+    id: categoryId ?? null,
+    slug: normalizedSlug,
+    allowsAddons: normalizedSlug !== "bebida",
+  }
+
+  try {
+    if (categoryId) {
+      const { data: byId, error: byIdErr } = await service
+        .from("categories")
+        .select("id, slug, allows_addons")
+        .eq("id", categoryId)
+        .maybeSingle()
+      if (!byIdErr && byId) {
+        return {
+          id: String(byId.id),
+          slug: String(byId.slug),
+          allowsAddons: Boolean(byId.allows_addons),
+        }
+      }
+    }
+
+    if (normalizedSlug) {
+      const { data: bySlug, error: bySlugErr } = await service
+        .from("categories")
+        .select("id, slug, allows_addons")
+        .eq("slug", normalizedSlug)
+        .maybeSingle()
+      if (!bySlugErr && bySlug) {
+        return {
+          id: String(bySlug.id),
+          slug: String(bySlug.slug),
+          allowsAddons: Boolean(bySlug.allows_addons),
+        }
+      }
+    }
+  } catch {
+    // Tabela categories pode ainda não existir (pré-migração); segue com fallback.
+  }
+
+  return fallback
+}
+
+async function fetchProductCategoryRef(
+  service: ReturnType<typeof getServiceClient>,
+  productId: string,
+): Promise<{ category: string | null; category_id: string | null }> {
+  let { data, error } = await service
+    .from("products")
+    .select("category, category_id")
+    .eq("id", productId)
+    .maybeSingle()
+
+  if (error && isMissingCategoryIdColumnError(error)) {
+    const retry = await service
+      .from("products")
+      .select("category")
+      .eq("id", productId)
+      .maybeSingle()
+    data = retry.data ? { category: retry.data.category, category_id: null } : null
+    error = retry.error
+  }
+
+  if (error) throw new ApiError(500, `Erro ao buscar produto: ${error.message}`)
+  if (!data) throw new ApiError(404, "Produto não encontrado.")
+  return {
+    category: data.category ? String(data.category) : null,
+    category_id: data.category_id ? String(data.category_id) : null,
+  }
+}
+
+function revalidateMenuCache() {
+  revalidateTag(CATEGORIES_CACHE_TAG, { expire: 0 })
+  revalidatePath("/")
+  revalidatePath("/cardapio")
 }
 
 async function syncAdicionais(
@@ -216,9 +318,23 @@ export async function POST(request: NextRequest) {
 
     if (action === "createProduct") {
       const row = buildProductRow(body.product ?? {}, false)
-      const adicionalIds = row.category === "bebida" ? [] : cleanIds(body.adicionalIds)
+      const meta = await resolveCategoryMeta(service, row.category, row.category_id ?? null)
+      row.category = meta.slug
+      if (meta.id) {
+        row.category_id = meta.id
+      } else {
+        delete row.category_id
+      }
 
-      const { data: product, error } = await service.from("products").insert(row).select().single()
+      const adicionalIds = !meta.allowsAddons ? [] : cleanIds(body.adicionalIds)
+
+      let { data: product, error } = await service.from("products").insert(row).select().single()
+      if (error && row.category_id !== undefined && isMissingCategoryIdColumnError(error)) {
+        const { category_id: _ignored, ...rowWithoutCategoryId } = row
+        const retry = await service.from("products").insert(rowWithoutCategoryId).select().single()
+        product = retry.data
+        error = retry.error
+      }
       if (error || !product) throw new ApiError(500, `Erro ao criar produto: ${error?.message ?? "sem retorno"}`)
 
       // Produto salvo mesmo que vínculo falhe; erro vira aviso, não perde o produto.
@@ -230,6 +346,7 @@ export async function POST(request: NextRequest) {
           warning = e?.message || "Produto criado, mas adicionais não foram vinculados."
         }
       }
+      revalidateMenuCache()
       return ok({ product, warning }, 201)
     }
 
@@ -238,20 +355,46 @@ export async function POST(request: NextRequest) {
       if (!productId) throw new ApiError(400, "productId é obrigatório.")
 
       const row = buildProductRow(body.updates ?? {}, true)
+      let categoryMeta: { id: string | null; slug: string; allowsAddons: boolean }
+      if (row.category !== undefined || row.category_id !== undefined) {
+        categoryMeta = await resolveCategoryMeta(service, row.category ?? null, row.category_id ?? null)
+        if (categoryMeta.slug) row.category = categoryMeta.slug
+        if (categoryMeta.id) {
+          row.category_id = categoryMeta.id
+        } else {
+          delete row.category_id
+        }
+      } else {
+        const existing = await fetchProductCategoryRef(service, productId)
+        categoryMeta = await resolveCategoryMeta(service, existing.category, existing.category_id)
+      }
+
       let product: Json | null = null
 
       if (Object.keys(row).length) {
-        const { data, error } = await service.from("products").update(row).eq("id", productId).select().maybeSingle()
+        let { data, error } = await service.from("products").update(row).eq("id", productId).select().maybeSingle()
+        if (error && row.category_id !== undefined && isMissingCategoryIdColumnError(error)) {
+          const { category_id: _ignored, ...rowWithoutCategoryId } = row
+          const retry = await service
+            .from("products")
+            .update(rowWithoutCategoryId)
+            .eq("id", productId)
+            .select()
+            .maybeSingle()
+          data = retry.data
+          error = retry.error
+        }
         if (error) throw new ApiError(500, `Erro ao atualizar produto: ${error.message}`)
         if (!data) throw new ApiError(404, "Produto não encontrado.")
         product = data
       }
 
-      if (row.category === "bebida") {
+      if (categoryMeta && !categoryMeta.allowsAddons) {
         await syncAdicionais(service, productId, [])
       } else if (body.adicionalIds !== undefined) {
         await syncAdicionais(service, productId, cleanIds(body.adicionalIds))
       }
+      revalidateMenuCache()
       return ok({ product })
     }
 
@@ -276,13 +419,26 @@ export async function POST(request: NextRequest) {
       if (delErr) throw new ApiError(500, `Erro ao excluir produto: ${delErr.message}`)
       if (!deleted || deleted.length === 0) throw new ApiError(404, "Produto não encontrado.")
 
+      revalidateMenuCache()
       return ok({ deleted: true, productId })
     }
 
     if (action === "setAdicionais") {
       const productId = String(body.productId ?? "").trim()
       if (!productId) throw new ApiError(400, "productId é obrigatório.")
-      await syncAdicionais(service, productId, cleanIds(body.adicionalIds))
+      const adicionalIds = cleanIds(body.adicionalIds)
+      const existing = await fetchProductCategoryRef(service, productId)
+      const meta = await resolveCategoryMeta(service, existing.category, existing.category_id)
+      if (!meta.allowsAddons) {
+        await syncAdicionais(service, productId, [])
+        if (adicionalIds.length > 0) {
+          revalidateMenuCache()
+          throw new ApiError(400, "Adicionais estão desativados para a categoria deste produto.")
+        }
+      } else {
+        await syncAdicionais(service, productId, adicionalIds)
+      }
+      revalidateMenuCache()
       return ok({ productId })
     }
 

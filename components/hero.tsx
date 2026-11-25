@@ -11,7 +11,7 @@ interface Product {
   description: string
   price: number
   image: string
-  category?: "batata" | "bebida" | "macarrao"
+  category?: string
 }
 
 interface HeroProps {

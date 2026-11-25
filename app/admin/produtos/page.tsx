@@ -20,16 +20,15 @@ import {
   Plus,
   Trash2,
   Package,
-  Coffee,
-  UtensilsCrossed,
   Search,
-  CheckCircle2,
   AlertCircle,
   Sparkles,
   Flame,
   Droplets,
   Layers,
   Image as ImageIcon,
+  LayoutGrid,
+  ExternalLink,
 } from "lucide-react"
 import Link from "next/link"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -45,18 +44,30 @@ import {
 } from "@/components/ui/alert-dialog"
 import { productsManager, type Product, type Adicional } from "@/lib/products-db"
 import { adicionaisManager } from "@/lib/adicionais-manager"
+import { fetchCategoriesFromDb, DEFAULT_CATEGORIES, type Category } from "@/lib/categories-db"
+import { normalizeLegacyCategorySlug } from "@/lib/category-icons"
+import { CategoryIcon } from "@/components/category-icon"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import { PhotoBankPicker } from "@/components/photo-bank-picker"
 import { isAdmin as checkIsAdminRole } from "@/lib/supabase/admin"
 
-const CATEGORIES = [
-  { key: "batata", label: "Batatas Recheadas", icon: Flame, color: "text-amber-500 bg-amber-50" },
-  { key: "macarrao", label: "Macarrão", icon: UtensilsCrossed, color: "text-orange-500 bg-orange-50" },
-  { key: "bebida", label: "Bebidas", icon: Coffee, color: "text-blue-500 bg-blue-50" },
-  { key: "adicionais", label: "Adicionais", icon: Layers, color: "text-purple-500 bg-purple-50" },
-] as const
+const DEFAULT_PRODUCT_CATEGORIES: Category[] = DEFAULT_CATEGORIES.filter(
+  (c) => c.kind === "product_category",
+).sort((a, b) => a.menu_order - b.menu_order)
+
+type ProductWithCategoryId = Product & { category_id?: string | null; categoryId?: string | null }
+
+const getProductCategoryId = (product: Product): string | null => {
+  const extended = product as ProductWithCategoryId
+  return extended.categoryId ?? extended.category_id ?? null
+}
+
+const getPersistedCategoryId = (category?: Category | null): string | null => {
+  if (!category?.id || category.id.startsWith("default-")) return null
+  return category.id
+}
 
 const ADICIONAL_CATEGORIAS = [
   { key: "proteinas", label: "Proteínas Extra", icon: Flame, color: "bg-red-50 text-red-700 border-red-200" },
@@ -73,6 +84,7 @@ export default function AdminProdutosPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [products, setProducts] = useState<Product[]>([])
   const [adicionais, setAdicionais] = useState<Adicional[]>([])
+  const [categories, setCategories] = useState<Category[]>(DEFAULT_PRODUCT_CATEGORIES)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [editingAdicional, setEditingAdicional] = useState<Adicional | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -83,7 +95,7 @@ export default function AdminProdutosPage() {
     | { type: "adicional"; id: string }
     | null
   >(null)
-  const [activeTab, setActiveTab] = useState<"batata" | "macarrao" | "bebida" | "adicionais">("batata")
+  const [activeTab, setActiveTab] = useState<string>("todos")
   const [searchQuery, setSearchQuery] = useState("")
 
   // Form states for products
@@ -96,7 +108,8 @@ export default function AdminProdutosPage() {
   const [formIsFeatured, setFormIsFeatured] = useState(false)
   const [pricingWarning, setPricingWarning] = useState<string | null>(null)
   const [formImage, setFormImage] = useState("")
-  const [formCategory, setFormCategory] = useState<"batata" | "bebida" | "macarrao">("batata")
+  const [formCategory, setFormCategory] = useState<string>(DEFAULT_PRODUCT_CATEGORIES[0]?.slug ?? "batata")
+  const [formCategoryId, setFormCategoryId] = useState<string | null>(null)
   const [selectedAdicionais, setSelectedAdicionais] = useState<string[]>([])
 
   // Form states for adicionais
@@ -198,6 +211,7 @@ export default function AdminProdutosPage() {
             if (!active) return
             if (allowed) {
               setIsAdmin(true)
+              loadCategories()
               loadProducts()
               loadAdicionais()
             } else {
@@ -213,6 +227,16 @@ export default function AdminProdutosPage() {
       active = false
     }
   }, [user, loading, router])
+
+  const loadCategories = async () => {
+    try {
+      const loaded = await fetchCategoriesFromDb({ kind: "product_category" })
+      const source = loaded.length > 0 ? loaded : DEFAULT_PRODUCT_CATEGORIES
+      setCategories([...source].sort((a, b) => a.menu_order - b.menu_order))
+    } catch {
+      setCategories(DEFAULT_PRODUCT_CATEGORIES)
+    }
+  }
 
   const loadProducts = async () => {
     try {
@@ -235,8 +259,70 @@ export default function AdminProdutosPage() {
     }
   }
 
+  const findProductCategory = (product: Product): Category | undefined => {
+    const prodCatId = getProductCategoryId(product)
+    if (prodCatId) {
+      const byId = categories.find((c) => c.id === prodCatId)
+      if (byId) return byId
+    }
+    const normSlug = normalizeLegacyCategorySlug(product.category)
+    return categories.find((c) => normalizeLegacyCategorySlug(c.slug) === normSlug)
+  }
+
+  const productMatchesCategory = (product: Product, category: Category): boolean => {
+    const prodCatId = getProductCategoryId(product)
+    if (prodCatId) {
+      const byId = categories.find((c) => c.id === prodCatId)
+      if (byId) return byId.id === category.id
+    }
+    return normalizeLegacyCategorySlug(product.category) === normalizeLegacyCategorySlug(category.slug)
+  }
+
+  const selectedCategoryObj = useMemo(() => {
+    if (formCategoryId) {
+      const byId = categories.find((c) => c.id === formCategoryId)
+      if (byId) return byId
+    }
+    const normSlug = normalizeLegacyCategorySlug(formCategory)
+    return categories.find((c) => normalizeLegacyCategorySlug(c.slug) === normSlug)
+  }, [categories, formCategoryId, formCategory])
+
+  const allowsAddons = selectedCategoryObj
+    ? selectedCategoryObj.allows_addons
+    : normalizeLegacyCategorySlug(formCategory) !== "bebida"
+
+  const allowsNotes = selectedCategoryObj
+    ? selectedCategoryObj.allows_notes
+    : normalizeLegacyCategorySlug(formCategory) !== "bebida"
+
+  const handleFormCategoryChange = (slug: string) => {
+    const matched = categories.find(
+      (c) => c.slug === slug || normalizeLegacyCategorySlug(c.slug) === normalizeLegacyCategorySlug(slug),
+    )
+    const nextSlug = matched?.slug ?? slug
+    setFormCategory(nextSlug)
+    setFormCategoryId(getPersistedCategoryId(matched))
+    const nextAllowsAddons = matched
+      ? matched.allows_addons
+      : normalizeLegacyCategorySlug(nextSlug) !== "bebida"
+    if (!nextAllowsAddons) {
+      setSelectedAdicionais([])
+    }
+  }
+
   const handleOpenDialog = (product?: Product) => {
     if (product) {
+      const matchedCat = findProductCategory(product)
+      const resolvedSlug =
+        matchedCat?.slug ||
+        normalizeLegacyCategorySlug(product.category) ||
+        categories[0]?.slug ||
+        "batata"
+      const resolvedId = getPersistedCategoryId(matchedCat) ?? getProductCategoryId(product)
+      const resolvedAllowsAddons = matchedCat
+        ? matchedCat.allows_addons
+        : normalizeLegacyCategorySlug(resolvedSlug) !== "bebida"
+
       setEditingProduct(product)
       setFormName(product.name)
       setFormDescription(product.description)
@@ -247,9 +333,16 @@ export default function AdminProdutosPage() {
       setFormIsFeatured(Boolean(product.isFeatured ?? product.is_featured))
       setPricingWarning(null)
       setFormImage(product.image)
-      setFormCategory(product.category)
-      setSelectedAdicionais(product.adicionais?.map((a) => a.id) || [])
+      setFormCategory(resolvedSlug)
+      setFormCategoryId(resolvedId)
+      setSelectedAdicionais(resolvedAllowsAddons ? product.adicionais?.map((a) => a.id) || [] : [])
     } else {
+      const activeCat =
+        activeTab !== "todos" && activeTab !== "adicionais"
+          ? categories.find((c) => c.slug === activeTab)
+          : undefined
+      const defaultCat = activeCat ?? categories[0]
+
       setEditingProduct(null)
       setFormName("")
       setFormDescription("")
@@ -260,7 +353,8 @@ export default function AdminProdutosPage() {
       setFormIsFeatured(false)
       setPricingWarning(null)
       setFormImage("")
-      setFormCategory(activeTab === "adicionais" ? "batata" : activeTab)
+      setFormCategory(defaultCat?.slug ?? "batata")
+      setFormCategoryId(getPersistedCategoryId(defaultCat))
       setSelectedAdicionais([])
     }
     setIsDialogOpen(true)
@@ -327,6 +421,8 @@ export default function AdminProdutosPage() {
       }
     }
 
+    const effectiveAdicionais = allowsAddons ? selectedAdicionais : []
+
     const productPayload = {
       name: formName.trim(),
       description: formDescription.trim(),
@@ -340,17 +436,19 @@ export default function AdminProdutosPage() {
       isFeatured,
       is_featured: isFeatured,
       image: trimmedImage || "/placeholder.svg?height=300&width=300&query=" + encodeURIComponent(formName),
-      category: formCategory,
+      category: formCategory as Product["category"],
+      category_id: formCategoryId,
     }
 
     if (isSaving) return
     setIsSaving(true)
     try {
       if (editingProduct) {
-        await productsManager.updateProduct(editingProduct.id, productPayload, selectedAdicionais)
+        await productsManager.updateProduct(editingProduct.id, productPayload, effectiveAdicionais)
         appToast.success("Produto atualizado", `"${productPayload.name}" foi salvo com sucesso.`)
       } else {
-        await productsManager.createProduct({ ...productPayload, available: true }, selectedAdicionais)
+        const createPayload = { ...productPayload, available: true }
+        await productsManager.createProduct(createPayload, effectiveAdicionais)
         appToast.success("Produto criado", `"${productPayload.name}" foi cadastrado com sucesso.`)
       }
       await loadProducts()
@@ -477,14 +575,23 @@ export default function AdminProdutosPage() {
   }
 
   const filteredProducts = useMemo(() => {
+    const activeCategory =
+      activeTab !== "todos" && activeTab !== "adicionais"
+        ? categories.find((c) => c.slug === activeTab)
+        : undefined
+
     return products.filter((p) => {
-      const matchCategory = p.category === activeTab
-      if (!matchCategory) return false
+      if (activeTab !== "todos") {
+        const matchCategory = activeCategory
+          ? productMatchesCategory(p, activeCategory)
+          : normalizeLegacyCategorySlug(p.category) === normalizeLegacyCategorySlug(activeTab)
+        if (!matchCategory) return false
+      }
       if (!searchQuery.trim()) return true
       const q = searchQuery.toLowerCase()
       return p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)
     })
-  }, [products, activeTab, searchQuery])
+  }, [products, categories, activeTab, searchQuery])
 
   const filteredAdicionais = useMemo(() => {
     if (!searchQuery.trim()) return adicionais
@@ -492,14 +599,13 @@ export default function AdminProdutosPage() {
     return adicionais.filter((a) => a.name.toLowerCase().includes(q))
   }, [adicionais, searchQuery])
 
-  const counts = useMemo(() => {
-    return {
-      batata: products.filter((p) => p.category === "batata").length,
-      macarrao: products.filter((p) => p.category === "macarrao").length,
-      bebida: products.filter((p) => p.category === "bebida").length,
-      adicionais: adicionais.length,
+  const categoryCounts = useMemo(() => {
+    const countsBySlug: Record<string, number> = {}
+    for (const cat of categories) {
+      countsBySlug[cat.slug] = products.filter((p) => productMatchesCategory(p, cat)).length
     }
-  }, [products, adicionais])
+    return countsBySlug
+  }, [products, categories])
 
   const usedImageUrls = useMemo(() => {
     return products
@@ -558,25 +664,52 @@ export default function AdminProdutosPage() {
 
         {/* Sticky iFood Category Pills Bar */}
         <div className="sticky top-0 z-20 bg-[#F7F7F8]/95 backdrop-blur-md pt-2 pb-4 -mx-4 px-4 border-b border-gray-200/80 mb-6 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
             {/* Category Pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-              {CATEGORIES.map((cat) => {
-                const Icon = cat.icon
-                const isActive = activeTab === cat.key
-                const count = counts[cat.key as keyof typeof counts] || 0
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
+              <button
+                type="button"
+                onClick={() => setActiveTab("todos")}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shadow-sm border ${
+                  activeTab === "todos"
+                    ? "bg-gray-900 text-white border-gray-900 shadow-gray-200"
+                    : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-gray-900"
+                }`}
+              >
+                <LayoutGrid className={`h-3.5 w-3.5 ${activeTab === "todos" ? "text-amber-400" : "text-gray-400"}`} />
+                <span>Todos</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                    activeTab === "todos" ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  {products.length}
+                </span>
+              </button>
+
+              {categories.map((cat) => {
+                const isActive = activeTab === cat.slug
+                const count = categoryCounts[cat.slug] || 0
                 return (
                   <button
-                    key={cat.key}
-                    onClick={() => setActiveTab(cat.key as any)}
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setActiveTab(cat.slug)}
                     className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shadow-sm border ${
                       isActive
                         ? "bg-gray-900 text-white border-gray-900 shadow-gray-200"
                         : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-gray-900"
                     }`}
                   >
-                    <Icon className={`h-3.5 w-3.5 ${isActive ? "text-amber-400" : "text-gray-400"}`} />
-                    <span>{cat.label}</span>
+                    <CategoryIcon
+                      iconUrl={cat.icon_url}
+                      iconType={cat.icon_type}
+                      fallbackIcon={cat.fallback_icon}
+                      accentColor={cat.accent_color}
+                      sizeClassName="w-4 h-4"
+                      iconClassName="w-3 h-3"
+                    />
+                    <span>{cat.name}</span>
                     <span
                       className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
                         isActive ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600"
@@ -587,17 +720,72 @@ export default function AdminProdutosPage() {
                   </button>
                 )
               })}
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("adicionais")}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shadow-sm border ${
+                  activeTab === "adicionais"
+                    ? "bg-gray-900 text-white border-gray-900 shadow-gray-200"
+                    : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-gray-900"
+                }`}
+              >
+                <Layers className={`h-3.5 w-3.5 ${activeTab === "adicionais" ? "text-amber-400" : "text-gray-400"}`} />
+                <span>Adicionais</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                    activeTab === "adicionais" ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  {adicionais.length}
+                </span>
+              </button>
             </div>
 
-            {/* Live Search Input */}
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Buscar item..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 pr-3 py-1.5 h-9 text-xs bg-white border-gray-200 rounded-xl focus:border-amber-500 shadow-sm"
-              />
+            {/* Category Dropdown Filter + Live Search Input */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+              {activeTab !== "adicionais" && (
+                <Select value={activeTab} onValueChange={setActiveTab}>
+                  <SelectTrigger className="h-9 w-full sm:w-48 text-xs font-bold bg-white border-gray-200 rounded-xl shadow-sm">
+                    <SelectValue placeholder="Filtrar categoria" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">
+                      <span className="flex items-center gap-2">
+                        <LayoutGrid className="h-3.5 w-3.5 text-amber-600" />
+                        <span>Todas ({products.length})</span>
+                      </span>
+                    </SelectItem>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.slug}>
+                        <span className="flex items-center gap-2">
+                          <CategoryIcon
+                            iconUrl={cat.icon_url}
+                            iconType={cat.icon_type}
+                            fallbackIcon={cat.fallback_icon}
+                            accentColor={cat.accent_color}
+                            sizeClassName="w-4 h-4"
+                            iconClassName="w-2.5 h-2.5"
+                          />
+                          <span>
+                            {cat.name} ({categoryCounts[cat.slug] || 0})
+                          </span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              <div className="relative w-full sm:w-60">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Buscar item..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 pr-3 py-1.5 h-9 text-xs bg-white border-gray-200 rounded-xl focus:border-amber-500 shadow-sm"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -683,6 +871,7 @@ export default function AdminProdutosPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {filteredProducts.map((product) => {
                   const isAvailable = product.available !== false
+                  const productCategory = findProductCategory(product)
                   return (
                     <Card
                       key={product.id}
@@ -758,6 +947,21 @@ export default function AdminProdutosPage() {
                               {(product.badgeText || product.badge_text) && (
                                 <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200/60 px-1.5 py-0.5 rounded-md">
                                   {product.badgeText || product.badge_text}
+                                </span>
+                              )}
+                              {activeTab === "todos" && (
+                                <span className="text-[10px] font-bold text-gray-700 bg-gray-100 border border-gray-200/80 px-1.5 py-0.5 rounded-md inline-flex items-center gap-1">
+                                  {productCategory && (
+                                    <CategoryIcon
+                                      iconUrl={productCategory.icon_url}
+                                      iconType={productCategory.icon_type}
+                                      fallbackIcon={productCategory.fallback_icon}
+                                      accentColor={productCategory.accent_color}
+                                      sizeClassName="w-3.5 h-3.5"
+                                      iconClassName="w-2.5 h-2.5"
+                                    />
+                                  )}
+                                  {productCategory?.name || product.category}
                                 </span>
                               )}
                               {product.adicionais && product.adicionais.length > 0 && (
@@ -849,17 +1053,63 @@ export default function AdminProdutosPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-gray-700">Categoria *</Label>
-                  <Select value={formCategory} onValueChange={(val: any) => setFormCategory(val)}>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold text-gray-700">Categoria *</Label>
+                    <Link
+                      href="/admin/categorias"
+                      className="text-[11px] font-bold text-amber-700 hover:text-amber-800 hover:underline inline-flex items-center gap-1"
+                    >
+                      Gerenciar categorias
+                    </Link>
+                  </div>
+                  <Select value={selectedCategoryObj?.slug ?? formCategory} onValueChange={handleFormCategoryChange}>
                     <SelectTrigger className="rounded-xl text-xs h-10 border-gray-200">
                       <SelectValue placeholder="Selecione a categoria" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="batata">Batata Recheada</SelectItem>
-                      <SelectItem value="macarrao">Macarrão</SelectItem>
-                      <SelectItem value="bebida">Bebida</SelectItem>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.slug}>
+                          <span className="flex items-center gap-2">
+                            <CategoryIcon
+                              iconUrl={cat.icon_url}
+                              iconType={cat.icon_type}
+                              fallbackIcon={cat.fallback_icon}
+                              accentColor={cat.accent_color}
+                              sizeClassName="w-4 h-4"
+                              iconClassName="w-3 h-3"
+                            />
+                            <span>{cat.name}</span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                      {!selectedCategoryObj && formCategory && (
+                        <SelectItem value={formCategory}>{formCategory}</SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
+
+                  {/* Regras ativas da categoria selecionada */}
+                  <div className="rounded-xl bg-amber-50/80 border border-amber-200/80 px-3 py-2 flex flex-wrap items-center gap-2 text-[11px]">
+                    <span className="font-bold text-amber-900">Regras da categoria:</span>
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full font-bold ${
+                        allowsAddons
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-gray-200/80 text-gray-600"
+                      }`}
+                    >
+                      Adicionais: {allowsAddons ? "Ativado" : "Desativado"}
+                    </span>
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full font-bold ${
+                        allowsNotes
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-gray-200/80 text-gray-600"
+                      }`}
+                    >
+                      Observações: {allowsNotes ? "Ativado" : "Desativado"}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="space-y-1.5">
@@ -1025,7 +1275,7 @@ export default function AdminProdutosPage() {
             </div>
 
             {/* Grouped Adicionais Manager */}
-            {formCategory !== "bebida" && (
+            {allowsAddons ? (
               <div className="space-y-3 pt-2 border-t border-gray-100">
                 <div className="flex items-center justify-between">
                   <Label className="text-xs font-extrabold uppercase tracking-wider text-gray-800">
@@ -1079,6 +1329,29 @@ export default function AdminProdutosPage() {
                       </div>
                     )
                   })}
+                </div>
+              </div>
+            ) : (
+              <div className="pt-2 border-t border-gray-100">
+                <div className="rounded-2xl bg-amber-50/70 border border-amber-200/80 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-bold text-amber-950">
+                        Adicionais desativados para esta categoria
+                      </p>
+                      <p className="text-[11px] text-amber-800/80 leading-relaxed">
+                        A categoria &ldquo;{selectedCategoryObj?.name || formCategory}&rdquo; está configurada para não permitir adicionais.
+                      </p>
+                    </div>
+                  </div>
+                  <Link
+                    href="/admin/categorias"
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-800 hover:text-amber-950 bg-white border border-amber-200 hover:bg-amber-50 px-3 py-1.5 rounded-xl shrink-0 transition-colors"
+                  >
+                    Configurar categoria
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </Link>
                 </div>
               </div>
             )}

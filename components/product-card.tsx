@@ -24,7 +24,9 @@ export interface ProductCardItem {
   isFeatured?: boolean
   is_featured?: boolean
   image: string
-  category?: "batata" | "bebida" | "macarrao"
+  category?: string
+  categoryId?: string | null
+  category_id?: string | null
   available?: boolean
   adicionais?: any[]
 }
@@ -35,6 +37,7 @@ export interface ProductCardProps {
   isMostRequested?: boolean
   layout?: "vertical" | "horizontal"
   className?: string
+  categoryRules?: { allowsAddons?: boolean; allowsNotes?: boolean }
 }
 
 export function ProductCard({
@@ -43,6 +46,7 @@ export function ProductCard({
   isMostRequested = false,
   layout = "vertical",
   className = "",
+  categoryRules,
 }: ProductCardProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [imageError, setImageError] = useState(false)
@@ -115,11 +119,16 @@ export function ProductCard({
 
   const handleAddClick = () => {
     // Checkout e carrinho utilizam EXCLUSIVAMENTE o preço final de venda (currentPrice)
-    if (user && product.category === "bebida") {
+    const isBebida = (product.category || "").toLowerCase().startsWith("bebida")
+    const allowsAddons = categoryRules?.allowsAddons ?? !isBebida
+    const allowsNotes = categoryRules?.allowsNotes ?? !isBebida
+
+    if (user && !allowsAddons && !allowsNotes) {
+      const quickCategory = product.category || "bebida"
       trackViewContent({
         id: product.id,
         name: product.name,
-        category: "bebida",
+        category: quickCategory,
         value: currentPrice,
       })
       addItem({
@@ -128,7 +137,7 @@ export function ProductCard({
         price: currentPrice,
         image: product.image,
         quantity: 1,
-        category: "bebida",
+        category: quickCategory as any,
         adicionais: [],
       })
       appToast.success(
@@ -260,6 +269,7 @@ export function ProductCard({
           } as any}
           open={dialogOpen}
           onOpenChange={setDialogOpen}
+          categoryRules={categoryRules}
         />
       </>
     )
@@ -380,6 +390,7 @@ export function ProductCard({
         } as any}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
+        categoryRules={categoryRules}
       />
     </>
   )

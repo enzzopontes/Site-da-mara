@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Geist } from "next/font/google"
 import { ThemedAlertHost } from "@/components/notifications/themed-alert-host"
+import { Toaster } from "sonner"
 import { CartProvider } from "@/lib/cart-context"
 import { AuthProvider } from "@/lib/auth-context"
 import { OfflineDetector } from "@/components/offline-detector"
@@ -53,6 +54,7 @@ export default function RootLayout({
               <CookieConsent />
             </OfflineDetector>
             <ThemedAlertHost />
+            <Toaster position="top-right" richColors closeButton />
           </CartProvider>
         </AuthProvider>
       </body>

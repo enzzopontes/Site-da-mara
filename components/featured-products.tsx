@@ -5,36 +5,71 @@ import { Button } from "@/components/ui/button"
 import { ScrollReveal } from "@/components/ui/scroll-reveal"
 import { ProductCard } from "@/components/product-card"
 import { ChevronRight, Sparkles, Tag, Flame } from "lucide-react"
+import { DEFAULT_CATEGORIES, type Category } from "@/lib/categories-db"
+import { normalizeLegacyCategorySlug } from "@/lib/category-icons"
 import type { Product } from "@/lib/products-db"
 
-interface FeaturedProductsProps {
+export interface FeaturedCategorySection {
+  category: Category
+  products: Product[]
+  showRanking: boolean
+}
+
+export interface FeaturedProductsProps {
   products?: Product[]
+  featuredSections?: FeaturedCategorySection[]
+  categoryRulesBySlug?: Record<string, { allowsAddons: boolean; allowsNotes: boolean }>
+  mostRequestedProductId?: string | null
   topBatatas?: Product[]
   topMacarrao?: Product[]
-  mostRequestedProductId?: string
   topBatatasNames?: string[]
   topMacarraoNames?: string[]
 }
 
 export function FeaturedProducts({
   products = [],
+  featuredSections,
+  categoryRulesBySlug,
   topBatatas,
   topMacarrao,
   mostRequestedProductId,
 }: FeaturedProductsProps) {
-  // Lista de batatas e macarrão separadas com fallback
+  // Lista de batatas e macarrão separadas com fallback legado quando featuredSections não é passado
   const batatasList =
     topBatatas && topBatatas.length > 0
       ? topBatatas
-      : products.filter((p) => p.category === "batata" || !p.category)
+      : products.filter((p) => normalizeLegacyCategorySlug(p.category) === "batata" || !p.category)
 
   const macarraoList =
     topMacarrao && topMacarrao.length > 0
       ? topMacarrao
-      : products.filter((p) => p.category === "macarrao")
+      : products.filter((p) => normalizeLegacyCategorySlug(p.category) === "macarrao")
+
+  const defaultBatataCategory =
+    DEFAULT_CATEGORIES.find((c) => c.slug === "batata") ?? DEFAULT_CATEGORIES[1]
+  const defaultMacarraoCategory =
+    DEFAULT_CATEGORIES.find((c) => c.slug === "macarrao") ?? DEFAULT_CATEGORIES[2]
+
+  const effectiveSections: FeaturedCategorySection[] = (
+    featuredSections !== undefined
+      ? featuredSections
+      : [
+          {
+            category: defaultBatataCategory,
+            products: batatasList,
+            showRanking: true,
+          },
+          {
+            category: defaultMacarraoCategory,
+            products: macarraoList,
+            showRanking: true,
+          },
+        ]
+  ).filter((section) => section.products.length > 0)
 
   // Todos os produtos agregados
-  const allAvailableProducts = [...batatasList, ...macarraoList, ...products].filter(
+  const sectionProducts = effectiveSections.flatMap((section) => section.products)
+  const allAvailableProducts = [...sectionProducts, ...products].filter(
     (item, index, self) => index === self.findIndex((t) => t.id === item.id),
   )
 
@@ -93,7 +128,12 @@ export function FeaturedProducts({
                 >
                   <ProductCard
                     product={product}
-                    isMostRequested={product.id === mostRequestedProductId}
+                    isMostRequested={Boolean(
+                      mostRequestedProductId && product.id === mostRequestedProductId,
+                    )}
+                    categoryRules={
+                      categoryRulesBySlug?.[normalizeLegacyCategorySlug(product.category)]
+                    }
                     layout="vertical"
                   />
                 </div>
@@ -134,7 +174,13 @@ export function FeaturedProducts({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               {displayPromos.map((product) => (
                 <ScrollReveal key={`promo-${product.id}`} className="grid">
-                  <ProductCard product={product} layout="horizontal" />
+                  <ProductCard
+                    product={product}
+                    categoryRules={
+                      categoryRulesBySlug?.[normalizeLegacyCategorySlug(product.category)]
+                    }
+                    layout="horizontal"
+                  />
                 </ScrollReveal>
               ))}
             </div>
@@ -142,115 +188,103 @@ export function FeaturedProducts({
         )}
 
         {/* ========================================================
-            SEÇÃO 3: Batatas Recheadas Mais Pedidas (Grid Padronizado)
+            SEÇÕES DINÂMICAS POR CATEGORIA (Grid Padronizado)
            ======================================================== */}
-        {batatasList.length > 0 && (
-          <div>
-            <ScrollReveal className="flex items-center justify-between gap-4 mb-4 sm:mb-6 pb-3 border-b border-[#ECE7E0]">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="p-1.5 rounded-lg bg-[#FEF8EC] text-[#8A6100]">
-                    <Flame className="w-4 h-4 fill-[#E3A008] text-[#E3A008]" />
-                  </span>
-                  <h2 className="text-lg sm:text-xl font-bold text-[#1F1B16] tracking-tight">
-                    Batatas Recheadas Mais Pedidas
-                  </h2>
+        {effectiveSections.map((section, sectionIdx) => {
+          const cat = section.category
+          const slugNorm = normalizeLegacyCategorySlug(cat.slug)
+          const title =
+            slugNorm === "batata"
+              ? "Batatas Recheadas Mais Pedidas"
+              : slugNorm === "macarrao"
+              ? "Massas e Macarrão Mais Pedidos"
+              : section.showRanking
+              ? `${cat.name} Mais Pedidos`
+              : cat.name
+          const ctaLabel =
+            slugNorm === "batata"
+              ? "Ver todas as batatas"
+              : slugNorm === "macarrao"
+              ? "Ver todas as massas"
+              : "Ver todas"
+          const showFlameBadge = slugNorm === "batata" || (sectionIdx === 0 && slugNorm !== "macarrao")
+
+          return (
+            <div key={cat.id}>
+              <ScrollReveal className="flex items-center justify-between gap-4 mb-4 sm:mb-6 pb-3 border-b border-[#ECE7E0]">
+                <div>
+                  <div className="flex items-center gap-2">
+                    {showFlameBadge && (
+                      <span className="p-1.5 rounded-lg bg-[#FEF8EC] text-[#8A6100]">
+                        <Flame className="w-4 h-4 fill-[#E3A008] text-[#E3A008]" />
+                      </span>
+                    )}
+                    <h2 className="text-lg sm:text-xl font-bold text-[#1F1B16] tracking-tight">
+                      {title}
+                    </h2>
+                    {cat.badge_text && (
+                      <span
+                        style={{ backgroundColor: cat.badge_color || "#C1440E" }}
+                        className="inline-flex items-center text-white uppercase tracking-wide text-[10px] font-extrabold px-2 py-0.5 rounded-full leading-none shadow-2xs"
+                      >
+                        {cat.badge_text}
+                      </span>
+                    )}
+                  </div>
+                  {cat.description && (
+                    <p className="text-xs text-[#6B6157] mt-0.5">{cat.description}</p>
+                  )}
                 </div>
-                <p className="text-xs text-[#6B6157] mt-0.5">
-                  As queridinhas de Iacanga, recheadas na medida certa com muito sabor
-                </p>
+
+                <Link
+                  href={`/cardapio?category=${encodeURIComponent(cat.slug)}`}
+                  className="shrink-0"
+                >
+                  <span className="text-xs font-bold text-[#C1440E] hover:text-[#E3A008] flex items-center gap-0.5 transition-colors">
+                    {ctaLabel}
+                    <ChevronRight className="w-4 h-4" />
+                  </span>
+                </Link>
+              </ScrollReveal>
+
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+                {section.products.map((product, idx) => (
+                  <ScrollReveal key={`${cat.id}-${product.id}`} className="relative group">
+                    {section.showRanking && (
+                      <div className="absolute top-2 left-2 z-10 pointer-events-none">
+                        <span
+                          className={`inline-flex items-center justify-center font-black text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full shadow-2xs ${
+                            idx === 0
+                              ? "bg-[#E3A008] text-white"
+                              : idx === 1
+                              ? "bg-[#C1440E] text-white"
+                              : idx === 2
+                              ? "bg-[#8A6100] text-white"
+                              : "bg-white/95 text-[#6B6157] border border-[#ECE7E0]"
+                          }`}
+                        >
+                          {idx + 1}º
+                        </span>
+                      </div>
+                    )}
+                    <ProductCard
+                      product={product}
+                      rank={null}
+                      isMostRequested={Boolean(
+                        mostRequestedProductId && product.id === mostRequestedProductId,
+                      )}
+                      categoryRules={{
+                        allowsAddons: cat.allows_addons,
+                        allowsNotes: cat.allows_notes,
+                      }}
+                      layout="vertical"
+                    />
+                  </ScrollReveal>
+                ))}
               </div>
-
-              <Link href="/cardapio" className="shrink-0">
-                <span className="text-xs font-bold text-[#C1440E] hover:text-[#E3A008] flex items-center gap-0.5 transition-colors">
-                  Ver todas as batatas
-                  <ChevronRight className="w-4 h-4" />
-                </span>
-              </Link>
-            </ScrollReveal>
-
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
-              {batatasList.map((product, index) => (
-                <ScrollReveal key={product.id} className="relative group">
-                  <div className="absolute top-2 left-2 z-10 pointer-events-none">
-                    <span
-                      className={`inline-flex items-center justify-center font-black text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full shadow-2xs ${
-                        index === 0
-                          ? "bg-[#E3A008] text-white"
-                          : index === 1
-                          ? "bg-[#C1440E] text-white"
-                          : index === 2
-                          ? "bg-[#8A6100] text-white"
-                          : "bg-white/95 text-[#6B6157] border border-[#ECE7E0]"
-                      }`}
-                    >
-                      {index + 1}º
-                    </span>
-                  </div>
-                  <ProductCard
-                    product={product}
-                    rank={null}
-                    isMostRequested={product.id === mostRequestedProductId}
-                    layout="vertical"
-                  />
-                </ScrollReveal>
-              ))}
             </div>
-          </div>
-        )}
-
-        {/* ========================================================
-            SEÇÃO 4: Massas e Macarrão Mais Pedidos
-           ======================================================== */}
-        {macarraoList.length > 0 && (
-          <div>
-            <ScrollReveal className="flex items-center justify-between gap-4 mb-4 sm:mb-6 pb-3 border-b border-[#ECE7E0]">
-              <div>
-                <h2 className="text-lg sm:text-xl font-bold text-[#1F1B16] tracking-tight">
-                  Massas e Macarrão Mais Pedidos
-                </h2>
-                <p className="text-xs text-[#6B6157] mt-0.5">
-                  Macarrão artesanal preparado na hora com molhos especiais e queijo derretido
-                </p>
-              </div>
-
-              <Link href="/cardapio" className="shrink-0">
-                <span className="text-xs font-bold text-[#C1440E] hover:text-[#E3A008] flex items-center gap-0.5 transition-colors">
-                  Ver todas as massas
-                  <ChevronRight className="w-4 h-4" />
-                </span>
-              </Link>
-            </ScrollReveal>
-
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
-              {macarraoList.map((product, index) => (
-                <ScrollReveal key={product.id} className="relative group">
-                  <div className="absolute top-2 left-2 z-10 pointer-events-none">
-                    <span
-                      className={`inline-flex items-center justify-center font-black text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full shadow-2xs ${
-                        index === 0
-                          ? "bg-[#E3A008] text-white"
-                          : index === 1
-                          ? "bg-[#C1440E] text-white"
-                          : index === 2
-                          ? "bg-[#8A6100] text-white"
-                          : "bg-white/95 text-[#6B6157] border border-[#ECE7E0]"
-                      }`}
-                    >
-                      {index + 1}º
-                    </span>
-                  </div>
-                  <ProductCard
-                    product={product}
-                    rank={null}
-                    isMostRequested={product.id === mostRequestedProductId}
-                    layout="vertical"
-                  />
-                </ScrollReveal>
-              ))}
-            </div>
-          </div>
-        )}
+          )
+        })}
 
         {/* Banner de Personalização / Montar do seu jeito */}
         <ScrollReveal className="rounded-2xl bg-[#F7F4EF] border border-[#ECE7E0] p-6 text-center flex flex-col sm:flex-row items-center justify-between gap-4">

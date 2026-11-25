@@ -31,7 +31,7 @@ export interface Product {
   description: string
   price: number
   image: string
-  category?: "batata" | "bebida" | "macarrao"
+  category?: string
   available?: boolean
   adicionais?: Adicional[]
 }
@@ -49,6 +49,7 @@ interface AddToCartDialogProps {
   product: Product
   open: boolean
   onOpenChange: (open: boolean) => void
+  categoryRules?: { allowsAddons?: boolean; allowsNotes?: boolean }
   editMode?: boolean
   initialQuantity?: number
   initialObservacoes?: string
@@ -249,6 +250,7 @@ export function AddToCartDialog({
   product,
   open,
   onOpenChange,
+  categoryRules,
   editMode = false,
   initialQuantity,
   initialObservacoes,
@@ -281,6 +283,8 @@ export function AddToCartDialog({
     product.name.toLowerCase().includes("coca-cola") ||
     product.name.toLowerCase().includes("fanta")
 
+  const allowsAddons = categoryRules?.allowsAddons ?? !isBebida
+  const allowsNotes = categoryRules?.allowsNotes ?? true
   const isMacarrao = product.category === "macarrao"
   const isUnavailable = product.available === false
   const resolvedPromoPrice = useMemo(
@@ -345,12 +349,15 @@ export function AddToCartDialog({
       }
       setFraseIndices(randomMap)
 
-      if (product.adicionais && product.adicionais.length > 0) {
+      if (!allowsAddons) {
+        setAdicionaisDisponiveis([])
+        setSelectedAdicionais({})
+      } else if (product.adicionais && product.adicionais.length > 0) {
         setAdicionaisDisponiveis(product.adicionais)
         setSelectedAdicionais(
           editMode ? buildHydratedAdicionais(product.adicionais, initialAdicionais) : {}
         )
-      } else if (!isBebida) {
+      } else {
         setSelectedAdicionais(
           editMode && adicionaisDisponiveis.length > 0
             ? buildHydratedAdicionais(adicionaisDisponiveis, initialAdicionais)
@@ -369,11 +376,9 @@ export function AddToCartDialog({
             }
           })
           .catch((err) => console.error("Erro ao carregar adicionais:", err))
-      } else {
-        setSelectedAdicionais({})
       }
 
-      if (!isBebida && !editMode) {
+      if (allowsAddons && !editMode) {
         const fetchDrinks = async () => {
           try {
             const supabase = createBrowserClient()
@@ -431,7 +436,7 @@ export function AddToCartDialog({
     return () => {
       cancelled = true
     }
-  }, [open, product.id, product.adicionais, isBebida, editMode])
+  }, [open, product.id, product.adicionais, allowsAddons, editMode])
 
   const updateAdicionalQuantity = (id: string, delta: number) => {
     userInteractedAdicionaisRef.current = true
@@ -528,10 +533,10 @@ export function AddToCartDialog({
       return
     }
 
-    const trimmedObservacoes = observacoes.trim() || undefined
+    const trimmedObservacoes = allowsNotes ? observacoes.trim() || undefined : undefined
 
     if (editMode) {
-      const adicionais = isBebida
+      const adicionais = !allowsAddons
         ? []
         : Object.entries(selectedAdicionais)
             .map(([id, qty]) => {
@@ -559,7 +564,7 @@ export function AddToCartDialog({
 
     // Intercepta ação de adicionar: exige login obrigatório antes de prosseguir
     if (!user) {
-      const adicionaisPayload = isBebida
+      const adicionaisPayload = !allowsAddons
         ? []
         : Object.entries(selectedAdicionais)
             .map(([id, qty]) => {
@@ -574,7 +579,7 @@ export function AddToCartDialog({
             })
             .filter(Boolean) as Array<{ id: string; name: string; price: number; quantity: number }>
 
-      const bebidasPayload = !isBebida
+      const bebidasPayload = allowsAddons
         ? Object.entries(selectedBebidas)
             .map(([bebidaId, qty]) => {
               if (qty <= 0) return null
@@ -618,7 +623,7 @@ export function AddToCartDialog({
       return
     }
 
-    const adicionais = isBebida
+    const adicionais = !allowsAddons
       ? []
       : Object.entries(selectedAdicionais)
           .map(([id, qty]) => {
@@ -639,13 +644,13 @@ export function AddToCartDialog({
       price: basePrice,
       image: product.image,
       quantity: quantity,
-      category: product.category || "batata",
+      category: (product.category || "batata") as any,
       pastaType: isMacarrao ? pastaType : undefined,
       observacoes: trimmedObservacoes,
       adicionais,
     })
 
-    if (!isBebida) {
+    if (allowsAddons) {
       Object.entries(selectedBebidas).forEach(([bebidaId, qty]) => {
         if (qty > 0) {
           const bebida = bebidasDisponiveis.find((b) => b.id === bebidaId)
@@ -799,7 +804,7 @@ export function AddToCartDialog({
             )}
 
             {/* SEÇÃO DE ADICIONAIS AGRUPADOS ESTILO IFOOD (COM FRASES EM RODÍZIO IDÊNTICAS AO APP) */}
-            {!isBebida && activeCategories.length > 0 && (
+            {allowsAddons && activeCategories.length > 0 && (
               <div className="space-y-4 pt-1">
                 <div className="flex items-center justify-between">
                   <h4 className="text-[16px] font-black text-[#1F1B16]">Adicionais</h4>
@@ -888,7 +893,7 @@ export function AddToCartDialog({
             )}
 
             {/* SEÇÃO DE CROSS-SELL DE BEBIDAS (EMBAIXO DOS ADICIONAIS COM RODÍZIO DE FRASES) */}
-            {!isBebida && !editMode && bebidasDisponiveis.length > 0 && (
+            {allowsAddons && !editMode && bebidasDisponiveis.length > 0 && (
               <div className="space-y-2 pt-1">
                 {/* BANNER DE CABEÇALHO */}
                 <div className="-mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-[#F7F5F1] border-y border-gray-100">
@@ -971,17 +976,19 @@ export function AddToCartDialog({
             )}
 
             {/* CAMPO DE OBSERVAÇÕES */}
-            <div className="space-y-2 pt-1">
-              <h4 className="text-[16px] font-black text-[#1F1B16]">Observações</h4>
-              <textarea
-                data-vaul-no-drag
-                value={observacoes}
-                onChange={(e) => setObservacoes(e.target.value)}
-                rows={3}
-                placeholder="Ex: sem cebola, maionese à parte..."
-                className="w-full p-4 bg-[#F7F5F1]/70 border border-gray-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#E3A008] focus:border-transparent transition-all text-sm text-[#1F1B16] placeholder:text-gray-400 resize-none"
-              />
-            </div>
+            {allowsNotes && (
+              <div className="space-y-2 pt-1">
+                <h4 className="text-[16px] font-black text-[#1F1B16]">Observações</h4>
+                <textarea
+                  data-vaul-no-drag
+                  value={observacoes}
+                  onChange={(e) => setObservacoes(e.target.value)}
+                  rows={3}
+                  placeholder="Ex: sem cebola, maionese à parte..."
+                  className="w-full p-4 bg-[#F7F5F1]/70 border border-gray-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#E3A008] focus:border-transparent transition-all text-sm text-[#1F1B16] placeholder:text-gray-400 resize-none"
+                />
+              </div>
+            )}
           </div>
         </div>
 

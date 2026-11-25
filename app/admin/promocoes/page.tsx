@@ -24,6 +24,8 @@ import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import Link from "next/link"
 import { productsManager, Product } from "@/lib/products-db"
+import { fetchCategoriesFromDb, DEFAULT_CATEGORIES, matchProductToCategory, type Category } from "@/lib/categories-db"
+import { normalizeLegacyCategorySlug } from "@/lib/category-icons"
 import { imageUploadManager, UploadedImage } from "@/lib/image-upload-manager"
 import {
   Dialog,
@@ -35,6 +37,10 @@ import {
 } from "@/components/ui/dialog"
 
 import { isAdmin as checkIsAdminRole } from "@/lib/supabase/admin"
+
+const DEFAULT_PRODUCT_CATEGORIES: Category[] = DEFAULT_CATEGORIES.filter(
+  (c) => c.kind === "product_category",
+).sort((a, b) => a.menu_order - b.menu_order)
 
 interface PromoProduct {
   productId: string
@@ -91,7 +97,8 @@ export default function AdminPromocoesPage() {
   const [isSuperPromoModalOpen, setIsSuperPromoModalOpen] = useState(false)
   const [isItemPromoModalOpen, setIsItemPromoModalOpen] = useState(false)
   const [searchFilter, setSearchFilter] = useState("")
-  const [categoryFilter, setCategoryFilter] = useState<"todos" | "batata" | "macarrao">("todos")
+  const [categories, setCategories] = useState<Category[]>(DEFAULT_PRODUCT_CATEGORIES)
+  const [categoryFilter, setCategoryFilter] = useState<string>("todos")
 
   useEffect(() => {
     if (!loading) {
@@ -105,6 +112,7 @@ export default function AdminPromocoesPage() {
             if (allowed) {
               setIsAdmin(true)
               loadPromoStatus()
+              loadCategories()
               loadProducts()
               loadImages()
             } else {
@@ -121,6 +129,16 @@ export default function AdminPromocoesPage() {
       }
     }
   }, [user, loading, router])
+
+  const loadCategories = async () => {
+    try {
+      const loaded = await fetchCategoriesFromDb({ kind: "product_category" })
+      const source = loaded.length > 0 ? loaded : DEFAULT_PRODUCT_CATEGORIES
+      setCategories([...source].sort((a, b) => a.menu_order - b.menu_order))
+    } catch {
+      setCategories(DEFAULT_PRODUCT_CATEGORIES)
+    }
+  }
 
   const loadProducts = async () => {
     try {
@@ -383,14 +401,24 @@ export default function AdminPromocoesPage() {
 
   // Filtro de produtos para o modal
   const eligibleProducts = useMemo(() => {
+    const selectedCategory =
+      categoryFilter !== "todos"
+        ? categories.find((c) => c.slug === categoryFilter)
+        : undefined
+
     return allProducts
-      .filter(p => p.category === "batata" || p.category === "macarrao")
-      .filter(p => {
+      .filter((p) => {
         if (categoryFilter === "todos") return true
-        return p.category === categoryFilter
+        if (selectedCategory) {
+          return matchProductToCategory(
+            p as Product & { category_id?: string | null; categoryId?: string | null },
+            selectedCategory,
+          )
+        }
+        return normalizeLegacyCategorySlug(p.category) === normalizeLegacyCategorySlug(categoryFilter)
       })
-      .filter(p => p.name.toLowerCase().includes(searchFilter.toLowerCase()))
-  }, [allProducts, categoryFilter, searchFilter])
+      .filter((p) => p.name.toLowerCase().includes(searchFilter.toLowerCase()))
+  }, [allProducts, categories, categoryFilter, searchFilter])
 
   // Contadores para o dashboard iFood
   const totalActivePromos = (superPromo.isActive ? 1 : 0) + (itemPromo.isActive ? 1 : 0)
@@ -428,6 +456,7 @@ export default function AdminPromocoesPage() {
                 size="sm"
                 onClick={() => {
                   loadPromoStatus()
+                  loadCategories()
                   loadProducts()
                   loadImages()
                   appToast.success("Dados sincronizados com o servidor!")
@@ -1096,19 +1125,30 @@ export default function AdminPromocoesPage() {
                 </Label>
 
                 {/* Filter Category Tabs */}
-                <div className="flex gap-1.5">
-                  {(["todos", "batata", "macarrao"] as const).map(cat => (
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setCategoryFilter("todos")}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
+                      categoryFilter === "todos"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                  >
+                    Todos
+                  </button>
+                  {categories.map((cat) => (
                     <button
-                      key={cat}
+                      key={cat.id}
                       type="button"
-                      onClick={() => setCategoryFilter(cat)}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold capitalize transition-colors ${
-                        categoryFilter === cat 
-                          ? "bg-blue-600 text-white" 
+                      onClick={() => setCategoryFilter(cat.slug)}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
+                        categoryFilter === cat.slug
+                          ? "bg-blue-600 text-white"
                           : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                       }`}
                     >
-                      {cat}
+                      {cat.name}
                     </button>
                   ))}
                 </div>
@@ -1159,7 +1199,12 @@ export default function AdminPromocoesPage() {
                               R$ {Number(product.price).toFixed(2)}
                             </span>
                             <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
-                              {product.category}
+                              {categories.find((c) =>
+                                matchProductToCategory(
+                                  product as Product & { category_id?: string | null; categoryId?: string | null },
+                                  c,
+                                ),
+                              )?.name || product.category}
                             </span>
                           </div>
                         </div>

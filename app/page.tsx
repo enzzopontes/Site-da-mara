@@ -3,22 +3,31 @@ import { Hero } from "@/components/hero"
 import { CampaignBanner } from "@/components/campaign-banner"
 import { CategoryBar } from "@/components/category-bar"
 import { HomeCouponBanner } from "@/components/home-coupon-banner"
-import { FeaturedProducts } from "@/components/featured-products"
+import { FeaturedProducts, type FeaturedCategorySection } from "@/components/featured-products"
 import { Footer } from "@/components/footer"
 import { ScrollReveal } from "@/components/ui/scroll-reveal"
 import { OrderSummary } from "@/components/order-summary"
-import { productsManager } from "@/lib/products-db"
+import { productsManager, type Product } from "@/lib/products-db"
 import { couponsManager } from "@/lib/cupons-manager"
+import { getCachedActiveCategories } from "@/lib/categories-server"
+import {
+  DEFAULT_CATEGORIES,
+  getHomeBarCategories,
+  getHomeFeaturedCategories,
+  matchProductToCategory,
+} from "@/lib/categories-db"
+import { normalizeLegacyCategorySlug } from "@/lib/category-icons"
 
 // ISR: revalidação a cada 60 segundos para carregamento instantâneo no mobile sem onerar o banco
 export const revalidate = 60
 
 export default async function Home() {
   // Busca em paralelo com tolerância a falhas
-  const [batatas, macarrao, mostRequestedData, totalCustomers, topBatatasNames, topMacarraoNames, allCoupons] =
+  const [categories, allProducts, rankingNames, mostRequestedData, totalCustomers, allCoupons] =
     await Promise.all([
-      productsManager.getBatatas().catch(() => [] as any[]),
-      productsManager.getMacarrao().catch(() => [] as any[]),
+      getCachedActiveCategories().catch(() => DEFAULT_CATEGORIES),
+      productsManager.getProducts().catch(() => [] as Product[]),
+      productsManager.getGlobalRankingNames(60).catch(() => [] as string[]),
       productsManager.getMostRequestedProduct().catch(() => ({
         product: {
           id: "default",
@@ -31,37 +40,81 @@ export default async function Home() {
         customerPhotos: [],
       })),
       productsManager.getTotalCustomers().catch(() => 0),
-      productsManager.getRealRankingByCategory("batata").catch(() => [] as string[]),
-      productsManager.getRealRankingByCategory("macarrao").catch(() => [] as string[]),
       couponsManager.getCoupons().catch(() => [] as any[]),
     ])
 
   const activeCoupons = allCoupons.filter((c: any) => c.isActive)
   const homeCoupon = activeCoupons.find((c: any) => c.showOnHome) || activeCoupons[0]
 
-  // Ordena batatas pelo ranking real (exibe até 8 no destaque)
-  const topBatatas = [...batatas]
-    .sort((a, b) => {
-      const indexA = topBatatasNames.indexOf(a.name)
-      const indexB = topBatatasNames.indexOf(b.name)
-      if (indexA === -1 && indexB === -1) return 0
-      if (indexA === -1) return 1
-      if (indexB === -1) return -1
-      return indexA - indexB
-    })
-    .slice(0, 8)
+  const availableProducts = allProducts.filter((p) => p.available !== false)
 
-  // Ordena macarrão pelo ranking real (exibe até 4 no destaque)
-  const topMacarrao = [...macarrao]
-    .sort((a, b) => {
-      const indexA = topMacarraoNames.indexOf(a.name)
-      const indexB = topMacarraoNames.indexOf(b.name)
-      if (indexA === -1 && indexB === -1) return 0
-      if (indexA === -1) return 1
-      if (indexB === -1) return -1
-      return indexA - indexB
+  // Conta produtos ativos por slug normalizado (incluindo vínculo direto via category_id)
+  const categorySlugById = new Map<string, string>()
+  for (const cat of categories) {
+    if (cat.kind === "product_category") {
+      categorySlugById.set(cat.id, normalizeLegacyCategorySlug(cat.slug))
+    }
+  }
+
+  const activeCountsBySlug: Record<string, number> = {}
+  for (const product of availableProducts) {
+    const prodCatId = product.categoryId ?? product.category_id
+    const mappedSlug = prodCatId ? categorySlugById.get(prodCatId) : undefined
+    const legacySlug = normalizeLegacyCategorySlug(product.category)
+
+    if (mappedSlug) {
+      activeCountsBySlug[mappedSlug] = (activeCountsBySlug[mappedSlug] ?? 0) + 1
+    }
+    if (legacySlug && legacySlug !== mappedSlug) {
+      activeCountsBySlug[legacySlug] = (activeCountsBySlug[legacySlug] ?? 0) + 1
+    }
+  }
+
+  const homeBarItems = getHomeBarCategories(categories, activeCountsBySlug)
+  const featuredCategories = getHomeFeaturedCategories(categories, activeCountsBySlug)
+
+  const rankIndexMap = new Map(rankingNames.map((n, i) => [n.toLowerCase().trim(), i]))
+
+  // Monta seções dinâmicas em destaque ordenadas pelo ranking real quando habilitado
+  const featuredSections: FeaturedCategorySection[] = featuredCategories
+    .map((cat) => {
+      const matched = availableProducts.filter((p) => matchProductToCategory(p, cat))
+      const ordered = cat.show_ranking
+        ? [...matched].sort((a, b) => {
+            const rankA = rankIndexMap.get(a.name.toLowerCase().trim()) ?? Infinity
+            const rankB = rankIndexMap.get(b.name.toLowerCase().trim()) ?? Infinity
+            return rankA - rankB
+          })
+        : matched
+      return {
+        category: cat,
+        products: ordered.slice(0, cat.home_featured_limit),
+        showRanking: cat.show_ranking,
+      }
     })
-    .slice(0, 4)
+    .filter((section) => section.products.length > 0)
+
+  const categoryRulesBySlug: Record<string, { allowsAddons: boolean; allowsNotes: boolean }> = {}
+  for (const cat of categories) {
+    if (cat.kind === "product_category") {
+      categoryRulesBySlug[normalizeLegacyCategorySlug(cat.slug)] = {
+        allowsAddons: cat.allows_addons,
+        allowsNotes: cat.allows_notes,
+      }
+    }
+  }
+
+  const sidebarSlugs = new Set(
+    categories
+      .filter((c) => c.menu_layout_zone === "sidebar_right")
+      .map((c) => normalizeLegacyCategorySlug(c.slug)),
+  )
+  const homeShowcaseProducts = availableProducts.filter((p) => {
+    const slug = normalizeLegacyCategorySlug(p.category)
+    return !sidebarSlugs.has(slug) && slug !== "bebida"
+  })
+
+  const mostRequested = mostRequestedData.product
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F5F0] text-[#1A1A1A] antialiased">
@@ -85,7 +138,7 @@ export default async function Home() {
 
         {/* Barra de Categorias Rápidas (Chips estilo iFood com espaço reservado CLS = 0) */}
         <section aria-label="Navegação por categorias" className="w-full min-h-[60px] bg-white">
-          <CategoryBar />
+          <CategoryBar items={homeBarItems} />
         </section>
 
         {/* Carrossel Rotativo de Cupons da Home (Estilo Mobile iFood) */}
@@ -103,11 +156,10 @@ export default async function Home() {
 
         {/* Blocos de Produtos em Destaque divididos por categoria */}
         <FeaturedProducts
-          topBatatas={topBatatas}
-          topMacarrao={topMacarrao}
-          mostRequestedProductId={mostRequestedData.product.id}
-          topBatatasNames={topBatatasNames}
-          topMacarraoNames={topMacarraoNames}
+          products={homeShowcaseProducts}
+          featuredSections={featuredSections}
+          categoryRulesBySlug={categoryRulesBySlug}
+          mostRequestedProductId={mostRequested?.id}
         />
       </main>
 
