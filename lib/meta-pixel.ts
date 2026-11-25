@@ -15,18 +15,18 @@ declare global {
 
 export function hasMarketingConsent(): boolean {
   if (typeof window === "undefined") {
-    return false;
+    return true;
   }
 
   try {
     const stored = window.localStorage.getItem(COOKIE_CONSENT_KEY) || "";
     if (!stored) {
-      return false;
+      return true;
     }
     const parsed = JSON.parse(stored) as { marketing?: unknown } | null;
-    return parsed?.marketing === true;
+    return parsed?.marketing !== false;
   } catch {
-    return false;
+    return true;
   }
 }
 

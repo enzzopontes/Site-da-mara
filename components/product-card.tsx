@@ -6,6 +6,7 @@ import { AddToCartDialog } from "@/components/add-to-cart-dialog"
 import { useCart } from "@/lib/cart-context"
 import { useAuth } from "@/lib/auth-context"
 import { appToast } from "@/lib/app-toast"
+import { trackViewContent } from "@/lib/meta-pixel"
 import { storeStatusManager } from "@/lib/store-status-manager"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -115,6 +116,12 @@ export function ProductCard({
   const handleAddClick = () => {
     // Checkout e carrinho utilizam EXCLUSIVAMENTE o preço final de venda (currentPrice)
     if (user && product.category === "bebida") {
+      trackViewContent({
+        id: product.id,
+        name: product.name,
+        category: "bebida",
+        value: currentPrice,
+      })
       addItem({
         id: product.id,
         name: product.name,

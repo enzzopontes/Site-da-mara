@@ -32,8 +32,8 @@ function MetaPixelRouteTracker() {
 }
 
 export function MetaPixel() {
-  const [marketingAllowed, setMarketingAllowed] = useState(false);
-  const prevAllowedRef = useRef(false);
+  const [marketingAllowed, setMarketingAllowed] = useState(true);
+  const prevAllowedRef = useRef(true);
 
   useEffect(() => {
     const syncConsent = () => {
