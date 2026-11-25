@@ -253,8 +253,8 @@ export function RestaurantHeaderCard({
                 </div>
               </div>
 
-              {/* Linha 3: Chips Informativos - Horizontal sem quebrar múltiplas linhas no mobile */}
-              <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-0.5 mt-1.5 text-xs text-[#525252] w-full">
+              {/* Linha 3: Chips Informativos - Quebra limpa no mobile sem corte lateral */}
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 py-0.5 mt-1.5 text-xs text-[#525252] w-full">
                 {/* Tempo de Preparo */}
                 <div className="inline-flex items-center gap-1 bg-[#F9F7F2] px-2.5 py-0.5 sm:py-1 rounded-full text-[11px] sm:text-xs font-semibold text-[#1F1B16] border border-[#EFECE6] shrink-0">
                   <Clock className="w-3.5 h-3.5 text-[#E3A008]" />
@@ -289,14 +289,12 @@ export function RestaurantHeaderCard({
           {/* BOTÕES DE AÇÃO */}
           <div className="flex sm:flex-col sm:items-end justify-end gap-2 shrink-0 pt-1.5 sm:pt-0 border-t sm:border-t-0 border-[#F0EDE6] w-full sm:w-auto">
             {/* Botão Primário Âmbar/Laranja Quente */}
-            <Link href="/cardapio" className="flex-1 sm:flex-none">
-              <button
-                type="button"
-                className="w-full sm:w-auto h-9 sm:h-11 bg-[#E3A008] hover:bg-[#C1440E] text-white font-bold text-xs sm:text-sm px-4 sm:px-5 rounded-xl shadow-xs hover:shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5"
-              >
-                <span>Fazer pedido</span>
-                <ChevronRight className="w-4 h-4 stroke-[2.5]" />
-              </button>
+            <Link
+              href="/cardapio"
+              className="flex-1 sm:flex-none w-full sm:w-auto h-9 sm:h-11 bg-[#E3A008] hover:bg-[#C1440E] text-white font-bold text-xs sm:text-sm px-4 sm:px-5 rounded-xl shadow-xs hover:shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5"
+            >
+              <span>Fazer pedido</span>
+              <ChevronRight className="w-4 h-4 stroke-[2.5]" />
             </Link>
 
             {/* Botão Secundário Outline/Ghost */}

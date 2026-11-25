@@ -182,7 +182,7 @@ export function Footer() {
                 />
               </div>
               <div className="text-xs text-gray-600 font-semibold">
-                © {new Date().getFullYear()} BATATA TOP DELIVERY. TODOS OS DIREITOS RESERVADOS.
+                © {new Intl.DateTimeFormat("en-US", { year: "numeric", timeZone: "America/Sao_Paulo" }).format(new Date())} BATATA TOP DELIVERY. TODOS OS DIREITOS RESERVADOS.
               </div>
             </div>
 

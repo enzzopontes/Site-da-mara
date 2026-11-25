@@ -237,7 +237,7 @@ export function ProductCard({
 
             <span
               aria-hidden="true"
-              className="absolute bottom-1.5 right-1.5 h-7 w-7 rounded-full bg-[#E3A008] text-white flex items-center justify-center shadow-md group-hover:bg-[#C1440E] transition-transform group-active:scale-90 pointer-events-none"
+              className="absolute bottom-1.5 right-1.5 h-7 w-7 rounded-full bg-[#C1440E] text-white flex items-center justify-center shadow-md group-hover:bg-[#9E350A] transition-transform group-active:scale-90 pointer-events-none"
             >
               <Plus className="w-4 h-4 stroke-[3]" />
             </span>
@@ -363,9 +363,9 @@ export function ProductCard({
             type="button"
             onClick={handleAddClick}
             aria-label={`Ver detalhes e adicionar ${product.name} ao pedido`}
-            className="shrink-0 h-7 w-7 sm:h-8 sm:w-auto sm:px-3 rounded-full sm:rounded-lg bg-[#E3A008] text-white sm:bg-[#FEF8EC] sm:border sm:border-[#E3A008] sm:text-[#A16207] hover:bg-[#E3A008] hover:text-white font-bold text-xs flex items-center justify-center gap-1 transition-all active:scale-95 shadow-xs focus-visible:outline-none after:absolute after:inset-0 after:content-[''] after:rounded-2xl"
+            className="shrink-0 h-8 w-8 sm:h-8 sm:w-auto sm:px-3 rounded-full sm:rounded-lg bg-[#C1440E] text-white sm:bg-[#FEF8EC] sm:border sm:border-[#E3A008] sm:text-[#8A4B00] hover:bg-[#9E350A] sm:hover:bg-[#E3A008] hover:text-white font-bold text-xs flex items-center justify-center gap-1 transition-all active:scale-95 shadow-sm focus-visible:outline-none after:absolute after:inset-0 after:z-10 after:content-[''] after:rounded-2xl"
           >
-            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+            <Plus className="w-4 h-4 sm:w-3.5 sm:h-3.5 stroke-[3] sm:stroke-[2.5]" />
             <span className="hidden sm:inline">Adicionar</span>
           </button>
         </div>

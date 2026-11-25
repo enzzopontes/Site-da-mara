@@ -24,15 +24,27 @@ export function HomeCouponBanner({
   const { getTotalPrice, subtotal, setCoupon } = useCart()
   const { user } = useAuth()
 
-  // Filtra apenas cupons ativos e não expirados, sem fallback fake
+  const [mountedNow, setMountedNow] = useState<number | null>(null)
+
+  useEffect(() => {
+    setMountedNow(Date.now())
+  }, [])
+
+  // Filtra apenas cupons ativos e não expirados de forma determinística entre SSR e cliente
   const displayCoupons = useMemo(() => {
-    const now = new Date()
+    const expiryFormatter = new Intl.DateTimeFormat("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      timeZone: "America/Sao_Paulo",
+    })
     const validCoupons = (coupons || []).filter((c) => {
       if (c.isActive === false || (c as any).active === false) return false
-      const exp = c.expiresAt ?? (c as any).expires_at
-      if (exp) {
-        const expDate = new Date(exp)
-        if (!isNaN(expDate.getTime()) && expDate < now) return false
+      if (mountedNow !== null) {
+        const exp = c.expiresAt ?? (c as any).expires_at
+        if (exp) {
+          const expDate = new Date(exp)
+          if (!isNaN(expDate.getTime()) && expDate.getTime() < mountedNow) return false
+        }
       }
       return true
     })
@@ -54,9 +66,7 @@ export function HomeCouponBanner({
       if (c.expiresAt) {
         const d = new Date(c.expiresAt)
         if (!isNaN(d.getTime())) {
-          const dia = String(d.getDate()).padStart(2, "0")
-          const mes = String(d.getMonth() + 1).padStart(2, "0")
-          expiryLabel = `Até ${dia}/${mes}`
+          expiryLabel = `Até ${expiryFormatter.format(d)}`
         }
       }
 
@@ -76,7 +86,7 @@ export function HomeCouponBanner({
         isExhausted,
       }
     })
-  }, [coupons])
+  }, [coupons, mountedNow])
 
   const [currentIndex, setCurrentIndex] = useState(0)
   const [copiedCode, setCopiedCode] = useState<string | null>(null)

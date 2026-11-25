@@ -19,20 +19,23 @@ export default async function SobrePage() {
       <main className="flex-1">
         
         {/* HERO DA PÁGINA SOBRE */}
-        <section className="relative py-20 md:py-32 overflow-hidden bg-yellow-500">
+        <section className="relative py-20 md:py-32 overflow-hidden bg-gradient-to-br from-[#F4B400] via-[#E3A008] to-[#D48A00]">
           <div className="absolute inset-0 opacity-10">
             <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/food.png')] opacity-20" />
           </div>
           <div className="container mx-auto px-4 relative z-10">
             <div className="max-w-3xl mx-auto text-center space-y-6">
-              <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-bold">
-                <Heart className="h-4 w-4 fill-current" />
+              <div className="inline-flex items-center gap-2 bg-[#1F1B16]/12 border border-[#1F1B16]/20 backdrop-blur-sm text-[#1F1B16] px-4 py-2 rounded-full text-sm font-extrabold">
+                <Heart className="h-4 w-4 fill-[#C1440E] text-[#C1440E]" />
                 Nossa História
               </div>
-              <h1 className="text-5xl md:text-7xl font-black text-white tracking-tight">
-                Muito Prazer, <br /> Somos a <span className="text-gray-900">batata top!</span>
+              <h1 className="text-5xl md:text-7xl font-black text-[#1F1B16] tracking-tight">
+                Muito Prazer, <br /> Somos a{" "}
+                <span className="inline-block bg-[#1F1B16] text-[#FEF8EC] px-4 py-1 rounded-2xl shadow-sm">
+                  batata top!
+                </span>
               </h1>
-              <p className="text-xl text-yellow-50 font-medium max-w-2xl mx-auto leading-relaxed">
+              <p className="text-xl text-[#2C241B] font-semibold max-w-2xl mx-auto leading-relaxed">
                 Paixão por batatas recheadas desde 2020, levando o melhor sabor de Iacanga direto para sua mesa.
               </p>
             </div>

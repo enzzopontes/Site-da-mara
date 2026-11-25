@@ -262,11 +262,12 @@ export function FeaturedProducts({
               Escolha seus recheios favoritos, adicionais generosos e monte sua batata personalizada.
             </p>
           </div>
-          <Link href="/cardapio" className="shrink-0 w-full sm:w-auto">
-            <Button className="w-full sm:w-auto h-11 bg-[#E3A008] hover:bg-[#B5860A] text-white font-bold text-sm px-6 rounded-xl shadow-xs transition-colors">
-              Abrir cardápio
-            </Button>
-          </Link>
+          <Button
+            asChild
+            className="shrink-0 w-full sm:w-auto h-11 bg-[#E3A008] hover:bg-[#B5860A] text-white font-bold text-sm px-6 rounded-xl shadow-xs transition-colors"
+          >
+            <Link href="/cardapio">Abrir cardápio</Link>
+          </Button>
         </ScrollReveal>
       </div>
     </section>

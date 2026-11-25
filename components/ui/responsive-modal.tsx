@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { Drawer as VaulDrawer } from "vaul"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { X } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -30,9 +29,6 @@ export function ResponsiveModal({
   children,
   open,
   onOpenChange,
-  shouldScaleBackground = false,
-  dismissible = true,
-  nested = false,
 }: ResponsiveModalProps) {
   const isMobile = useIsMobile()
   const [mounted, setMounted] = React.useState(false)
@@ -41,28 +37,10 @@ export function ResponsiveModal({
     setMounted(true)
   }, [])
 
-  // Se ainda não montou no cliente, sincroniza sem quebrar hidratação
   const activeIsMobile = mounted ? isMobile : false
 
-  if (activeIsMobile) {
-    return (
-      <ResponsiveModalContext.Provider value={{ isMobile: true }}>
-        <VaulDrawer.Root
-          open={open}
-          onOpenChange={onOpenChange}
-          shouldScaleBackground={shouldScaleBackground}
-          dismissible={dismissible}
-          nested={nested}
-          repositionInputs={false}
-        >
-          {children}
-        </VaulDrawer.Root>
-      </ResponsiveModalContext.Provider>
-    )
-  }
-
   return (
-    <ResponsiveModalContext.Provider value={{ isMobile: false }}>
+    <ResponsiveModalContext.Provider value={{ isMobile: activeIsMobile }}>
       <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
         {children}
       </DialogPrimitive.Root>
@@ -73,10 +51,6 @@ export function ResponsiveModal({
 export function ResponsiveModalTrigger({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Trigger>) {
-  const { isMobile } = useResponsiveModal()
-  if (isMobile) {
-    return <VaulDrawer.Trigger {...props} />
-  }
   return <DialogPrimitive.Trigger {...props} />
 }
 
@@ -113,78 +87,26 @@ export const ResponsiveModalContent = React.forwardRef<
       () => innerRef.current as HTMLDivElement
     )
 
-    // Garante data-vaul-no-drag em todos os inputs e controles para prevenir bugs de arraste e teclado
-    React.useEffect(() => {
-      if (!isMobile || !innerRef.current) return
-
-      const markNoDrag = () => {
-        if (!innerRef.current) return
-        const interactiveElements = innerRef.current.querySelectorAll(
-          "input, textarea, select, [role='slider'], [data-no-drag]"
-        )
-        interactiveElements.forEach((el) => {
-          if (!el.hasAttribute("data-vaul-no-drag")) {
-            el.setAttribute("data-vaul-no-drag", "true")
-          }
-        })
-      }
-
-      markNoDrag()
-      const observer = new MutationObserver(markNoDrag)
-      observer.observe(innerRef.current, { childList: true, subtree: true })
-      return () => observer.disconnect()
-    }, [isMobile])
-
-    if (isMobile) {
-      return (
-        <VaulDrawer.Portal>
-          <VaulDrawer.Overlay
-            className={cn(
-              "fixed inset-0 z-50 bg-black/60 backdrop-blur-xs",
-              "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-              "transition-opacity duration-300 [transition-timing-function:cubic-bezier(0.32,0.72,0,1)]",
-              overlayClassName
-            )}
-          />
-          <VaulDrawer.Content
-            ref={innerRef}
-            className={cn(
-              "fixed inset-x-0 bottom-0 z-50 flex flex-col bg-white rounded-t-[28px] max-h-[92vh] focus:outline-none shadow-2xl",
-              "transition-transform duration-300 [transition-timing-function:cubic-bezier(0.32,0.72,0,1)]",
-              className
-            )}
-            {...props}
-          >
-            {showHandle && (
-              <div className="w-10 h-1.5 bg-[#D6CEC4] rounded-full mx-auto my-3 shrink-0" />
-            )}
-            {children}
-          </VaulDrawer.Content>
-        </VaulDrawer.Portal>
-      )
-    }
-
     return (
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay
           className={cn(
-            "fixed inset-0 z-50 bg-black/60 backdrop-blur-xs",
-            "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-            "transition-all duration-300 [transition-timing-function:cubic-bezier(0.32,0.72,0,1)]",
+            "fixed inset-0 z-[80] bg-black/60 backdrop-blur-xs",
             overlayClassName
           )}
         />
         <DialogPrimitive.Content
           ref={innerRef}
           className={cn(
-            "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] bg-white p-6 shadow-2xl rounded-3xl focus:outline-none max-h-[90vh] overflow-y-auto",
-            "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-            "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:scale-95 data-[state=open]:scale-100",
-            "duration-200 [transition-timing-function:cubic-bezier(0.32,0.72,0,1)]",
+            "fixed inset-x-0 bottom-0 top-auto left-0 right-0 z-[80] flex flex-col w-full bg-white rounded-t-[28px] max-h-[92dvh] p-6 shadow-2xl focus:outline-none overflow-y-auto",
+            "sm:inset-auto sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:max-w-lg sm:rounded-3xl sm:max-h-[90vh]",
             className
           )}
           {...props}
         >
+          {isMobile && showHandle && (
+            <div className="w-10 h-1.5 bg-[#D6CEC4] rounded-full mx-auto my-3 shrink-0" />
+          )}
           {children}
           {showCloseButton && (
             <DialogPrimitive.Close
@@ -218,15 +140,6 @@ export function ResponsiveModalTitle({
   className,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Title>) {
-  const { isMobile } = useResponsiveModal()
-  if (isMobile) {
-    return (
-      <VaulDrawer.Title
-        className={cn("text-lg sm:text-xl font-bold text-[#1F1B16]", className)}
-        {...props}
-      />
-    )
-  }
   return (
     <DialogPrimitive.Title
       className={cn("text-lg sm:text-xl font-bold text-[#1F1B16]", className)}
@@ -239,15 +152,6 @@ export function ResponsiveModalDescription({
   className,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Description>) {
-  const { isMobile } = useResponsiveModal()
-  if (isMobile) {
-    return (
-      <VaulDrawer.Description
-        className={cn("text-sm text-gray-500", className)}
-        {...props}
-      />
-    )
-  }
   return (
     <DialogPrimitive.Description
       className={cn("text-sm text-gray-500", className)}
@@ -289,9 +193,5 @@ export function ResponsiveModalFooter({
 export function ResponsiveModalClose({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Close>) {
-  const { isMobile } = useResponsiveModal()
-  if (isMobile) {
-    return <VaulDrawer.Close {...props} />
-  }
   return <DialogPrimitive.Close {...props} />
 }

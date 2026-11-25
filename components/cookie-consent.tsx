@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { ShieldCheck, Cookie, Settings, Check, X } from "lucide-react"
 import { Analytics } from "@vercel/analytics/next"
 
@@ -17,12 +18,15 @@ interface CookiePreferences {
 }
 
 export function CookieConsent() {
+  const pathname = usePathname()
   const [mounted, setMounted] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
   const [showPreferences, setShowPreferences] = useState(false)
   const [analyticsAllowed, setAnalyticsAllowed] = useState(false)
   const [marketingAllowed, setMarketingAllowed] = useState(false)
   const [hasConsented, setHasConsented] = useState<boolean | null>(null)
+  const isAuthFixedFooterRoute =
+    pathname === "/login" || pathname === "/cadastro" || pathname?.startsWith("/auth")
 
   useEffect(() => {
     setMounted(true)
@@ -98,50 +102,56 @@ export function CookieConsent() {
         </button>
       )}
 
-      {/* Cookie Banner modal/bar */}
+      {/* Cookie Banner compacto flutuante sem ocluir CTAs primários */}
       {isVisible && (
-        <div 
-          role="region" 
+        <div
+          role="region"
           aria-label="Aviso de Consentimento de Cookies e Privacidade"
-          className="fixed bottom-0 inset-x-0 z-50 p-3 sm:p-4 bg-white/95 backdrop-blur-md border-t border-gray-300 shadow-2xl transition-all"
+          className={`fixed z-50 bg-white/95 backdrop-blur-md border border-gray-200 rounded-2xl shadow-2xl transition-all ${
+            showPreferences
+              ? "inset-x-2 bottom-2 p-3.5 sm:p-4 md:inset-x-auto md:left-4 md:bottom-4 md:max-w-2xl max-h-[85dvh] overflow-y-auto"
+              : `${
+                  isAuthFixedFooterRoute ? "bottom-[96px]" : "bottom-2"
+                } inset-x-2 p-3 md:bottom-4 md:left-4 md:right-auto md:max-w-[340px]`
+          }`}
         >
-          <div className="container mx-auto max-w-5xl">
+          <div className="w-full">
             {!showPreferences ? (
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div className="space-y-1.5 flex-1 pr-2">
-                  <div className="flex items-center gap-2">
-                    <Cookie className="w-5 h-5 text-amber-700 shrink-0" aria-hidden="true" />
-                    <h2 className="text-base font-extrabold text-gray-900">
+              <div className="flex flex-col gap-2.5">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <Cookie className="w-4 h-4 text-amber-700 shrink-0" aria-hidden="true" />
+                    <h2 className="text-xs sm:text-sm font-extrabold text-gray-900">
                       Sua privacidade e seus cookies
                     </h2>
                   </div>
-                  <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
-                    Utilizamos cookies para assegurar o funcionamento da loja, registrar suas preferências e aprimorar sua experiência. Os cookies essenciais são necessários para navegação e finalização do pedido. Você tem o direito de aceitar ou recusar cookies de telemetria analítica e marketing. Saiba mais em nossa{" "}
+                  <p className="text-[11px] sm:text-xs text-gray-700 leading-snug">
+                    Cookies essenciais mantêm a loja ativa. Aceite ou recuse cookies analíticos e de marketing conforme nossa{" "}
                     <Link href="/privacidade" className="font-bold underline text-amber-800 hover:text-amber-950 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-600 rounded">
                       Política de Privacidade
                     </Link>.
                   </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 w-full md:w-auto shrink-0">
+                <div className="flex items-center gap-1.5 w-full">
                   <button
                     type="button"
                     onClick={() => setShowPreferences(true)}
-                    className="flex-1 md:flex-none px-3.5 py-2.5 rounded-xl border border-gray-300 text-gray-800 hover:bg-gray-100 font-bold text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+                    className="px-2.5 py-2 rounded-xl border border-gray-300 text-gray-800 hover:bg-gray-100 font-bold text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 shrink-0"
                   >
                     Personalizar
                   </button>
                   <button
                     type="button"
                     onClick={handleRejectAll}
-                    className="flex-1 md:flex-none px-3.5 py-2.5 rounded-xl border border-gray-300 text-gray-800 hover:bg-gray-100 font-bold text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+                    className="flex-1 px-2.5 py-2 rounded-xl border border-gray-300 text-gray-800 hover:bg-gray-100 font-bold text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 whitespace-nowrap"
                   >
-                    Apenas Essenciais
+                    Só Essenciais
                   </button>
                   <button
                     type="button"
                     onClick={handleAcceptAll}
-                    className="w-full sm:w-auto flex-1 md:flex-none px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs shadow-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+                    className="flex-1 px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-[11px] shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 whitespace-nowrap"
                   >
                     Aceitar Todos
                   </button>
