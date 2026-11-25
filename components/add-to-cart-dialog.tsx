@@ -822,7 +822,7 @@ export function AddToCartDialog({
                     return (
                       <div key={catKey} className="space-y-1">
                         {/* BANNER DE CATEGORIA SANGRAMENTO HORIZONTAL */}
-                        <div className="-mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-[#F7F5F1] border-y border-gray-100 flex items-center justify-between">
+                        <div className="-mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-[#ECECEC] border-y border-gray-200 flex items-center justify-between">
                           <div>
                             <h5 className="font-bold text-[15px] text-[#1F1B16]">{phrase}</h5>
                             <p className="text-[12px] text-gray-500">Escolha até 10 opções</p>
@@ -897,7 +897,7 @@ export function AddToCartDialog({
             {allowsAddons && !editMode && bebidasDisponiveis.length > 0 && (
               <div className="space-y-2 pt-1">
                 {/* BANNER DE CABEÇALHO */}
-                <div className="-mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-[#F7F5F1] border-y border-gray-100">
+                <div className="-mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-[#ECECEC] border-y border-gray-200">
                   <h5 className="font-bold text-[15px] text-[#1F1B16]">{fraseBebida}</h5>
                   <p className="text-[12px] text-gray-500">Escolha até 10 opções</p>
                 </div>
