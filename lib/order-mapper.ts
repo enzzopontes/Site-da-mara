@@ -6,41 +6,61 @@ function safeDate(value: unknown): Date | null {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
+function normalizeAdicionais(raw: unknown) {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((a: unknown) => {
+      if (typeof a === "string") {
+        const trimmed = a.trim()
+        if (!trimmed) return null
+        return { id: undefined, name: trimmed, price: 0, quantity: 1 }
+      }
+      if (a && typeof a === "object") {
+        const rawName = (a as any).name ?? (a as any).nome
+        const name = typeof rawName === "string" ? rawName.trim() : ""
+        if (!name) return null
+        const price = Number((a as any).price ?? (a as any).preco ?? 0)
+        const quantity = Number((a as any).quantity ?? (a as any).quantidade ?? 1)
+        return {
+          id: (a as any).id,
+          name,
+          price: Number.isFinite(price) ? price : 0,
+          quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
+        }
+      }
+      return null
+    })
+    .filter((a): a is NonNullable<typeof a> => a !== null)
+}
+
+function normalizeItems(rawItems: unknown) {
+  if (!Array.isArray(rawItems)) return []
+  return rawItems
+    .filter((item: any) => item && typeof item === "object")
+    .map((item: any) => {
+      const rawName = item.product_name ?? item.name
+      const rawNotes = item.notes ?? item.observacoes
+      const rawPasta = item.pasta_type ?? item.pastaType
+      return {
+        id: item.product_id ?? item.id,
+        name: typeof rawName === "string" ? rawName : "",
+        quantity: Number(item.quantity) || 1,
+        price: Number(item.product_price ?? item.price) || 0,
+        adicionais: normalizeAdicionais(item.adicionais),
+        pastaType: typeof rawPasta === "string" && rawPasta.trim() ? rawPasta : null,
+        notes: typeof rawNotes === "string" && rawNotes.trim() ? rawNotes : null,
+      }
+    })
+}
+
 export function mapOrderData(rawOrder: any, rawItems: any[] = []): Order {
   const o: any = rawOrder && typeof rawOrder === "object" ? rawOrder : {}
-  const items = Array.isArray(rawItems) ? rawItems : []
-  let finalItems: any[] = items;
+  let finalItems: any[] = normalizeItems(rawItems)
   if (finalItems.length === 0) {
     if (Array.isArray(o.order_items) && o.order_items.length > 0) {
-      finalItems = o.order_items.map((item: any) => ({
-        id: item.product_id,
-        name: item.product_name,
-        quantity: Number(item.quantity) || 1,
-        price: Number(item.product_price) || 0,
-        adicionais: (Array.isArray(item.adicionais) ? item.adicionais : []).map((a: any) => ({
-          id: a.id,
-          name: a.name || a.nome,
-          price: Number(a.price ?? a.preco ?? 0),
-          quantity: Number(a.quantity || 1),
-        })),
-        pastaType: item.pasta_type || null,
-        notes: item.notes || null,
-      }))
+      finalItems = normalizeItems(o.order_items)
     } else if (Array.isArray(o.metadata?.items) && o.metadata.items.length > 0) {
-      finalItems = o.metadata.items.map((item: any) => ({
-        id: item.product_id || item.id,
-        name: item.product_name || item.name,
-        quantity: Number(item.quantity) || 1,
-        price: Number(item.product_price || item.price) || 0,
-        adicionais: (Array.isArray(item.adicionais) ? item.adicionais : []).map((a: any) => ({
-          id: a.id,
-          name: a.name || a.nome,
-          price: Number(a.price ?? a.preco ?? 0),
-          quantity: Number(a.quantity || 1),
-        })),
-        pastaType: item.pastaType || null,
-        notes: item.notes || item.observacoes || null,
-      }))
+      finalItems = normalizeItems(o.metadata.items)
     }
   }
 
@@ -63,7 +83,7 @@ export function mapOrderData(rawOrder: any, rawItems: any[] = []): Order {
     completedAt: safeDate(o.updated_at) ?? undefined,
     statusUpdatedAt: safeDate(o.metadata?.statusUpdatedAt) ?? safeDate(o.updated_at) ?? undefined,
     notes: o.notes,
-    discountAmount: Number(o.discount_amount),
+    discountAmount: Number(o.discount_amount) || 0,
     couponCode: o.coupon_code,
     user_id: o.user_id,
     metadata: o.metadata

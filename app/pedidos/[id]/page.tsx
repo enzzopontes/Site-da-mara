@@ -316,61 +316,74 @@ export default function DetalhesPedidoPage() {
 
     loadOrderRef.current()
 
-    const supabase = getSupabaseBrowserClient()
-    const channelName = `order-detail-${orderId}-${Date.now()}`
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "orders",
-          filter: `id=eq.${orderId}`,
-        },
-        (payload: any) => {
-          const nextRow = payload.new
-          const newStatus = nextRow?.status as string | undefined
-          const nextMeta = nextRow?.metadata || {}
-          const nextUnderpaidOrReview =
-            (nextMeta.action === "held_underpaid" ||
-              nextMeta.mp_payment_status === "held_underpaid" ||
-              nextMeta.review_reason === "underpaid" ||
-              (nextMeta.needs_review === true && newStatus === "awaiting_payment")) &&
-            !Boolean(nextMeta.paid_at) &&
-            !["cancelled", "preparing", "preparo", "ready", "out_for_delivery", "delivered"].includes(
-              newStatus || ""
-            )
+    let supabase: ReturnType<typeof getSupabaseBrowserClient> | null = null
+    let channel: ReturnType<ReturnType<typeof getSupabaseBrowserClient>["channel"]> | null = null
 
-          const prevStatus =
-            (payload.old?.status as string | undefined) ||
-            prevStatusRef.current ||
-            orderRef.current?.status
+    try {
+      supabase = getSupabaseBrowserClient()
+      const channelName = `order-detail-${orderId}-${Date.now()}`
+      channel = supabase
+        .channel(channelName)
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "orders",
+            filter: `id=eq.${orderId}`,
+          },
+          (payload: any) => {
+            const nextRow = payload.new
+            const newStatus = nextRow?.status as string | undefined
+            const nextMeta = nextRow?.metadata || {}
+            const nextUnderpaidOrReview =
+              (nextMeta.action === "held_underpaid" ||
+                nextMeta.mp_payment_status === "held_underpaid" ||
+                nextMeta.review_reason === "underpaid" ||
+                (nextMeta.needs_review === true && newStatus === "awaiting_payment")) &&
+              !Boolean(nextMeta.paid_at) &&
+              !["cancelled", "preparing", "preparo", "ready", "out_for_delivery", "delivered"].includes(
+                newStatus || ""
+              )
 
-          if (
-            !nextUnderpaidOrReview &&
-            prevStatus === "awaiting_payment" &&
-            newStatus &&
-            newStatus !== "awaiting_payment" &&
-            newStatus !== "cancelled"
-          ) {
-            handlePaymentApproved()
+            const prevStatus =
+              (payload.old?.status as string | undefined) ||
+              prevStatusRef.current ||
+              orderRef.current?.status
+
+            if (
+              !nextUnderpaidOrReview &&
+              prevStatus === "awaiting_payment" &&
+              newStatus &&
+              newStatus !== "awaiting_payment" &&
+              newStatus !== "cancelled"
+            ) {
+              handlePaymentApproved()
+            }
+
+            if (newStatus) {
+              prevStatusRef.current = newStatus
+            }
+            loadOrderRef.current(true)
           }
-
-          if (newStatus) {
-            prevStatusRef.current = newStatus
-          }
-          loadOrderRef.current(true)
-        }
-      )
-      .subscribe()
+        )
+        .subscribe()
+    } catch (err) {
+      console.warn("Erro ao iniciar assinatura realtime do pedido:", err)
+    }
 
     const pollInterval = setInterval(() => {
       loadOrderRef.current(true)
     }, 10000)
 
     return () => {
-      supabase.removeChannel(channel)
+      if (supabase && channel) {
+        try {
+          supabase.removeChannel(channel)
+        } catch (err) {
+          console.warn("Erro ao remover canal realtime do pedido:", err)
+        }
+      }
       clearInterval(pollInterval)
     }
   }, [orderId, user, handlePaymentApproved])
@@ -398,22 +411,38 @@ export default function DetalhesPedidoPage() {
     }
 
     clearCart()
-    order.items.forEach((item: any) => {
+    ;(Array.isArray(order.items) ? order.items : []).forEach((item: any, idx: number) => {
+      if (!item || typeof item !== "object") return
+      const rawAdicionais = Array.isArray(item.adicionais) ? item.adicionais : []
       addItem({
-        id: String(item.product_id || item.id || `reorder-${Date.now()}`),
-        name: item.name || item.product_name,
-        price: Number(item.price || item.product_price || 0),
+        id: String(item.product_id || item.id || `reorder-${Date.now()}-${idx}`),
+        name: typeof item.name === "string" ? item.name : typeof item.product_name === "string" ? item.product_name : "Item",
+        price: Number(item.price ?? item.product_price ?? 0) || 0,
         image: item.image || item.image_url || "/logo.png",
         quantity: Number(item.quantity) || 1,
         category: item.category || "batata",
-        pastaType: item.pastaType || undefined,
-        observacoes: item.notes || item.observacoes || undefined,
-        adicionais: (item.adicionais || []).map((a: any) => ({
-          id: a.id || String(a.name || a),
-          name: a.name || String(a),
-          price: Number(a.price) || 0,
-          quantity: Number(a.quantity) || 1,
-        })),
+        pastaType: typeof item.pastaType === "string" ? item.pastaType : undefined,
+        observacoes: typeof (item.notes ?? item.observacoes) === "string" ? (item.notes ?? item.observacoes) : undefined,
+        adicionais: rawAdicionais
+          .map((a: any) => {
+            const label =
+              typeof a === "string"
+                ? a.trim()
+                : typeof a?.name === "string"
+                ? a.name.trim()
+                : typeof a?.nome === "string"
+                ? a.nome.trim()
+                : ""
+            if (!label) return null
+            const isObj = Boolean(a && typeof a === "object")
+            return {
+              id: (isObj && a.id) ? String(a.id) : label,
+              name: label,
+              price: Number(isObj ? (a.price ?? a.preco) : 0) || 0,
+              quantity: Number(isObj ? (a.quantity ?? a.quantidade) : 1) || 1,
+            }
+          })
+          .filter((a: { id: string; name: string; price: number; quantity: number } | null): a is { id: string; name: string; price: number; quantity: number } => a !== null),
       })
     })
 
@@ -626,12 +655,14 @@ export default function DetalhesPedidoPage() {
     return { text: "Pagamento na entrega", className: "bg-[#FEF8EC] text-[#A16207]" }
   })()
 
-  const computedItemsSubtotal = (order.items || []).reduce((sum: number, item: any) => {
-    const adicsTotal = (item.adicionais || []).reduce(
-      (s: number, a: any) => s + Number(a.price ?? a.preco ?? 0) * Number(a.quantity || 1),
-      0
-    )
-    return sum + (Number(item.price || 0) + adicsTotal) * Number(item.quantity || 1)
+  const computedItemsSubtotal = (Array.isArray(order.items) ? order.items : []).reduce((sum: number, item: any) => {
+    if (!item || typeof item !== "object") return sum
+    const adicionais = Array.isArray(item.adicionais) ? item.adicionais : []
+    const adicsTotal = adicionais.reduce((s: number, a: any) => {
+      const isObj = Boolean(a && typeof a === "object")
+      return s + (Number(isObj ? (a.price ?? a.preco) : 0) || 0) * (Number(isObj ? (a.quantity ?? a.quantidade) : 1) || 1)
+    }, 0)
+    return sum + ((Number(item.price) || 0) + adicsTotal) * (Number(item.quantity) || 1)
   }, 0)
   const rawSubtotal = order.metadata?.subtotal
   const subtotalValue =
@@ -774,10 +805,15 @@ export default function DetalhesPedidoPage() {
             </div>
 
             <div className="p-5 space-y-4">
-              {order.items && order.items.length > 0 ? (
-                (order.items || []).map((item: any, idx: number) => {
-                  const adicsTotal = (item.adicionais || []).reduce(
-                    (s: number, a: any) => s + Number(a.price || a.preco || 0) * Number(a.quantity || 1),
+              {Array.isArray(order.items) && order.items.length > 0 ? (
+                order.items.map((item: any, idx: number) => {
+                  if (!item || typeof item !== "object") return null
+                  const adicionais = Array.isArray(item.adicionais) ? item.adicionais : []
+                  const adicsTotal = adicionais.reduce(
+                    (s: number, a: any) =>
+                      s +
+                      (Number(a && typeof a === "object" ? (a.price ?? a.preco) : 0) || 0) *
+                        (Number(a && typeof a === "object" ? (a.quantity ?? a.quantidade) : 1) || 1),
                     0
                   )
                   const itemTotal = (Number(item.price || 0) + adicsTotal) * Number(item.quantity || 1)
@@ -797,20 +833,25 @@ export default function DetalhesPedidoPage() {
                           </span>
                         </div>
 
-                        {item.pastaType && (
+                        {typeof item.pastaType === "string" && item.pastaType.trim().length > 0 && (
                           <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md inline-block mt-1 ml-7">
                             Massa: {item.pastaType.toUpperCase()}
                           </span>
                         )}
 
-                        {item.adicionais && item.adicionais.length > 0 && (
+                        {adicionais.length > 0 && (
                           <div className="pl-7 mt-1 space-y-0.5">
-                            {(item.adicionais || []).map((a: any, aIdx: number) => {
-                              const aPrice = Number(a.price || a.preco || 0)
-                              const aQty = Number(a.quantity || 1)
+                            {adicionais.map((a: any, aIdx: number) => {
+                              const isObj = Boolean(a && typeof a === "object")
+                              const aPrice = Number((isObj ? a.price ?? a.preco : 0) || 0)
+                              const aQty = Number((isObj ? a.quantity : 1) || 1)
+                              const aLabel =
+                                typeof a === "string"
+                                  ? a.trim() || "Adicional"
+                                  : String(a?.name || a?.nome || "Adicional")
                               return (
                                 <p key={aIdx} className="text-[11px] text-[#6B6157] font-medium flex items-center justify-between">
-                                  <span>+ {aQty}x {a.name || a.nome || a}</span>
+                                  <span>+ {aQty}x {aLabel}</span>
                                   {aPrice > 0 && (
                                     <span className="text-emerald-700 font-bold ml-2">
                                       + R$ {(aPrice * aQty).toFixed(2).replace(".", ",")}

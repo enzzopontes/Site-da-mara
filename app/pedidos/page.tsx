@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation"
@@ -24,6 +24,17 @@ import {
   RotateCcw,
   AlertCircle,
 } from "lucide-react"
+
+// ─── Helper seguro para label de adicional ────────────────────────────────────
+function getAdicionalLabel(a: any): string {
+  return typeof a === "string"
+    ? a.trim()
+    : typeof a?.name === "string"
+    ? a.name.trim()
+    : typeof a?.nome === "string"
+    ? a.nome.trim()
+    : ""
+}
 
 // ─── Header Minimalista Padrão (Estilo iFood) ─────────────────────────────────
 function MinimalHeader({ title = "Pedidos" }: { title?: string }) {
@@ -218,10 +229,15 @@ function ActiveOrderCard({
 
       {/* Lista de Itens Rica dentro do Card */}
       <div className="py-2.5 space-y-2 border-y border-[#F5F2ED]">
-        {order.items && order.items.length > 0 ? (
-          (order.items || []).map((item: any, idx: number) => {
-            const adicsTotal = (item.adicionais || []).reduce(
-              (s: number, a: any) => s + Number(a.price || a.preco || 0) * Number(a.quantity || 1),
+        {Array.isArray(order.items) && order.items.length > 0 ? (
+          order.items.map((item: any, idx: number) => {
+            if (!item || typeof item !== "object") return null
+            const adicionais = Array.isArray(item.adicionais) ? item.adicionais : []
+            const adicsTotal = adicionais.reduce(
+              (s: number, a: any) =>
+                s +
+                Number((a && typeof a === "object" ? a.price ?? a.preco : 0) || 0) *
+                  Number((a && typeof a === "object" ? a.quantity : 1) || 1),
               0
             )
             const itemTotal = (Number(item.price || 0) + adicsTotal) * Number(item.quantity || 1)
@@ -239,14 +255,15 @@ function ActiveOrderCard({
                     R$ {itemTotal.toFixed(2).replace(".", ",")}
                   </span>
                 </div>
-                {item.adicionais && item.adicionais.length > 0 && (
+                {adicionais.length > 0 && (
                   <div className="pl-7 mt-0.5 space-y-0.5">
-                    {(item.adicionais || []).map((a: any, aIdx: number) => {
-                      const aPrice = Number(a.price || a.preco || 0)
-                      const aQty = Number(a.quantity || 1)
+                    {adicionais.map((a: any, aIdx: number) => {
+                      const isObj = Boolean(a && typeof a === "object")
+                      const aPrice = Number((isObj ? a.price ?? a.preco : 0) || 0)
+                      const aQty = Number((isObj ? a.quantity : 1) || 1)
                       return (
                         <p key={aIdx} className="text-[11px] text-[#6B6157] flex items-center justify-between">
-                          <span>+ {aQty}x {a.name || a.nome || a}</span>
+                          <span>+ {aQty}x {getAdicionalLabel(a) || "Adicional"}</span>
                           {aPrice > 0 && (
                             <span className="text-emerald-700 font-bold ml-1">
                               + R$ {(aPrice * aQty).toFixed(2).replace(".", ",")}
@@ -382,10 +399,15 @@ function CompletedOrderCard({
 
       {/* Lista de Itens Rica dentro do Card */}
       <div className="mt-3 py-2.5 space-y-2 border-y border-[#F5F2ED]">
-        {order.items && order.items.length > 0 ? (
-          (order.items || []).map((item: any, idx: number) => {
-            const adicsTotal = (item.adicionais || []).reduce(
-              (s: number, a: any) => s + Number(a.price || a.preco || 0) * Number(a.quantity || 1),
+        {Array.isArray(order.items) && order.items.length > 0 ? (
+          order.items.map((item: any, idx: number) => {
+            if (!item || typeof item !== "object") return null
+            const adicionais = Array.isArray(item.adicionais) ? item.adicionais : []
+            const adicsTotal = adicionais.reduce(
+              (s: number, a: any) =>
+                s +
+                Number((a && typeof a === "object" ? a.price ?? a.preco : 0) || 0) *
+                  Number((a && typeof a === "object" ? a.quantity : 1) || 1),
               0
             )
             const itemTotal = (Number(item.price || 0) + adicsTotal) * Number(item.quantity || 1)
@@ -403,14 +425,15 @@ function CompletedOrderCard({
                     R$ {itemTotal.toFixed(2).replace(".", ",")}
                   </span>
                 </div>
-                {item.adicionais && item.adicionais.length > 0 && (
+                {adicionais.length > 0 && (
                   <div className="pl-7 mt-0.5 space-y-0.5">
-                    {(item.adicionais || []).map((a: any, aIdx: number) => {
-                      const aPrice = Number(a.price || a.preco || 0)
-                      const aQty = Number(a.quantity || 1)
+                    {adicionais.map((a: any, aIdx: number) => {
+                      const isObj = Boolean(a && typeof a === "object")
+                      const aPrice = Number((isObj ? a.price ?? a.preco : 0) || 0)
+                      const aQty = Number((isObj ? a.quantity : 1) || 1)
                       return (
                         <p key={aIdx} className="text-[11px] text-[#6B6157] flex items-center justify-between">
-                          <span>+ {aQty}x {a.name || a.nome || a}</span>
+                          <span>+ {aQty}x {getAdicionalLabel(a) || "Adicional"}</span>
                           {aPrice > 0 && (
                             <span className="text-emerald-700 font-bold ml-1">
                               + R$ {(aPrice * aQty).toFixed(2).replace(".", ",")}
@@ -576,23 +599,30 @@ export default function PedidosPage() {
     const uid = user.id
     fetchOrdersRef.current(uid)
 
-    const supabase = getSupabaseBrowserClient()
-    const channelName = `orders-list-${uid}-${Date.now()}`
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "orders",
-          filter: `user_id=eq.${uid}`,
-        },
-        () => {
-          fetchOrdersRef.current(uid, { silent: true })
-        }
-      )
-      .subscribe()
+    let supabase: ReturnType<typeof getSupabaseBrowserClient> | null = null
+    let channel: ReturnType<ReturnType<typeof getSupabaseBrowserClient>["channel"]> | null = null
+
+    try {
+      supabase = getSupabaseBrowserClient()
+      const channelName = `orders-list-${uid}-${Date.now()}`
+      channel = supabase
+        .channel(channelName)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "orders",
+            filter: `user_id=eq.${uid}`,
+          },
+          () => {
+            fetchOrdersRef.current(uid, { silent: true })
+          }
+        )
+        .subscribe()
+    } catch (err) {
+      console.warn("Erro ao iniciar assinatura realtime de pedidos:", err)
+    }
 
     // Polling a cada 30 segundos
     const pollInterval = setInterval(() => {
@@ -600,7 +630,13 @@ export default function PedidosPage() {
     }, 30000)
 
     return () => {
-      supabase.removeChannel(channel)
+      if (supabase && channel) {
+        try {
+          supabase.removeChannel(channel)
+        } catch (err) {
+          console.warn("Erro ao remover canal realtime de pedidos:", err)
+        }
+      }
       clearInterval(pollInterval)
     }
   }, [user?.id, authLoading])
@@ -623,8 +659,23 @@ export default function PedidosPage() {
 
     clearCart()
     order.items.forEach((item: any) => {
+      if (!item || typeof item !== "object") return
       const rawNotes = item.notes ?? item.observacoes
       const observacoes = typeof rawNotes === "string" ? rawNotes.trim() || undefined : undefined
+      const adicionais = Array.isArray(item.adicionais)
+        ? item.adicionais
+            .filter((a: any) => a != null)
+            .map((a: any, aIdx: number) => {
+              const isObj = typeof a === "object"
+              const label = getAdicionalLabel(a) || "Adicional"
+              return {
+                id: String((isObj ? a.id : undefined) || label || `adic-${aIdx}`),
+                name: label,
+                price: Number((isObj ? a.price ?? a.preco : 0) || 0),
+                quantity: Number((isObj ? a.quantity : 1) || 1),
+              }
+            })
+        : []
       addItem({
         id: String(item.product_id || item.id || `reorder-${Date.now()}-${Math.random()}`),
         name: item.name || item.product_name,
@@ -634,12 +685,7 @@ export default function PedidosPage() {
         category: item.category || "batata",
         pastaType: item.pastaType || undefined,
         observacoes,
-        adicionais: (item.adicionais || []).map((a: any) => ({
-          id: a.id || String(a.name || a),
-          name: a.name || String(a),
-          price: Number(a.price) || 0,
-          quantity: Number(a.quantity) || 1,
-        })),
+        adicionais,
       })
     })
 

@@ -52,3 +52,53 @@ test('helpers de status aceitam pedido malformado', () => {
   assert.equal(isOrderAwaitingPix(o), false)
   assert.equal(isOrderAwaitingPix(null), false)
 })
+
+test('mapOrderData: adicionais legados em string e filtragem de entradas invalidas', () => {
+  const o = mapOrderData({
+    id: '2',
+    total_amount: 35,
+    created_at: '2026-01-01T00:00:00Z',
+    order_items: [
+      null,
+      {
+        product_id: 'p1',
+        product_name: 'Batata Recheada',
+        quantity: 1,
+        product_price: 35,
+        adicionais: ['Batata palha', '  Requeijao Cremoso  ', '', '   ', null, {}, { name: '' }, { nome: 'Bacon', preco: '5.5', quantidade: 2 }],
+      },
+    ],
+  })
+  assert.equal(o.items.length, 1)
+  assert.deepEqual(o.items[0].adicionais, [
+    { id: undefined, name: 'Batata palha', price: 0, quantity: 1 },
+    { id: undefined, name: 'Requeijao Cremoso', price: 0, quantity: 1 },
+    { id: undefined, name: 'Bacon', price: 5.5, quantity: 2 },
+  ])
+  for (const ad of o.items[0].adicionais) {
+    assert.equal(typeof ad.name, 'string')
+    assert.ok(ad.name.length > 0)
+  }
+
+  const fromMeta = mapOrderData({
+    id: '3',
+    total_amount: 20,
+    created_at: '2026-01-01T00:00:00Z',
+    metadata: {
+      items: [
+        undefined,
+        {
+          id: 'p2',
+          name: 'Macarrao',
+          quantity: 1,
+          price: 20,
+          adicionais: ['Queijo ralado', null, {}, ''],
+        },
+      ],
+    },
+  })
+  assert.equal(fromMeta.items.length, 1)
+  assert.deepEqual(fromMeta.items[0].adicionais, [
+    { id: undefined, name: 'Queijo ralado', price: 0, quantity: 1 },
+  ])
+})
