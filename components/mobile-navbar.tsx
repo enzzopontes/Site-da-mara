@@ -19,6 +19,12 @@ export function MobileNavbar() {
   const { items } = useCart()
   const hasCartItems = items.reduce((sum, item) => sum + item.quantity, 0) > 0
   const [isMapActive, setIsMapActive] = useState(false)
+  // Render inicial determinístico (SSR == 1º render do client): só exibe após o mount
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Desativa completamente a Mobile Navbar quando o usuário entra na seleção do mapa
   useEffect(() => {
@@ -51,7 +57,7 @@ export function MobileNavbar() {
   }, [])
 
   // Se o usuário entrou no mapa ou modal de endereço, desativa a mobile navbar
-  if (isMapActive) return null
+  if (!mounted || isMapActive) return null
 
   // REGRAS ESTRITAS DE VISIBILIDADE:
   // EXIBIR APENAS: Nas abas principais ("/", "/cardapio", "/pedidos", "/profile" ou "/perfil").
