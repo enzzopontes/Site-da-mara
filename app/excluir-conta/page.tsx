@@ -98,9 +98,9 @@ export default function ExcluirContaPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F7F4EF] text-[#1F1B16] flex flex-col justify-between py-8 px-4 sm:px-6 lg:px-8 antialiased selection:bg-[#E3A008] selection:text-white">
+    <div className="min-h-screen bg-[#F7F4EF] text-[#1F1B16] flex flex-col justify-between py-3 pb-44 sm:py-8 px-4 sm:px-6 lg:px-8 antialiased selection:bg-[#E3A008] selection:text-white">
       {/* Botão de Retorno */}
-      <div className="max-w-xl w-full mx-auto mb-4">
+      <div className="max-w-xl w-full mx-auto mb-2 sm:mb-4">
         <Link 
           href="/" 
           className="inline-flex items-center gap-2 text-sm font-bold text-[#6B635B] hover:text-[#1F1B16] transition-colors"
@@ -111,11 +111,11 @@ export default function ExcluirContaPage() {
       </div>
 
       <main className="w-full max-w-xl mx-auto my-auto">
-        <div className="bg-white rounded-2xl shadow-lg border border-[#E8E2D9] p-6 sm:p-10 transition-all">
+        <div className="bg-white rounded-2xl shadow-lg border border-[#E8E2D9] p-4 sm:p-10 transition-all">
           
           {/* 1. Cabeçalho */}
-          <header className="text-center mb-8">
-            <Link href="/" className="inline-block relative w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-3">
+          <header className="text-center mb-4 sm:mb-8">
+            <Link href="/" className="inline-block relative w-11 h-11 sm:w-20 sm:h-20 mx-auto mb-1.5 sm:mb-3">
               <Image
                 src="/logo.png"
                 alt="Batata Top Delivery"
@@ -124,21 +124,21 @@ export default function ExcluirContaPage() {
                 priority
               />
             </Link>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#1F1B16] tracking-tight">
+            <h1 className="text-xl sm:text-3xl font-extrabold text-[#1F1B16] tracking-tight">
               Batata Top
             </h1>
-            <p className="text-xs font-bold text-[#E3A008] uppercase tracking-wider mt-1">
+            <p className="text-xs font-bold text-[#E3A008] uppercase tracking-wider mt-0.5 sm:mt-1">
               Iacanga - SP
             </p>
-            <p className="text-sm sm:text-base text-[#6B635B] mt-2 font-medium">
+            <p className="text-xs sm:text-base text-[#6B635B] mt-1 sm:mt-2 font-medium">
               Central de Privacidade e Exclusão de Dados
             </p>
           </header>
 
           {/* 2. Explicação Transparente (LGPD / Google Play) */}
-          <section className="space-y-3 mb-8">
-            <div className="p-4 rounded-xl bg-[#FAFAF8] border border-[#E8E2D9] text-xs sm:text-sm leading-relaxed space-y-3">
-              <div className="flex items-start gap-3">
+          <section className="space-y-2 sm:space-y-3 mb-4 sm:mb-8">
+            <div className="p-3 sm:p-4 rounded-xl bg-[#FAFAF8] border border-[#E8E2D9] text-xs sm:text-sm leading-snug sm:leading-relaxed space-y-2 sm:space-y-3">
+              <div className="flex items-start gap-2.5 sm:gap-3">
                 <div className="p-1.5 bg-red-50 text-red-600 rounded-lg shrink-0 mt-0.5">
                   <Trash2 className="w-4 h-4" />
                 </div>
@@ -152,7 +152,7 @@ export default function ExcluirContaPage() {
                 </div>
               </div>
 
-              <div className="flex items-start gap-3 pt-3 border-t border-[#E8E2D9]">
+              <div className="flex items-start gap-2.5 sm:gap-3 pt-2 sm:pt-3 border-t border-[#E8E2D9]">
                 <div className="p-1.5 bg-amber-50 text-[#C1440E] rounded-lg shrink-0 mt-0.5">
                   <FileText className="w-4 h-4" />
                 </div>
@@ -170,7 +170,7 @@ export default function ExcluirContaPage() {
 
           {/* 3. Formulário de Solicitação, Gate de Login ou Feedback de Sucesso */}
           {submitted ? (
-            <div className="mb-8 p-5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs sm:text-sm space-y-2">
+            <div className="mb-4 sm:mb-8 p-4 sm:p-5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs sm:text-sm space-y-2">
               <div className="flex items-center gap-2 font-bold text-emerald-800 text-sm sm:text-base">
                 <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
                 <span>Solicitação recebida com sucesso!</span>
@@ -183,12 +183,12 @@ export default function ExcluirContaPage() {
               </p>
             </div>
           ) : authLoading ? (
-            <div className="mb-8 p-6 rounded-xl bg-[#FAFAF8] border border-[#E8E2D9] flex items-center justify-center gap-2.5 text-sm font-medium text-[#6B635B]">
+            <div className="mb-4 sm:mb-8 p-4 sm:p-6 rounded-xl bg-[#FAFAF8] border border-[#E8E2D9] flex items-center justify-center gap-2.5 text-sm font-medium text-[#6B635B]">
               <Loader2 className="w-5 h-5 animate-spin text-[#E3A008]" />
               <span>Verificando sua sessão...</span>
             </div>
           ) : !user ? (
-            <div className="mb-8 p-5 sm:p-6 rounded-xl bg-[#FFF7E8] border border-[#F3D8A8] space-y-4">
+            <div className="mb-4 sm:mb-8 p-4 sm:p-6 rounded-xl bg-[#FFF7E8] border border-[#F3D8A8] space-y-3 sm:space-y-4">
               <div className="flex items-start gap-3">
                 <div className="p-2 bg-white text-[#C1440E] rounded-lg border border-[#F3D8A8] shrink-0 mt-0.5">
                   <ShieldAlert className="w-5 h-5" />
