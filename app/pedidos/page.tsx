@@ -1,14 +1,14 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { HeaderWrapper } from "@/components/header-wrapper"
 import { Footer } from "@/components/footer"
 import { OrderSummary } from "@/components/order-summary"
 import { useAuth } from "@/lib/auth-context"
 import { useCart } from "@/lib/cart-context"
 import { ordersManager, type Order } from "@/lib/orders-manager"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
+import { isOrderAwaitingPix, isOrderUnderpaidReview } from "@/lib/order-status-helpers"
 import { FeedbackModal } from "@/components/feedback-modal"
 import { ScrollReveal } from "@/components/ui/scroll-reveal"
 import { PedidosSkeleton } from "@/components/skeletons/pedidos-skeleton"
@@ -116,39 +116,6 @@ function SegmentedProgressBar({
   )
 }
 
-// ─── Verificador de Pedido em Revisão (Pagamento Parcial) ───────────────────
-export function isOrderUnderpaidReview(order: Order): boolean {
-  if (!order) return false
-  return Boolean(
-    (order as any).isUnderpaidReview ||
-      (order.metadata?.needs_review && order.metadata?.review_reason === "underpaid") ||
-      order.metadata?.review_reason === "underpaid"
-  )
-}
-
-// ─── Verificador de Pedido Aguardando Pix ──────────────────────────────────
-export function isOrderAwaitingPix(order: Order): boolean {
-  if (!order) return false
-  const underpaidReview = isOrderUnderpaidReview(order)
-  const isPaid =
-    Boolean(order.metadata?.paid_at) ||
-    ["preparing", "preparo", "ready", "out_for_delivery", "delivered"].includes(order.status) ||
-    (!underpaidReview &&
-      (order.metadata?.mp_payment_status === "approved" ||
-        order.metadata?.pix?.status === "approved"))
-
-  if (isPaid || underpaidReview) return false
-
-  const isPixMethod =
-    order.paymentMethod === "pix" ||
-    order.paymentMethod?.toLowerCase?.() === "pix" ||
-    Boolean(order.metadata?.pix) ||
-    Boolean(order.metadata?.qr_code) ||
-    Boolean(order.metadata?.pix_qr_code)
-
-  return order.status === "awaiting_payment" || (order.status === "pending" && isPixMethod)
-}
-
 // ─── Card de Pedido em Andamento (Design Rico iFood) ─────────────────────────
 function ActiveOrderCard({
   order,
@@ -157,7 +124,7 @@ function ActiveOrderCard({
   order: Order
   onDetails: (id: string) => void
 }) {
-  const num = String(order.orderNumber || order.id.slice(-4).toUpperCase())
+  const num = String(order.orderNumber || String(order.id || "").slice(-4).toUpperCase())
   const underpaidReview =
     isOrderUnderpaidReview(order) &&
     !Boolean(order.metadata?.paid_at) &&
@@ -205,7 +172,7 @@ function ActiveOrderCard({
 
         <div className="flex items-center gap-2">
           <span className="text-sm font-extrabold text-[#1F1B16]">
-            R$ {order.total.toFixed(2).replace(".", ",")}
+            R$ {Number(order.total || 0).toFixed(2).replace(".", ",")}
           </span>
           <ChevronRight className="w-4 h-4 text-[#9C9188]" />
         </div>
@@ -252,7 +219,7 @@ function ActiveOrderCard({
       {/* Lista de Itens Rica dentro do Card */}
       <div className="py-2.5 space-y-2 border-y border-[#F5F2ED]">
         {order.items && order.items.length > 0 ? (
-          order.items.map((item: any, idx: number) => {
+          (order.items || []).map((item: any, idx: number) => {
             const adicsTotal = (item.adicionais || []).reduce(
               (s: number, a: any) => s + Number(a.price || a.preco || 0) * Number(a.quantity || 1),
               0
@@ -274,7 +241,7 @@ function ActiveOrderCard({
                 </div>
                 {item.adicionais && item.adicionais.length > 0 && (
                   <div className="pl-7 mt-0.5 space-y-0.5">
-                    {item.adicionais.map((a: any, aIdx: number) => {
+                    {(item.adicionais || []).map((a: any, aIdx: number) => {
                       const aPrice = Number(a.price || a.preco || 0)
                       const aQty = Number(a.quantity || 1)
                       return (
@@ -338,7 +305,7 @@ function CompletedOrderCard({
   onHelp: (order: Order) => void
 }) {
   const isCancelled = order.status === "cancelled"
-  const num = String(order.orderNumber || order.id.slice(-4).toUpperCase())
+  const num = String(order.orderNumber || String(order.id || "").slice(-4).toUpperCase())
   const isPickup = order.deliveryType === "pickup" || (order.deliveryType as string) === "retirada"
   const deliveryTypeLabel = isPickup ? "Retirada" : "Delivery"
   const paymentLabel =
@@ -389,7 +356,7 @@ function CompletedOrderCard({
 
         <div className="flex items-center gap-2">
           <span className="text-sm font-extrabold text-[#1F1B16]">
-            R$ {order.total.toFixed(2).replace(".", ",")}
+            R$ {Number(order.total || 0).toFixed(2).replace(".", ",")}
           </span>
           <ChevronRight className="w-4 h-4 text-[#9C9188]" />
         </div>
@@ -416,7 +383,7 @@ function CompletedOrderCard({
       {/* Lista de Itens Rica dentro do Card */}
       <div className="mt-3 py-2.5 space-y-2 border-y border-[#F5F2ED]">
         {order.items && order.items.length > 0 ? (
-          order.items.map((item: any, idx: number) => {
+          (order.items || []).map((item: any, idx: number) => {
             const adicsTotal = (item.adicionais || []).reduce(
               (s: number, a: any) => s + Number(a.price || a.preco || 0) * Number(a.quantity || 1),
               0
@@ -438,7 +405,7 @@ function CompletedOrderCard({
                 </div>
                 {item.adicionais && item.adicionais.length > 0 && (
                   <div className="pl-7 mt-0.5 space-y-0.5">
-                    {item.adicionais.map((a: any, aIdx: number) => {
+                    {(item.adicionais || []).map((a: any, aIdx: number) => {
                       const aPrice = Number(a.price || a.preco || 0)
                       const aQty = Number(a.quantity || 1)
                       return (
@@ -540,6 +507,7 @@ export default function PedidosPage() {
 
   const [orders, setOrders] = useState<Order[]>([])
   const [initialLoading, setInitialLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [feedbackMap, setFeedbackMap] = useState<Record<string, number>>({})
 
   // Modais de Feedback
@@ -563,7 +531,9 @@ export default function PedidosPage() {
         })
       }
       setFeedbackMap(map)
-    } catch {}
+    } catch (err) {
+      console.warn("Erro ao carregar avaliações:", err)
+    }
   }, [])
 
   // Busca lista de pedidos
@@ -583,6 +553,7 @@ export default function PedidosPage() {
         await fetchFeedbacks(uid)
       } catch (err) {
         console.error("Erro ao carregar pedidos:", err)
+        if (!silent) setLoadError("Não foi possível carregar seus pedidos.")
       } finally {
         setInitialLoading(false)
       }
@@ -676,9 +647,9 @@ export default function PedidosPage() {
   }
 
   const handleHelp = (order: Order) => {
-    const num = order.orderNumber || order.id.slice(-4).toUpperCase()
+    const num = order.orderNumber || String(order.id || "").slice(-4).toUpperCase()
     const msg = `Olá! Preciso de ajuda com meu pedido #${num}.`
-    window.open(`https://wa.me/5514997361015?text=${encodeURIComponent(msg)}`, "_blank")
+    window.open(`https://wa.me/5514997361015?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer")
   }
 
   // Divisão em pedidos ativos e anteriores
@@ -704,7 +675,19 @@ export default function PedidosPage() {
 
       <main className="flex-1 pb-24 lg:pb-12">
         <div className="container mx-auto px-4 max-w-2xl py-5">
-          {!user || orders.length === 0 ? (
+          {user && loadError && orders.length === 0 ? (
+            <div role="alert" className="flex flex-col items-center justify-center py-16 text-center">
+              <h2 className="text-xl font-black text-[#1F1B16] mb-2">{loadError}</h2>
+              <p className="text-sm text-[#6B6157] mb-6 font-medium">Verifique sua conexão e tente novamente.</p>
+              <button
+                type="button"
+                onClick={() => user?.id && fetchOrders(user.id)}
+                className="bg-[#E3A008] hover:bg-[#B5860A] text-white font-extrabold px-8 py-3.5 rounded-xl transition-all shadow-md active:scale-95"
+              >
+                Tentar novamente
+              </button>
+            </div>
+          ) : !user || orders.length === 0 ? (
             /* Estado Vazio Idêntico ao App Mobile */
             <ScrollReveal className="flex flex-col items-center justify-center py-12 lg:py-20 text-center">
               <img
@@ -790,7 +773,7 @@ export default function PedidosPage() {
         <FeedbackModal
           orderId={feedbackModalOrder.id}
           orderNumber={String(
-            feedbackModalOrder.orderNumber || feedbackModalOrder.id.slice(-4).toUpperCase()
+            feedbackModalOrder.orderNumber || String(feedbackModalOrder.id || "").slice(-4).toUpperCase()
           )}
           initialRating={feedbackInitialRating}
           onClose={() => setFeedbackModalOrder(null)}

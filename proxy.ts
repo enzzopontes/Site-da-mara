@@ -161,7 +161,7 @@ export default async function proxy(request: NextRequest) {
   }
 
   // 2. Proteção de Rotas de Usuário (Pedidos, subrotas de Perfil, Meus Dados, Checkout)
-  const protectedUserRoutes = ["/pedidos", "/perfil/", "/meus-dados", "/checkout"]
+  const protectedUserRoutes = ["/pedidos/", "/perfil/", "/meus-dados", "/checkout"]
   const isProtectedUserRoute = protectedUserRoutes.some((route) =>
     route.endsWith("/")
       ? url.pathname.startsWith(route) && url.pathname !== route

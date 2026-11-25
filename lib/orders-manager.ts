@@ -1,5 +1,6 @@
 import { getSupabaseBrowserClient } from "./supabase/client"
 import { validateOrder } from "./validation"
+import { mapOrderData } from "./order-mapper"
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -146,65 +147,7 @@ class OrdersManager {
   }
 
   private mapOrderData(o: any, items: any[] = []): Order {
-    let finalItems = items;
-    if (!finalItems || finalItems.length === 0) {
-      if (o.order_items && o.order_items.length > 0) {
-        finalItems = o.order_items.map((item: any) => ({
-          id: item.product_id,
-          name: item.product_name,
-          quantity: item.quantity,
-          price: Number(item.product_price),
-          adicionais: (item.adicionais || []).map((a: any) => ({
-            id: a.id,
-            name: a.name || a.nome,
-            price: Number(a.price ?? a.preco ?? 0),
-            quantity: Number(a.quantity || 1),
-          })),
-          pastaType: item.pasta_type || null,
-          notes: item.notes || null,
-        }))
-      } else if (o.metadata?.items && o.metadata.items.length > 0) {
-        finalItems = o.metadata.items.map((item: any) => ({
-          id: item.product_id || item.id,
-          name: item.product_name || item.name,
-          quantity: item.quantity,
-          price: Number(item.product_price || item.price),
-          adicionais: (item.adicionais || []).map((a: any) => ({
-            id: a.id,
-            name: a.name || a.nome,
-            price: Number(a.price ?? a.preco ?? 0),
-            quantity: Number(a.quantity || 1),
-          })),
-          pastaType: item.pastaType || null,
-          notes: item.notes || item.observacoes || null,
-        }))
-      }
-    }
-
-    return {
-      id: o.id,
-      orderNumber: o.order_number || 0,
-      customerName: o.customer_name,
-      customerPhone: o.customer_phone,
-      items: finalItems,
-      total: Number(o.total_amount),
-      status: o.status as any,
-      paymentMethod: o.payment_method,
-      deliveryType: o.delivery_type || "delivery",
-      address: o.customer_address,
-      neighborhood: o.customer_neighborhood || "",
-      complement: o.customer_complement || "",
-      deliveryLat: o.delivery_lat ?? o.metadata?.delivery_lat ?? null,
-      deliveryLng: o.delivery_lng ?? o.metadata?.delivery_lng ?? null,
-      createdAt: new Date(o.created_at),
-      completedAt: o.updated_at ? new Date(o.updated_at) : undefined,
-      statusUpdatedAt: o.metadata?.statusUpdatedAt ? new Date(o.metadata.statusUpdatedAt) : (o.updated_at ? new Date(o.updated_at) : undefined),
-      notes: o.notes,
-      discountAmount: Number(o.discount_amount),
-      couponCode: o.coupon_code,
-      user_id: o.user_id,
-      metadata: o.metadata
-    }
+    return mapOrderData(o, items)
   }
 
   async getOrderById(orderId: string): Promise<Order | null> {
@@ -227,32 +170,35 @@ class OrdersManager {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const sb = this.supabase
-    const { data } = await sb
+    const { data, error } = await sb
       .from("orders")
       .select(`*, order_items (*)`)
       .gte("created_at", today.toISOString())
       .neq("status", "awaiting_payment")
       .order("created_at", { ascending: false })
+    if (error) throw new Error(error.message || "Erro ao consultar pedidos de hoje.")
     return data?.map((o: any) => this.mapOrderData(o)) || []
   }
 
   async getActiveOrders(): Promise<Order[]> {
     const sb = this.supabase
-    const { data } = await sb
+    const { data, error } = await sb
       .from("orders")
       .select(`*, order_items (*)`)
       .in("status", ["pending", "preparing", "ready", "out_for_delivery"])
       .order("created_at", { ascending: false })
+    if (error) throw new Error(error.message || "Erro ao consultar pedidos ativos.")
     return data?.map((o: any) => this.mapOrderData(o)) || []
   }
 
   async getUserOrders(userId: string): Promise<Order[]> {
     const sb = this.supabase
-    const { data } = await sb
+    const { data, error } = await sb
       .from("orders")
       .select(`*, order_items (*)`)
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
+    if (error) throw new Error(error.message || "Erro ao consultar pedidos.")
     return data?.map((o: any) => this.mapOrderData(o)) || []
   }
 

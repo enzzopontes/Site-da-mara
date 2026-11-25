@@ -419,6 +419,7 @@ export function Header({ variant = "default" }: HeaderProps) {
 
             <Link
               href="/checkout"
+              prefetch={false}
               className="w-10 h-10 rounded-full bg-[#F3F0EB] hover:bg-[#ECE7E0] flex items-center justify-center relative active:scale-[0.98] transition-transform flex-shrink-0"
               aria-label="Ver sacola"
             >

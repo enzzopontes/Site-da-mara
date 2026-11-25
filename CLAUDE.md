@@ -85,7 +85,7 @@ Site-da-mara/
 ├── styles/                         # CSS global adicional
 ├── components.json                 # Configuração do shadcn/ui
 ├── next.config.mjs                 # Configuração do Next.js (com ignoreBuildErrors: false)
-├── middleware.ts                   # Middleware de proteção de rotas (admin e usuário) e refresh de sessão
+├── proxy.ts                   # Middleware de proteção de rotas (admin e usuário) e refresh de sessão
 └── tsconfig.json                   # Configurações do TypeScript e aliases de caminhos (@/*)
 ```
 
@@ -151,7 +151,7 @@ Variáveis de ambiente necessárias para o funcionamento local e de produção (
 - **Simulação da Progressão de Pedidos & Serverless**: O fluxo avança automaticamente de `pending` -> `preparing` -> `ready` -> `delivered`. Para mitigar o descarte de temporizadores em funções serverless da Vercel (que finalizam a execução após a resposta HTTP), foi integrado um mecanismo de *catch-up* reativo (`catchUpOrderProgression`) no `ordersManager`. Sempre que os pedidos são consultados nas rotas da API ou painéis do cliente/admin, a diferença de tempo (`Date.now() - created_at`) é avaliada e o status é sincronizado no banco de dados. Timers locais em Node.js continuam ativos para atualização em tempo real no ambiente local de desenvolvimento.
 - **Cálculo Fila e Tempo de Espera**: O tempo de espera estimado é calculado de forma dinâmica pelo `StoreStatusManager`. O tempo base é somado a 5 minutos adicionais para cada pedido criado nos últimos 10 minutos (fila ativa).
 - **Armazenamento de Imagens**: Para simplificar a infraestrutura e evitar dependência de buckets S3 ou Supabase Storage, as imagens enviadas pelos administradores/clientes são convertidas para strings Base64 no cliente e armazenadas no PostgreSQL na tabela `uploaded_images`. A rota `/api/images/[id]` converte a string Base64 de volta para um buffer binário e serve como uma imagem comum com headers de cache eficientes.
-- **Segurança (Middleware, Rate Limiting & Guards)**: O arquivo `middleware.ts` atua como middleware de proteção de rotas no Next.js:
+- **Segurança (Middleware, Rate Limiting & Guards)**: O arquivo `proxy.ts` atua como middleware de proteção de rotas no Next.js:
   - **Rate Limiting por IP (`lib/rate-limit.ts`)**: 60 req/min para rotas de `/api/*`, 180 req/min para o webhook do Mercado Pago, e 25 req/min para endpoints sensíveis de autenticação (`/login`, `/cadastro`, `/auth/*`), mitigando força bruta, scraping e flooding.
   - **Proteção de Rotas**: Bloqueia rotas administrativas `/admin` e rotas de usuário protegidas (`/pedidos`, `/perfil`, `/meus-dados`, `/checkout`) caso não haja sessão ativa ou o usuário não seja classificado como administrador.
   - **Cabeçalhos HTTP Globais (`next.config.mjs`)**: Configurados headers `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`, `Referrer-Policy` e `Permissions-Policy`.

@@ -356,7 +356,7 @@ export default function AdminPedidosPage() {
           <div className="text-center pb-2 border-b border-dashed border-black">
             <p className="font-bold text-sm">BATATA TOP GOURMET</p>
             <p className="text-[10px] text-gray-700">GESTOR DE PEDIDOS</p>
-            <p className="font-bold text-base mt-1">PEDIDO #{receiptOrder.orderNumber || receiptOrder.id.slice(0, 5)}</p>
+            <p className="font-bold text-base mt-1">PEDIDO #{receiptOrder.orderNumber || String(receiptOrder.id || "").slice(0, 5)}</p>
             <p className="text-[10px]">
               {new Date(receiptOrder.createdAt).toLocaleDateString("pt-BR")} - {new Date(receiptOrder.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
             </p>
@@ -375,7 +375,7 @@ export default function AdminPedidosPage() {
 
           <div className="py-2 border-b border-dashed border-black">
             <p className="font-bold mb-1">ITENS DO PEDIDO:</p>
-            {receiptOrder.items.map((item, idx) => {
+            {(receiptOrder.items || []).map((item, idx) => {
               const itemTotal = getItemTotal(item)
               return (
                 <div key={idx} className="mb-2">
@@ -659,7 +659,7 @@ export default function AdminPedidosPage() {
                           <div>
                             <div className="flex flex-wrap items-center gap-2">
                               <h3 className="text-2xl font-black text-gray-900">
-                                Pedido #{order.orderNumber || order.id.slice(0, 5)}
+                                Pedido #{order.orderNumber || String(order.id || "").slice(0, 5)}
                               </h3>
                               <Badge className={`${cfg.badgeBg} border-none font-bold text-xs uppercase px-2.5 py-0.5`}>
                                 {cfg.label}
@@ -822,10 +822,10 @@ export default function AdminPedidosPage() {
                         <div className="lg:col-span-2 space-y-6">
                           <div>
                             <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                              <ShoppingBag className="h-3.5 w-3.5 text-[#E3A008]" /> Itens do Pedido ({order.items.length})
+                              <ShoppingBag className="h-3.5 w-3.5 text-[#E3A008]" /> Itens do Pedido ({(order.items || []).length})
                             </h4>
                             <div className="space-y-3">
-                              {order.items.map((item, idx) => {
+                              {(order.items || []).map((item, idx) => {
                                 const basePrice = Number(item.price || 0)
                                 const adicsTotal = getItemAdicionaisTotal(item)
                                 const itemUnitTotal = getItemUnitTotal(item)
@@ -1062,7 +1062,7 @@ export default function AdminPedidosPage() {
                                     <span className="text-sm font-bold text-gray-700">{order.paymentMethod?.toUpperCase()}</span>
                                   </div>
                                   <span className="text-3xl font-black text-[#C1440E]">
-                                    R$ {Number(order.total).toFixed(2).replace('.', ',')}
+                                    R$ {Number(order.total || 0).toFixed(2).replace('.', ',')}
                                   </span>
                                 </div>
                               </div>

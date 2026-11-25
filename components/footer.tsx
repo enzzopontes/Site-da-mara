@@ -89,17 +89,17 @@ export function Footer() {
             </h3>
             <ul className="space-y-4">
               <li>
-                <Link href="/cadastro" className="text-gray-600 hover:text-amber-700 transition-colors text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 rounded px-1">
+                <Link href="/cadastro" prefetch={false} className="text-gray-600 hover:text-amber-700 transition-colors text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 rounded px-1">
                   Criar Conta
                 </Link>
               </li>
               <li>
-                <Link href="/login" className="text-gray-600 hover:text-amber-700 transition-colors text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 rounded px-1">
+                <Link href="/login" prefetch={false} className="text-gray-600 hover:text-amber-700 transition-colors text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 rounded px-1">
                   Fazer Login
                 </Link>
               </li>
               <li>
-                <Link href="/meus-dados" className="text-gray-600 hover:text-amber-700 transition-colors text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 rounded px-1">
+                <Link href="/meus-dados" prefetch={false} className="text-gray-600 hover:text-amber-700 transition-colors text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 rounded px-1">
                   Meus Dados &amp; Privacidade
                 </Link>
               </li>
@@ -109,7 +109,7 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/checkout" className="text-gray-600 hover:text-amber-700 transition-colors text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 rounded px-1">
+                <Link href="/checkout" prefetch={false} className="text-gray-600 hover:text-amber-700 transition-colors text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 rounded px-1">
                   Sacola / Checkout
                 </Link>
               </li>

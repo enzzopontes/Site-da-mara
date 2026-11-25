@@ -422,7 +422,7 @@ export default function DetalhesPedidoPage() {
 
   const handleHelp = () => {
     if (!order) return
-    const num = order.orderNumber || order.id.slice(-4).toUpperCase()
+    const num = order.orderNumber || String(order.id || "").slice(-4).toUpperCase()
     const msg = `Olá! Gostaria de informações sobre meu pedido #${num}.`
     window.open(`https://wa.me/5514997361015?text=${encodeURIComponent(msg)}`, "_blank")
   }
@@ -456,7 +456,7 @@ export default function DetalhesPedidoPage() {
   }
 
   // Cálculos visuais
-  const num = String(order.orderNumber || order.id.slice(-4).toUpperCase())
+  const num = String(order.orderNumber || String(order.id || "").slice(-4).toUpperCase())
   const isUnderpaidReview =
     Boolean(
       order.metadata?.action === "held_underpaid" ||
@@ -492,7 +492,7 @@ export default function DetalhesPedidoPage() {
   const formattedTimeOrEta = (() => {
     if (etaMinutes && !isFinalStatus) {
       const base = order.createdAt ? new Date(order.createdAt).getTime() : Date.now()
-      const etaDate = new Date(base + etaMinutes * 60 * 1000)
+      const etaDate = new Date((Number.isFinite(base) ? base : Date.now()) + etaMinutes * 60 * 1000)
       return `Previsão de entrega às ${etaDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
     }
     if (order.createdAt) {
@@ -775,7 +775,7 @@ export default function DetalhesPedidoPage() {
 
             <div className="p-5 space-y-4">
               {order.items && order.items.length > 0 ? (
-                order.items.map((item: any, idx: number) => {
+                (order.items || []).map((item: any, idx: number) => {
                   const adicsTotal = (item.adicionais || []).reduce(
                     (s: number, a: any) => s + Number(a.price || a.preco || 0) * Number(a.quantity || 1),
                     0
@@ -805,7 +805,7 @@ export default function DetalhesPedidoPage() {
 
                         {item.adicionais && item.adicionais.length > 0 && (
                           <div className="pl-7 mt-1 space-y-0.5">
-                            {item.adicionais.map((a: any, aIdx: number) => {
+                            {(item.adicionais || []).map((a: any, aIdx: number) => {
                               const aPrice = Number(a.price || a.preco || 0)
                               const aQty = Number(a.quantity || 1)
                               return (
@@ -879,7 +879,7 @@ export default function DetalhesPedidoPage() {
                 <div className="flex justify-between items-center text-sm font-black text-[#1F1B16] pt-1 border-t border-[#F5F2ED]">
                   <span>Total</span>
                   <span className="text-lg font-black text-[#E3A008]">
-                    R$ {order.total.toFixed(2).replace(".", ",")}
+                    R$ {Number(order.total || 0).toFixed(2).replace(".", ",")}
                   </span>
                 </div>
               </div>

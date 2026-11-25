@@ -90,7 +90,13 @@ export function FeedbackModal({ orderId, orderNumber, initialRating = 0, onClose
 
       if (error) throw error
 
-      const evaluatedOrders = JSON.parse(localStorage.getItem("evaluated-orders") || "[]")
+      let evaluatedOrders: string[] = []
+      try {
+        const parsed = JSON.parse(localStorage.getItem("evaluated-orders") || "[]")
+        if (Array.isArray(parsed)) evaluatedOrders = parsed
+      } catch (parseErr) {
+        console.warn("evaluated-orders inválido no localStorage, reiniciando lista:", parseErr)
+      }
       if (!evaluatedOrders.includes(orderId)) {
         evaluatedOrders.push(orderId)
         localStorage.setItem("evaluated-orders", JSON.stringify(evaluatedOrders))
