@@ -19,22 +19,17 @@ export const metadata: Metadata = {
   title: "batata top - Batatas Recheadas Delivery",
   description: "As melhores batatas recheadas da cidade! Peça agora pelo delivery.",
   generator: "Enzzo Baraldo",
+  manifest: "/site.webmanifest",
   icons: {
     icon: [
-      {
-        url: "/images/favicon.png",
-        media: "(prefers-color-scheme: light)",
-      },
-      {
-        url: "/images/favicon.png",
-        media: "(prefers-color-scheme: dark)",
-      },
-      {
-        url: "/images/favicon.png",
-        type: "(prefers-color-scheme: dark)",
-      },
+      { url: "/favicon.ico", sizes: "48x48" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/android-chrome-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/android-chrome-512x512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: "/images/favicon.png",
+    shortcut: "/favicon.ico",
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
 }
 
