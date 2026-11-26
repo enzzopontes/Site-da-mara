@@ -730,10 +730,10 @@ export default function AdminProdutosPage() {
         </div>
 
         {/* Sticky iFood Category Pills Bar */}
-        <div className="sticky top-16 z-20 bg-[#F7F7F8]/95 backdrop-blur-md pt-2.5 pb-3.5 -mx-4 px-4 border-b border-gray-200/80 mb-6 space-y-2.5">
+        <div className="sticky top-0 z-20 bg-[#F7F7F8]/95 backdrop-blur-md pt-2.5 pb-3.5 -mx-4 px-4 border-b border-gray-200/80 mb-6 space-y-2.5">
           {/* Row 1: Search Bar */}
-          <div className="flex items-center justify-between gap-2">
-            <div className="relative w-full md:max-w-md">
+          <div className="flex items-center justify-center">
+            <div className="relative w-full max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
               <Input
                 placeholder="Buscar item..."
@@ -840,17 +840,6 @@ export default function AdminProdutosPage() {
               >
                 {adicionais.length}
               </span>
-            </button>
-
-            <button
-              type="button"
-              disabled={isOffline}
-              title={isOffline ? "Sem conexão com a internet" : undefined}
-              onClick={() => setIsCategoryModalOpen(true)}
-              className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-dashed border-[#E3A008] bg-[#FEF8EC] text-[#8A6100] hover:bg-[#FCEFC7] hover:border-[#C1440E] transition-colors whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Plus className="h-3.5 w-3.5 text-[#C1440E]" />
-              <span>Nova Categoria</span>
             </button>
           </div>
         </div>
