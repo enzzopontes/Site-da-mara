@@ -463,7 +463,7 @@ export function CardapioContent({
     return (
       <ScrollReveal className="mb-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
+          <div className="flex items-center gap-2.5 min-w-0">
             <CategoryIcon
               iconUrl={category.icon_url}
               iconType={category.icon_type}
@@ -474,14 +474,14 @@ export function CardapioContent({
             />
             <h2
               id={`heading-${category.slug}`}
-              className="text-xl sm:text-2xl font-black text-[#1A1A1A] leading-tight"
+              className="min-w-0 text-xl sm:text-2xl font-black text-[#1A1A1A] leading-tight"
             >
               {category.name}
             </h2>
             {category.badge_text && (
               <span
                 style={{ backgroundColor: badgeColor }}
-                className="inline-flex items-center text-[10px] sm:text-[11px] font-black uppercase tracking-wide text-white px-2.5 py-0.5 rounded-full shadow-2xs"
+                className="shrink-0 inline-flex items-center text-[10px] sm:text-[11px] font-black uppercase tracking-wide text-white px-2.5 py-0.5 rounded-full shadow-2xs"
               >
                 {category.badge_text}
               </span>

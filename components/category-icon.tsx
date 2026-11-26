@@ -150,9 +150,10 @@ export function CategoryIcon({
       <img
         src={iconUrl}
         alt={alt}
+        decoding="async"
         aria-hidden={alt === "" ? true : undefined}
         onError={() => setImgError(true)}
-        className={`${sizeClassName} object-contain select-none ${className}`}
+        className={`${sizeClassName} shrink-0 object-contain select-none ${className}`}
       />
     )
   }

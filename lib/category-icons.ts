@@ -127,6 +127,7 @@ export function isSafeCategoryHref(raw?: string | null): boolean {
   if (!trimmed) return false
   if (/[\u0000-\u001f\u007f]/.test(trimmed)) return false
   if (trimmed.includes("\\")) return false
+  if (trimmed.includes("..")) return false
 
   const lower = trimmed.toLowerCase()
   if (
@@ -145,6 +146,7 @@ export function isSafeCategoryHref(raw?: string | null): boolean {
   if (lower.startsWith("https://")) {
     try {
       const url = new URL(trimmed)
+      if (url.username || url.password) return false
       return url.protocol === "https:"
     } catch {
       return false

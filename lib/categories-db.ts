@@ -235,6 +235,15 @@ export function mapCategoryRow(row: Record<string, any>): Category {
       ? row.show_on_home_bar_app
       : legacyShowOnHomeBar
 
+  const slugNorm = normalizeLegacyCategorySlug(String(row.slug ?? ""))
+  const defaultFeaturedLimit =
+    slugNorm === "batata" ? 8 : slugNorm === "macarrao" ? 4 : 6
+  const parsedFeaturedLimit = Number(row.home_featured_limit)
+  const safeFeaturedLimit =
+    Number.isFinite(parsedFeaturedLimit) && parsedFeaturedLimit >= 1
+      ? Math.min(24, Math.max(1, Math.trunc(parsedFeaturedLimit)))
+      : defaultFeaturedLimit
+
   return {
     id: String(row.id),
     slug: String(row.slug),
@@ -259,7 +268,7 @@ export function mapCategoryRow(row: Record<string, any>): Category {
     home_bar_order: Number.isFinite(Number(row.home_bar_order)) ? Number(row.home_bar_order) : 0,
     show_on_home_featured: Boolean(row.show_on_home_featured),
     home_featured_order: Number.isFinite(Number(row.home_featured_order)) ? Number(row.home_featured_order) : 0,
-    home_featured_limit: Math.min(24, Math.max(1, Number(row.home_featured_limit) || 6)),
+    home_featured_limit: safeFeaturedLimit,
     show_on_menu: row.show_on_menu !== false,
     menu_order: Number.isFinite(Number(row.menu_order)) ? Number(row.menu_order) : 0,
     menu_layout_zone: row.menu_layout_zone === "sidebar_right" ? "sidebar_right" : "main",

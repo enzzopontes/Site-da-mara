@@ -4,9 +4,10 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ScrollReveal } from "@/components/ui/scroll-reveal"
 import { ProductCard } from "@/components/product-card"
+import { CategoryIcon } from "@/components/category-icon"
 import { ChevronRight, Sparkles, Tag, Flame } from "lucide-react"
 import { DEFAULT_CATEGORIES, type Category } from "@/lib/categories-db"
-import { normalizeLegacyCategorySlug } from "@/lib/category-icons"
+import { normalizeLegacyCategorySlug, PRESET_3D_ICONS } from "@/lib/category-icons"
 import type { Product } from "@/lib/products-db"
 
 export interface FeaturedCategorySection {
@@ -207,25 +208,42 @@ export function FeaturedProducts({
               : slugNorm === "macarrao"
               ? "Ver todas as massas"
               : "Ver todas"
-          const showFlameBadge = slugNorm === "batata" || (sectionIdx === 0 && slugNorm !== "macarrao")
+          const is3dCategory = slugNorm === "batata" || slugNorm === "macarrao"
+          const preset3dUrl = is3dCategory
+            ? (PRESET_3D_ICONS.find((icon) => icon.id === slugNorm)?.path ?? null)
+            : null
+          const section3dIconUrl = is3dCategory
+            ? (cat.icon_type !== "lucide" && cat.icon_url ? cat.icon_url : preset3dUrl)
+            : null
+          const showFlameBadge = !is3dCategory && sectionIdx === 0
 
           return (
             <div key={cat.id}>
               <ScrollReveal className="flex items-center justify-between gap-4 mb-4 sm:mb-6 pb-3 border-b border-[#ECE7E0]">
-                <div>
-                  <div className="flex items-center gap-2">
-                    {showFlameBadge && (
-                      <span className="p-1.5 rounded-lg bg-[#FEF8EC] text-[#8A6100]">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {is3dCategory && section3dIconUrl ? (
+                      <CategoryIcon
+                        iconUrl={section3dIconUrl}
+                        iconType="preset_3d"
+                        fallbackIcon={cat.fallback_icon}
+                        accentColor={cat.accent_color}
+                        sizeClassName="w-7 h-7 sm:w-8 sm:h-8"
+                        iconClassName="w-4 h-4"
+                        className="shrink-0"
+                      />
+                    ) : showFlameBadge ? (
+                      <span className="p-1.5 rounded-lg bg-[#FEF8EC] text-[#8A6100] shrink-0">
                         <Flame className="w-4 h-4 fill-[#E3A008] text-[#E3A008]" />
                       </span>
-                    )}
-                    <h2 className="text-lg sm:text-xl font-bold text-[#1F1B16] tracking-tight">
+                    ) : null}
+                    <h2 className="text-lg sm:text-xl font-bold text-[#1F1B16] tracking-tight min-w-0">
                       {title}
                     </h2>
                     {cat.badge_text && (
                       <span
                         style={{ backgroundColor: cat.badge_color || "#C1440E" }}
-                        className="inline-flex items-center text-white uppercase tracking-wide text-[10px] font-extrabold px-2 py-0.5 rounded-full leading-none shadow-2xs"
+                        className="inline-flex items-center text-white uppercase tracking-wide text-[10px] font-extrabold px-2 py-0.5 rounded-full leading-none shadow-2xs shrink-0"
                       >
                         {cat.badge_text}
                       </span>
