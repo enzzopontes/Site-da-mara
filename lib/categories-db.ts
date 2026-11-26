@@ -294,17 +294,10 @@ export function findCategoryForProduct(
 
 export function getHomeBarCategories(
   categories: Category[],
-  activeProductCountsBySlug: Record<string, number>
+  _activeProductCountsBySlug?: Record<string, number>
 ): Category[] {
   return categories
-    .filter((cat) => {
-      if (!cat.is_active || !cat.show_on_home_bar) return false
-      if (cat.kind === "product_category") {
-        const count = activeProductCountsBySlug[normalizeLegacyCategorySlug(cat.slug)] ?? 0
-        return count > 0
-      }
-      return true
-    })
+    .filter((cat) => cat.is_active && cat.show_on_home_bar)
     .sort((a, b) => a.home_bar_order - b.home_bar_order || a.name.localeCompare(b.name))
 }
 

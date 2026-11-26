@@ -801,8 +801,8 @@ export function CategoryFormModal({
                   <Info className="w-4 h-4 mt-0.5 shrink-0 text-[#B47B00]" />
                   <span>
                     {showOnHomeBar
-                      ? "Importe o ícone 3D agora (ou selecione do banco abaixo). Esta categoria já aparece na Prévia ao Vivo do admin e entra automaticamente na Home pública assim que tiver pelo menos 1 produto ativo."
-                      : 'Importe o ícone 3D agora (ou selecione do banco abaixo). Esta categoria entra ativa no Cardápio e aparece marcada como "Fora da Home" na Prévia ao Vivo para você ativar quando quiser.'}
+                      ? "Importe o ícone 3D agora (ou selecione do banco abaixo). Com a opção ativada, esta categoria já aparece na Grade 3D da Home e na Prévia ao Vivo."
+                      : 'Importe o ícone 3D agora (ou selecione do banco abaixo). Com a opção desativada, esta categoria fica fora da Home (visível apenas no Cardápio) e aparece marcada como "Fora da Home" na Prévia ao Vivo para você ativar quando quiser.'}
                   </span>
                 </div>
 
@@ -884,11 +884,10 @@ export function CategoryFormModal({
                           htmlFor="sw-quick-home-bar"
                           className="text-sm font-medium text-[#1F1B16] cursor-pointer"
                         >
-                          Mostrar na Grade 3D da Home quando houver produtos ativos
+                          Mostrar na Grade 3D da Home
                         </Label>
                         <p className="text-xs text-[#1F1B16]/60">
-                          Aparece na Prévia do admin e permanece oculta na loja pública enquanto
-                          tiver 0 produtos ativos.
+                          Ativado aparece na barra 3D da Home; desativado fica apenas no Cardápio.
                         </p>
                       </div>
                       <Switch

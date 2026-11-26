@@ -275,9 +275,9 @@ export default function AdminProdutosPage() {
     toast.success(`Categoria "${saved.name}" criada!`, {
       description: saved.show_on_home_bar
         ? saved.icon_url
-          ? "Ícone 3D salvo! Já aparece na Prévia ao Vivo e entra automaticamente na Home assim que tiver 1+ produto ativo."
-          : "Já aparece na Prévia ao Vivo e entra na Home assim que tiver 1+ produto ativo. Adicione um ícone 3D em Categorias & Vitrine."
-        : "Criada no Cardápio (fora da Home). Você pode colocá-la na Grade 3D em Categorias & Vitrine quando quiser.",
+          ? "Ícone 3D salvo! Já está ativada na Grade 3D da Home."
+          : "Já está ativada na Grade 3D da Home. Adicione um ícone 3D em Categorias & Vitrine."
+        : "Criada no Cardápio (fora da Home). Ative o botão do ícone em Categorias & Vitrine quando quiser destacar na Home.",
       action: {
         label: "Ir para Vitrine 3D",
         onClick: () => router.push("/admin/categorias"),

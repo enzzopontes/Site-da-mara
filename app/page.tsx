@@ -146,9 +146,11 @@ export default async function Home() {
         </ScrollReveal>
 
         {/* Barra de Categorias Rápidas (Chips estilo iFood com espaço reservado CLS = 0) */}
-        <section aria-label="Navegação por categorias" className="w-full min-h-[60px] bg-white">
-          <CategoryBar items={homeBarItems} layout={homeGridLayout} />
-        </section>
+        {homeBarItems.length > 0 && (
+          <section aria-label="Navegação por categorias" className="w-full min-h-[60px] bg-white">
+            <CategoryBar items={homeBarItems} layout={homeGridLayout} />
+          </section>
+        )}
 
         {/* Carrossel Rotativo de Cupons da Home (Estilo Mobile iFood) */}
         <ScrollReveal>
