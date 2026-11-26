@@ -971,7 +971,7 @@ export default function AdminCategoriasPage() {
               </SheetTrigger>
               <SheetContent
                 side="right"
-                className="w-full sm:max-w-md bg-[#F7F5F0] p-4 overflow-y-auto"
+                className="w-full sm:max-w-lg bg-[#F7F5F0] p-4 overflow-y-auto"
               >
                 <SheetHeader className="p-0 pb-3">
                   <SheetTitle className="text-[#1F1A17]">
@@ -1110,7 +1110,7 @@ export default function AdminCategoriasPage() {
 
       {/* Main Content States */}
       {loading ? (
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_370px] gap-6 items-start">
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_430px] gap-6 items-start">
           <div className="space-y-3">
             <Skeleton className="h-10 w-full max-w-md rounded-xl" />
             {Array.from({ length: 5 }).map((_, i) => (
@@ -1185,7 +1185,7 @@ export default function AdminCategoriasPage() {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_370px] gap-6 items-start">
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_430px] gap-6 items-start">
           {/* Left Column: Tabs & Interactive Lists */}
           <div className="min-w-0">
             <Tabs

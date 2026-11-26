@@ -108,6 +108,8 @@ export function CategoryBar({
     "--cat-icon-d": `${gridLayout.desktop_icon_size}px`,
     "--cat-text-m": `${gridLayout.mobile_label_size}px`,
     "--cat-text-d": `${gridLayout.desktop_label_size}px`,
+    "--cat-radius-m": `${gridLayout.mobile_card_radius}px`,
+    "--cat-radius-d": `${gridLayout.desktop_card_radius}px`,
   } as React.CSSProperties
 
   return (
@@ -131,7 +133,7 @@ export function CategoryBar({
                   <Link
                     href={href}
                     onClick={() => setActiveId(cat.id)}
-                    className={`group relative flex flex-col items-center justify-center min-w-0 [padding:var(--cat-pad-m)] sm:[padding:var(--cat-pad-d)] rounded-2xl border transition-all active:scale-[0.95] ${
+                    className={`group relative flex flex-col items-center justify-center min-w-0 [padding:var(--cat-pad-m)] sm:[padding:var(--cat-pad-d)] [border-radius:var(--cat-radius-m)] sm:[border-radius:var(--cat-radius-d)] border transition-all active:scale-[0.95] ${
                       isActive
                         ? "bg-[#FEF8EC] border-[#E3A008] shadow-xs"
                         : "bg-[#F7F4EF] hover:bg-[#FEF8EC] border-[#ECE7E0] hover:border-[#E3A008]/60 shadow-2xs"

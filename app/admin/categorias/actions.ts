@@ -26,6 +26,7 @@ import { CATEGORIES_CACHE_TAG, HOME_GRID_LAYOUT_CACHE_TAG } from "@/lib/categori
 import {
   DEFAULT_HOME_GRID_LAYOUT,
   HOME_GRID_LAYOUT_LIMITS,
+  HOME_GRID_LAYOUT_SELECT_COLUMNS,
   normalizeHomeGridLayout,
   type HomeGridLayout,
 } from "@/lib/home-grid-layout"
@@ -151,6 +152,11 @@ const HomeGridLayoutSchema = z.object({
     .int()
     .min(HOME_GRID_LAYOUT_LIMITS.mobile_label_size.min)
     .max(HOME_GRID_LAYOUT_LIMITS.mobile_label_size.max),
+  mobile_card_radius: z
+    .number()
+    .int()
+    .min(HOME_GRID_LAYOUT_LIMITS.mobile_card_radius.min)
+    .max(HOME_GRID_LAYOUT_LIMITS.mobile_card_radius.max),
   desktop_columns: z
     .number()
     .int()
@@ -176,10 +182,42 @@ const HomeGridLayoutSchema = z.object({
     .int()
     .min(HOME_GRID_LAYOUT_LIMITS.desktop_label_size.min)
     .max(HOME_GRID_LAYOUT_LIMITS.desktop_label_size.max),
+  desktop_card_radius: z
+    .number()
+    .int()
+    .min(HOME_GRID_LAYOUT_LIMITS.desktop_card_radius.min)
+    .max(HOME_GRID_LAYOUT_LIMITS.desktop_card_radius.max),
+  app_columns: z
+    .number()
+    .int()
+    .min(HOME_GRID_LAYOUT_LIMITS.app_columns.min)
+    .max(HOME_GRID_LAYOUT_LIMITS.app_columns.max),
+  app_card_padding: z
+    .number()
+    .int()
+    .min(HOME_GRID_LAYOUT_LIMITS.app_card_padding.min)
+    .max(HOME_GRID_LAYOUT_LIMITS.app_card_padding.max),
+  app_card_gap: z
+    .number()
+    .int()
+    .min(HOME_GRID_LAYOUT_LIMITS.app_card_gap.min)
+    .max(HOME_GRID_LAYOUT_LIMITS.app_card_gap.max),
+  app_icon_size: z
+    .number()
+    .int()
+    .min(HOME_GRID_LAYOUT_LIMITS.app_icon_size.min)
+    .max(HOME_GRID_LAYOUT_LIMITS.app_icon_size.max),
+  app_label_size: z
+    .number()
+    .int()
+    .min(HOME_GRID_LAYOUT_LIMITS.app_label_size.min)
+    .max(HOME_GRID_LAYOUT_LIMITS.app_label_size.max),
+  app_card_radius: z
+    .number()
+    .int()
+    .min(HOME_GRID_LAYOUT_LIMITS.app_card_radius.min)
+    .max(HOME_GRID_LAYOUT_LIMITS.app_card_radius.max),
 })
-
-const HOME_GRID_LAYOUT_COLUMNS =
-  "mobile_columns, mobile_card_padding, mobile_card_gap, mobile_icon_size, mobile_label_size, desktop_columns, desktop_card_padding, desktop_card_gap, desktop_icon_size, desktop_label_size"
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -281,6 +319,8 @@ function isMissingTableError(error: any): boolean {
   const msg = String(error?.message || "")
   return (
     code === "42P01" ||
+    code === "42703" ||
+    code === "PGRST204" ||
     code === "PGRST205" ||
     msg.includes("does not exist") ||
     msg.includes("Could not find the table") ||
@@ -1030,7 +1070,7 @@ export async function getHomeGridLayoutAdminAction(): Promise<
     const service = getServiceClient()
     const { data, error } = await service
       .from("home_grid_layout")
-      .select(HOME_GRID_LAYOUT_COLUMNS)
+      .select(HOME_GRID_LAYOUT_SELECT_COLUMNS)
       .eq("id", "default")
       .maybeSingle()
 
@@ -1069,14 +1109,14 @@ export async function saveHomeGridLayoutAction(
     const { data, error } = await service
       .from("home_grid_layout")
       .upsert({ id: "default", ...parsed.data }, { onConflict: "id" })
-      .select(HOME_GRID_LAYOUT_COLUMNS)
+      .select(HOME_GRID_LAYOUT_SELECT_COLUMNS)
       .single()
 
     if (error && isMissingTableError(error)) {
       return {
         ok: false,
         code: "MIGRATION_PENDING",
-        error: "Tabela home_grid_layout pendente. Execute a migration scripts/031_home_grid_layout.sql no Supabase.",
+        error: "Schema home_grid_layout pendente. Execute scripts/031_home_grid_layout.sql e scripts/032_home_grid_layout_app_profile.sql no Supabase.",
       }
     }
 

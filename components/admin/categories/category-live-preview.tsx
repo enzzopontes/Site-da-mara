@@ -5,6 +5,7 @@ import {
   AlertCircle,
   ArrowLeftRight,
   ChevronDown,
+  Copy,
   Eye,
   EyeOff,
   GripVertical,
@@ -15,6 +16,7 @@ import {
   SlidersHorizontal,
   Smartphone,
   Sparkles,
+  TabletSmartphone,
   Trophy,
   UtensilsCrossed,
 } from "lucide-react"
@@ -28,10 +30,18 @@ import {
 import { normalizeLegacyCategorySlug } from "@/lib/category-icons"
 import {
   DEFAULT_HOME_GRID_LAYOUT,
-  HOME_GRID_LAYOUT_LIMITS,
   HOME_GRID_LAYOUT_PRESETS,
+  HOME_GRID_SCALE_LIMITS,
+  applyProfileValues,
+  computeBalancedProfile,
+  copyMobileToAppProfile,
+  estimateProfileScalePercent,
+  getProfileLimits,
+  getProfileValues,
   type HomeGridLayout,
   type HomeGridPresetKey,
+  type HomeGridProfile,
+  type HomeGridProfileValues,
 } from "@/lib/home-grid-layout"
 import { CategoryIcon } from "@/components/category-icon"
 import { Button } from "@/components/ui/button"
@@ -64,8 +74,91 @@ export interface CategoryLivePreviewProps {
   onDiscardChanges?: () => void
 }
 
-type PreviewViewport = "mobile" | "desktop"
+type PreviewViewport = HomeGridProfile
 type PreviewDragSection = "home_bar" | "home_featured" | "menu"
+type PreviewSimCount = "real" | 8 | 10
+
+interface SimulatedPreviewItem {
+  id: string
+  name: string
+  fallback_icon: string
+  accent_color: string
+  badge_text?: string
+  badge_color?: string
+}
+
+type HomeBarRenderItem =
+  | { kind: "real"; category: CategoryWithCounts }
+  | { kind: "simulated"; demo: SimulatedPreviewItem }
+
+const PROFILE_LABELS: Record<HomeGridProfile, string> = {
+  mobile: "Site Mobile",
+  desktop: "Site Desktop",
+  app: "App",
+}
+
+const SIMULATED_DEMO_CATEGORIES: SimulatedPreviewItem[] = [
+  {
+    id: "__demo_sobremesas",
+    name: "Sobremesas",
+    fallback_icon: "IceCreamCone",
+    accent_color: "#C1440E",
+  },
+  {
+    id: "__demo_lasanhas",
+    name: "Lasanhas",
+    fallback_icon: "UtensilsCrossed",
+    accent_color: "#E3A008",
+  },
+  {
+    id: "__demo_porcoes",
+    name: "Porções",
+    fallback_icon: "Flame",
+    accent_color: "#D97706",
+  },
+  {
+    id: "__demo_combos",
+    name: "Combos",
+    fallback_icon: "Sparkles",
+    accent_color: "#B45309",
+  },
+  {
+    id: "__demo_panquecas",
+    name: "Panquecas",
+    fallback_icon: "Cookie",
+    accent_color: "#A16207",
+  },
+  {
+    id: "__demo_caldos",
+    name: "Caldos",
+    fallback_icon: "Soup",
+    accent_color: "#C1440E",
+  },
+  {
+    id: "__demo_esfihas",
+    name: "Esfihas",
+    fallback_icon: "Pizza",
+    accent_color: "#E3A008",
+  },
+  {
+    id: "__demo_sucos",
+    name: "Sucos",
+    fallback_icon: "CupSoda",
+    accent_color: "#15803D",
+  },
+  {
+    id: "__demo_acai",
+    name: "Açaí",
+    fallback_icon: "Coffee",
+    accent_color: "#7E22CE",
+  },
+  {
+    id: "__demo_kits",
+    name: "Kits Festa",
+    fallback_icon: "Gift",
+    accent_color: "#C1440E",
+  },
+]
 
 interface DragState {
   section: PreviewDragSection
@@ -112,6 +205,11 @@ export function CategoryLivePreview({
   const [viewport, setViewport] = useState<PreviewViewport>("mobile")
   const [simulateStoreAutoHide, setSimulateStoreAutoHide] = useState(false)
   const [layoutEditorOpen, setLayoutEditorOpen] = useState(false)
+  const [fineTuningOpen, setFineTuningOpen] = useState(false)
+  const [simCount, setSimCount] = useState<PreviewSimCount>("real")
+  const [scaleOverride, setScaleOverride] = useState<
+    Partial<Record<HomeGridProfile, number>>
+  >({})
   const [dragState, setDragState] = useState<DragState | null>(null)
   const [dragOverTarget, setDragOverTarget] = useState<DragOverTarget | null>(
     null
@@ -128,6 +226,8 @@ export function CategoryLivePreview({
     !writesDisabled && !savingChanges && Boolean(onReorderMenu)
 
   const isDesktop = viewport === "desktop"
+  const isApp = viewport === "app"
+  const activeProfileLabel = PROFILE_LABELS[viewport]
   const isLayoutDisabled = Boolean(
     writesDisabled ||
       layoutWritesDisabled ||
@@ -135,117 +235,144 @@ export function CategoryLivePreview({
       !onChangeHomeGridLayout
   )
 
-  const activeCols = isDesktop
-    ? homeGridLayout.desktop_columns
-    : homeGridLayout.mobile_columns
-  const activePad = isDesktop
-    ? homeGridLayout.desktop_card_padding
-    : homeGridLayout.mobile_card_padding
-  const activeGap = isDesktop
-    ? homeGridLayout.desktop_card_gap
-    : homeGridLayout.mobile_card_gap
-  const activeIcon = isDesktop
-    ? homeGridLayout.desktop_icon_size
-    : homeGridLayout.mobile_icon_size
-  const activeLabel = isDesktop
-    ? homeGridLayout.desktop_label_size
-    : homeGridLayout.mobile_label_size
+  const activeValues = getProfileValues(homeGridLayout, viewport)
+  const activeCols = activeValues.columns
+  const activePad = activeValues.card_padding
+  const activeGap = activeValues.card_gap
+  const activeIcon = activeValues.icon_size
+  const activeLabel = activeValues.label_size
+  const activeRadius = activeValues.card_radius
 
-  const activeLimits = isDesktop
-    ? {
-        columns: HOME_GRID_LAYOUT_LIMITS.desktop_columns,
-        card_padding: HOME_GRID_LAYOUT_LIMITS.desktop_card_padding,
-        card_gap: HOME_GRID_LAYOUT_LIMITS.desktop_card_gap,
-        icon_size: HOME_GRID_LAYOUT_LIMITS.desktop_icon_size,
-        label_size: HOME_GRID_LAYOUT_LIMITS.desktop_label_size,
-      }
-    : {
-        columns: HOME_GRID_LAYOUT_LIMITS.mobile_columns,
-        card_padding: HOME_GRID_LAYOUT_LIMITS.mobile_card_padding,
-        card_gap: HOME_GRID_LAYOUT_LIMITS.mobile_card_gap,
-        icon_size: HOME_GRID_LAYOUT_LIMITS.mobile_icon_size,
-        label_size: HOME_GRID_LAYOUT_LIMITS.mobile_label_size,
-      }
+  const activeLimits = getProfileLimits(viewport)
+  const estimatedScalePercent = estimateProfileScalePercent(
+    viewport,
+    activeValues
+  )
+  const activeScalePercent = scaleOverride[viewport] ?? estimatedScalePercent
+  const columnOptions = isDesktop ? [3, 4, 5, 6, 7, 8] : [2, 3, 4]
 
+  // Escala proporcional do preview (Site Desktop / Site Mobile)
   const previewGap = isDesktop
     ? Math.max(3, Math.round(activeGap * 0.35))
-    : Math.max(4, Math.round(activeGap * 0.7))
+    : Math.max(4, Math.round(activeGap * 0.72))
   const previewPadY = isDesktop
     ? Math.max(3, Math.round(activePad * 0.4))
-    : Math.max(4, Math.round(activePad * 0.72))
+    : Math.max(4, Math.round(activePad * 0.74))
   const previewPadX = isDesktop
     ? Math.max(2, Math.round(activePad * 0.3))
-    : Math.max(3, Math.round(activePad * 0.5))
+    : Math.max(3, Math.round(activePad * 0.55))
   const previewIcon = isDesktop
     ? Math.max(16, Math.min(36, Math.round(activeIcon * 0.44)))
-    : Math.max(22, Math.min(54, Math.round(activeIcon * 0.76)))
+    : Math.max(22, Math.min(54, Math.round(activeIcon * 0.78)))
   const previewLabel = isDesktop
     ? Math.max(7.5, Math.round(activeLabel * 0.68 * 10) / 10)
-    : Math.max(8.5, Math.round(activeLabel * 0.86 * 10) / 10)
+    : Math.max(8.5, Math.round(activeLabel * 0.88 * 10) / 10)
+  const previewRadius = isDesktop
+    ? Math.max(6, Math.round(activeRadius * 0.65))
+    : Math.max(6, Math.round(activeRadius * 0.85))
+
+  // Escala fiel ao Batatop-app/app/index.js dentro da moldura ~390px
+  const appColGap = activeGap
+  const appRowGap = Math.max(activeGap, 12)
+  const appPadY = activePad
+  const appPadX = Math.max(4, Math.round(activePad * 0.75))
+  const appApproxSlotWidth = Math.floor(
+    (326 - appColGap * (activeCols - 1)) / activeCols
+  )
+  const appMaxSafeIcon = Math.max(24, appApproxSlotWidth - appPadX * 2)
+  const appIconSize = Math.min(activeIcon, appMaxSafeIcon)
+  const appLabelSize = activeLabel
+  const appLabelLineHeight = Math.round(activeLabel * 1.35)
+  const appCardRadius = activeRadius
 
   function matchesPreset(presetKey: HomeGridPresetKey): boolean {
-    if (isDesktop) {
-      const p = HOME_GRID_LAYOUT_PRESETS.desktop[presetKey]
-      return (
-        homeGridLayout.desktop_columns === p.desktop_columns &&
-        homeGridLayout.desktop_card_padding === p.desktop_card_padding &&
-        homeGridLayout.desktop_card_gap === p.desktop_card_gap &&
-        homeGridLayout.desktop_icon_size === p.desktop_icon_size &&
-        homeGridLayout.desktop_label_size === p.desktop_label_size
-      )
-    }
-    const p = HOME_GRID_LAYOUT_PRESETS.mobile[presetKey]
+    const preset = HOME_GRID_LAYOUT_PRESETS[viewport][presetKey] as Record<
+      string,
+      number
+    >
     return (
-      homeGridLayout.mobile_columns === p.mobile_columns &&
-      homeGridLayout.mobile_card_padding === p.mobile_card_padding &&
-      homeGridLayout.mobile_card_gap === p.mobile_card_gap &&
-      homeGridLayout.mobile_icon_size === p.mobile_icon_size &&
-      homeGridLayout.mobile_label_size === p.mobile_label_size
+      activeCols === preset[`${viewport}_columns`] &&
+      activePad === preset[`${viewport}_card_padding`] &&
+      activeGap === preset[`${viewport}_card_gap`] &&
+      activeIcon === preset[`${viewport}_icon_size`] &&
+      activeLabel === preset[`${viewport}_label_size`] &&
+      activeRadius === preset[`${viewport}_card_radius`]
     )
+  }
+
+  function clearProfileScaleOverride(profile: HomeGridProfile) {
+    setScaleOverride((prev) => {
+      if (prev[profile] === undefined) return prev
+      const next = { ...prev }
+      delete next[profile]
+      return next
+    })
   }
 
   function applyPreset(presetKey: HomeGridPresetKey) {
     if (isLayoutDisabled || !onChangeHomeGridLayout) return
+    clearProfileScaleOverride(viewport)
     onChangeHomeGridLayout({
       ...homeGridLayout,
       ...HOME_GRID_LAYOUT_PRESETS[viewport][presetKey],
     })
   }
 
+  function handleSelectColumns(nextColumns: number) {
+    if (isLayoutDisabled || !onChangeHomeGridLayout) return
+    if (nextColumns === activeCols) return
+    clearProfileScaleOverride(viewport)
+    const balanced = computeBalancedProfile(
+      viewport,
+      nextColumns,
+      HOME_GRID_SCALE_LIMITS.default
+    )
+    onChangeHomeGridLayout(applyProfileValues(homeGridLayout, viewport, balanced))
+  }
+
+  function handleMasterScaleChange(nextScale: number) {
+    if (isLayoutDisabled || !onChangeHomeGridLayout) return
+    setScaleOverride((prev) => ({ ...prev, [viewport]: nextScale }))
+    const balanced = computeBalancedProfile(viewport, activeCols, nextScale)
+    onChangeHomeGridLayout(applyProfileValues(homeGridLayout, viewport, balanced))
+  }
+
   function updateActiveLayoutField(
-    field: "columns" | "card_padding" | "card_gap" | "icon_size" | "label_size",
+    field: keyof HomeGridProfileValues,
     value: number
   ) {
     if (isLayoutDisabled || !onChangeHomeGridLayout) return
-    const key = `${viewport}_${field}` as keyof HomeGridLayout
-    if (homeGridLayout[key] === value) return
-    onChangeHomeGridLayout({
-      ...homeGridLayout,
-      [key]: value,
-    })
+    if (activeValues[field] === value) return
+    clearProfileScaleOverride(viewport)
+    onChangeHomeGridLayout(
+      applyProfileValues(homeGridLayout, viewport, { [field]: value })
+    )
   }
 
-  const isActiveViewportDefault = isDesktop
-    ? homeGridLayout.desktop_columns ===
-        DEFAULT_HOME_GRID_LAYOUT.desktop_columns &&
-      homeGridLayout.desktop_card_padding ===
-        DEFAULT_HOME_GRID_LAYOUT.desktop_card_padding &&
-      homeGridLayout.desktop_card_gap ===
-        DEFAULT_HOME_GRID_LAYOUT.desktop_card_gap &&
-      homeGridLayout.desktop_icon_size ===
-        DEFAULT_HOME_GRID_LAYOUT.desktop_icon_size &&
-      homeGridLayout.desktop_label_size ===
-        DEFAULT_HOME_GRID_LAYOUT.desktop_label_size
-    : homeGridLayout.mobile_columns ===
-        DEFAULT_HOME_GRID_LAYOUT.mobile_columns &&
-      homeGridLayout.mobile_card_padding ===
-        DEFAULT_HOME_GRID_LAYOUT.mobile_card_padding &&
-      homeGridLayout.mobile_card_gap ===
-        DEFAULT_HOME_GRID_LAYOUT.mobile_card_gap &&
-      homeGridLayout.mobile_icon_size ===
-        DEFAULT_HOME_GRID_LAYOUT.mobile_icon_size &&
-      homeGridLayout.mobile_label_size ===
-        DEFAULT_HOME_GRID_LAYOUT.mobile_label_size
+  const defaultActiveValues = getProfileValues(DEFAULT_HOME_GRID_LAYOUT, viewport)
+  const isActiveViewportDefault =
+    activeCols === defaultActiveValues.columns &&
+    activePad === defaultActiveValues.card_padding &&
+    activeGap === defaultActiveValues.card_gap &&
+    activeIcon === defaultActiveValues.icon_size &&
+    activeLabel === defaultActiveValues.label_size &&
+    activeRadius === defaultActiveValues.card_radius
+
+  const mobileValues = getProfileValues(homeGridLayout, "mobile")
+  const appValues = getProfileValues(homeGridLayout, "app")
+  const isAppSameAsMobile =
+    appValues.columns === mobileValues.columns &&
+    appValues.card_padding === mobileValues.card_padding &&
+    appValues.card_gap === mobileValues.card_gap &&
+    appValues.icon_size === mobileValues.icon_size &&
+    appValues.label_size === mobileValues.label_size &&
+    appValues.card_radius === mobileValues.card_radius
+
+  function handleCopyMobileToApp() {
+    if (isLayoutDisabled || !onChangeHomeGridLayout || isAppSameAsMobile) return
+    clearProfileScaleOverride("app")
+    onChangeHomeGridLayout(copyMobileToAppProfile(homeGridLayout))
+  }
 
   function resetActiveViewportLayout() {
     if (
@@ -255,25 +382,10 @@ export function CategoryLivePreview({
     ) {
       return
     }
-    if (isDesktop) {
-      onChangeHomeGridLayout({
-        ...homeGridLayout,
-        desktop_columns: DEFAULT_HOME_GRID_LAYOUT.desktop_columns,
-        desktop_card_padding: DEFAULT_HOME_GRID_LAYOUT.desktop_card_padding,
-        desktop_card_gap: DEFAULT_HOME_GRID_LAYOUT.desktop_card_gap,
-        desktop_icon_size: DEFAULT_HOME_GRID_LAYOUT.desktop_icon_size,
-        desktop_label_size: DEFAULT_HOME_GRID_LAYOUT.desktop_label_size,
-      })
-    } else {
-      onChangeHomeGridLayout({
-        ...homeGridLayout,
-        mobile_columns: DEFAULT_HOME_GRID_LAYOUT.mobile_columns,
-        mobile_card_padding: DEFAULT_HOME_GRID_LAYOUT.mobile_card_padding,
-        mobile_card_gap: DEFAULT_HOME_GRID_LAYOUT.mobile_card_gap,
-        mobile_icon_size: DEFAULT_HOME_GRID_LAYOUT.mobile_icon_size,
-        mobile_label_size: DEFAULT_HOME_GRID_LAYOUT.mobile_label_size,
-      })
-    }
+    clearProfileScaleOverride(viewport)
+    onChangeHomeGridLayout(
+      applyProfileValues(homeGridLayout, viewport, defaultActiveValues)
+    )
   }
 
   const categoryById = useMemo(
@@ -299,6 +411,30 @@ export function CategoryLivePreview({
       .map((cat) => categoryById.get(cat.id))
       .filter((cat): cat is CategoryWithCounts => Boolean(cat))
   }, [categories, previewCountsBySlug, categoryById])
+
+  const displayedHomeBarItems = useMemo<HomeBarRenderItem[]>(() => {
+    const realItems: HomeBarRenderItem[] = homeBarItems.map((category) => ({
+      kind: "real",
+      category,
+    }))
+    if (simCount === "real" || realItems.length >= simCount) {
+      return realItems
+    }
+    const existingNames = new Set(
+      homeBarItems.map((c) => c.name.trim().toLowerCase())
+    )
+    const needed = simCount - realItems.length
+    const demoPool = SIMULATED_DEMO_CATEGORIES.filter(
+      (d) => !existingNames.has(d.name.trim().toLowerCase())
+    )
+    const simulatedItems: HomeBarRenderItem[] = demoPool
+      .slice(0, needed)
+      .map((demo) => ({ kind: "simulated", demo }))
+    return [...realItems, ...simulatedItems]
+  }, [homeBarItems, simCount])
+
+  const simulatedSlotsCount =
+    displayedHomeBarItems.length - homeBarItems.length
 
   const homeFeaturedItems = useMemo(() => {
     return getHomeFeaturedCategories(categories, previewCountsBySlug)
@@ -544,56 +680,68 @@ export function CategoryLivePreview({
     <div className="flex flex-col rounded-2xl border border-[#ECE7E0] bg-[#F7F5F0] shadow-sm overflow-hidden">
       {/* Preview Header */}
       <div className="border-b border-[#ECE7E0] bg-[#FEF8EC] px-4 py-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="inline-block size-2 rounded-full bg-[#E3A008] animate-pulse" />
-              <h3 className="text-sm font-bold tracking-tight text-[#1F1A17] truncate">
-                Prévia ao Vivo da Loja
-              </h3>
-            </div>
-            <p className="text-[11px] text-[#6E6258]">
-              {!writesDisabled &&
-              (onReorderHomeBar || onReorderHomeFeatured || onReorderMenu)
-                ? "Arraste para reordenar · Clique para editar"
-                : "Atualiza em tempo real conforme você organiza"}
-            </p>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block size-2 rounded-full bg-[#E3A008] animate-pulse" />
+            <h3 className="text-sm font-bold tracking-tight text-[#1F1A17] truncate">
+              Prévia ao Vivo da Loja
+            </h3>
           </div>
+          <p className="text-[11px] text-[#6E6258]">
+            {!writesDisabled &&
+            (onReorderHomeBar || onReorderHomeFeatured || onReorderMenu)
+              ? "Arraste para reordenar · Clique para editar"
+              : "Atualiza em tempo real conforme você organiza"}
+          </p>
+        </div>
 
-          <div
-            role="group"
-            aria-label="Alternar visualização"
-            className="inline-flex items-center rounded-lg border border-[#ECE7E0] bg-white p-0.5 shrink-0"
+        <div
+          role="group"
+          aria-label="Alternar perfil de visualização"
+          className="mt-2.5 grid grid-cols-3 items-center rounded-lg border border-[#ECE7E0] bg-white p-0.5 gap-0.5"
+        >
+          <button
+            type="button"
+            onClick={() => setViewport("mobile")}
+            aria-pressed={viewport === "mobile"}
+            className={cn(
+              "inline-flex items-center justify-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-semibold transition-colors",
+              viewport === "mobile"
+                ? "bg-[#E3A008] text-white shadow-xs"
+                : "text-[#6E6258] hover:text-[#1F1A17]"
+            )}
           >
-            <button
-              type="button"
-              onClick={() => setViewport("mobile")}
-              aria-pressed={viewport === "mobile"}
-              className={cn(
-                "inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold transition-colors",
-                viewport === "mobile"
-                  ? "bg-[#E3A008] text-white shadow-xs"
-                  : "text-[#6E6258] hover:text-[#1F1A17]"
-              )}
-            >
-              <Smartphone className="size-3.5" />
-              <span>Mobile</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewport("desktop")}
-              aria-pressed={viewport === "desktop"}
-              className={cn(
-                "inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold transition-colors",
-                viewport === "desktop"
-                  ? "bg-[#E3A008] text-white shadow-xs"
-                  : "text-[#6E6258] hover:text-[#1F1A17]"
-              )}
-            >
-              <Monitor className="size-3.5" />
-              <span>Desktop</span>
-            </button>
-          </div>
+            <Smartphone className="size-3.5 shrink-0" />
+            <span className="truncate">Site Mobile</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewport("desktop")}
+            aria-pressed={viewport === "desktop"}
+            className={cn(
+              "inline-flex items-center justify-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-semibold transition-colors",
+              viewport === "desktop"
+                ? "bg-[#E3A008] text-white shadow-xs"
+                : "text-[#6E6258] hover:text-[#1F1A17]"
+            )}
+          >
+            <Monitor className="size-3.5 shrink-0" />
+            <span className="truncate">Site Desktop</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewport("app")}
+            aria-pressed={viewport === "app"}
+            className={cn(
+              "inline-flex items-center justify-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-semibold transition-colors",
+              viewport === "app"
+                ? "bg-[#C1440E] text-white shadow-xs"
+                : "text-[#6E6258] hover:text-[#1F1A17]"
+            )}
+          >
+            <TabletSmartphone className="size-3.5 shrink-0" />
+            <span className="truncate">App</span>
+          </button>
         </div>
 
         {/* Auto-hide toggle & note */}
@@ -640,16 +788,56 @@ export function CategoryLivePreview({
               : "border-[#ECE7E0]"
           )}
         >
-          <div className="mb-2.5 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5">
-              <LayoutGrid className="size-3.5 text-[#E3A008]" />
-              <h4 className="text-xs font-bold text-[#1F1A17]">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <LayoutGrid className="size-3.5 shrink-0 text-[#E3A008]" />
+              <h4 className="text-xs font-bold text-[#1F1A17] truncate">
                 Grade 3D da Home
               </h4>
             </div>
-            <span className="rounded-full bg-[#FEF8EC] px-2 py-0.5 text-[10px] font-semibold text-[#8A6100] border border-[#E3A008]/30">
+            <span className="shrink-0 rounded-full bg-[#FEF8EC] px-2 py-0.5 text-[10px] font-semibold text-[#8A6100] border border-[#E3A008]/30">
               {storeVisibleHomeBarCount} na loja
             </span>
+          </div>
+
+          {/* Simulador visual de quantidade (somente preview) */}
+          <div className="mb-2.5 flex items-center justify-between gap-2 rounded-lg border border-[#ECE7E0] bg-[#FAF8F5] px-2 py-1">
+            <span className="text-[10px] font-semibold text-[#6E6258] truncate">
+              Simulador
+              {simulatedSlotsCount > 0 && (
+                <span className="ml-1 text-[#C1440E]">
+                  (+{simulatedSlotsCount} demo)
+                </span>
+              )}
+            </span>
+            <div
+              role="group"
+              aria-label="Simular quantidade de categorias na grade"
+              className="inline-flex items-center rounded-md border border-[#ECE7E0] bg-white p-0.5 shrink-0"
+            >
+              {(
+                [
+                  { value: "real", label: "Reais" },
+                  { value: 8, label: "Simular 8" },
+                  { value: 10, label: "Simular 10" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={String(opt.value)}
+                  type="button"
+                  onClick={() => setSimCount(opt.value)}
+                  aria-pressed={simCount === opt.value}
+                  className={cn(
+                    "rounded px-1.5 py-0.5 text-[10px] font-semibold transition-colors",
+                    simCount === opt.value
+                      ? "bg-[#E3A008] text-white"
+                      : "text-[#6E6258] hover:text-[#1F1A17]"
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <Collapsible
@@ -669,8 +857,15 @@ export function CategoryLivePreview({
                   </span>
                 </span>
                 <span className="flex items-center gap-1.5 shrink-0">
-                  <span className="rounded-full border border-[#E3A008]/35 bg-[#FEF8EC] px-1.5 py-0.5 text-[9.5px] font-bold text-[#A16207]">
-                    {viewport === "mobile" ? "Mobile" : "Desktop"}
+                  <span
+                    className={cn(
+                      "rounded-full border px-1.5 py-0.5 text-[9.5px] font-bold",
+                      isApp
+                        ? "border-[#C1440E]/35 bg-[#FFF4EE] text-[#C1440E]"
+                        : "border-[#E3A008]/35 bg-[#FEF8EC] text-[#A16207]"
+                    )}
+                  >
+                    {activeProfileLabel}
                   </span>
                   <ChevronDown
                     className={cn(
@@ -691,16 +886,110 @@ export function CategoryLivePreview({
                   <AlertCircle className="size-3.5 shrink-0 mt-0.5 text-[#E3A008]" />
                   <span>
                     {layoutMigrationPending
-                      ? "Migration 031 pendente no Supabase. Execute scripts/031_home_grid_layout.sql para salvar o layout."
+                      ? "Migrations 031/032 pendentes no Supabase. Execute os scripts em scripts/ para salvar o layout."
                       : "Somente leitura (offline ou banco indisponível)."}
                   </span>
                 </div>
               )}
 
+              {/* Ação rápida exclusiva da aba App */}
+              {isApp && (
+                <div className="flex items-center justify-between gap-2 rounded-md border border-[#C1440E]/20 bg-[#FFF8F4] px-2 py-1.5">
+                  <span className="text-[10.5px] font-medium text-[#7A3519]">
+                    Perfil independente do App Mobile
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={isLayoutDisabled || isAppSameAsMobile}
+                    onClick={handleCopyMobileToApp}
+                    className="h-6 px-2 text-[10px] font-semibold border-[#C1440E]/30 bg-white text-[#C1440E] hover:bg-[#FFF4EE] hover:text-[#9A3309] shrink-0"
+                  >
+                    <Copy className="size-3 mr-1" />
+                    Copiar do Site Mobile
+                  </Button>
+                </div>
+              )}
+
+              {/* Seletor de Colunas com auto-equilíbrio */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-semibold text-[#1F1A17]">
+                    Colunas por linha
+                  </span>
+                  <span className="text-[10px] font-medium text-[#7A6E63]">
+                    Auto-equilíbrio
+                  </span>
+                </div>
+                <div
+                  role="group"
+                  aria-label={`Colunas por linha (${activeProfileLabel})`}
+                  className={cn(
+                    "grid gap-1",
+                    isDesktop ? "grid-cols-6" : "grid-cols-3"
+                  )}
+                >
+                  {columnOptions.map((cols) => {
+                    const active = activeCols === cols
+                    return (
+                      <button
+                        key={cols}
+                        type="button"
+                        disabled={isLayoutDisabled}
+                        onClick={() => handleSelectColumns(cols)}
+                        aria-pressed={active}
+                        className={cn(
+                          "rounded-md border py-1 text-[11px] font-bold tabular-nums transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
+                          active
+                            ? isApp
+                              ? "border-[#C1440E] bg-[#FFF4EE] text-[#C1440E]"
+                              : "border-[#E3A008] bg-[#FEF8EC] text-[#A16207]"
+                            : "border-[#ECE7E0] bg-white text-[#5C5248] hover:border-[#E3A008]/60 hover:text-[#1F1A17]"
+                        )}
+                      >
+                        {cols}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Slider Mestre: Tamanho Geral (70% a 120%) */}
+              <div className="space-y-1.5 rounded-md border border-[#ECE7E0] bg-white p-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold text-[#1F1A17]">
+                    Tamanho Geral
+                  </span>
+                  <span className="rounded bg-[#FEF8EC] border border-[#E3A008]/35 px-1.5 py-0.5 text-[10px] font-bold text-[#A16207] tabular-nums">
+                    {activeScalePercent}%
+                  </span>
+                </div>
+                <Slider
+                  min={HOME_GRID_SCALE_LIMITS.min}
+                  max={HOME_GRID_SCALE_LIMITS.max}
+                  step={1}
+                  value={[activeScalePercent]}
+                  disabled={isLayoutDisabled}
+                  onValueChange={([v]) => {
+                    if (typeof v === "number") {
+                      handleMasterScaleChange(v)
+                    }
+                  }}
+                  aria-label={`Tamanho geral (${activeProfileLabel})`}
+                  className="[&_[data-slot=slider-range]]:bg-[#E3A008] [&_[data-slot=slider-thumb]]:border-[#E3A008] [&_[data-slot=slider-thumb]]:size-3.5"
+                />
+                <div className="flex items-center justify-between text-[9.5px] text-[#8B7E72] tabular-nums">
+                  <span>{HOME_GRID_SCALE_LIMITS.min}%</span>
+                  <span>100% harmônico</span>
+                  <span>{HOME_GRID_SCALE_LIMITS.max}%</span>
+                </div>
+              </div>
+
               {/* Presets Rápidos */}
               <div className="space-y-1.5">
                 <span className="block text-[10px] font-bold uppercase tracking-wider text-[#7A6E63]">
-                  Presets Rápidos ({viewport === "mobile" ? "Mobile" : "Desktop"})
+                  Presets Rápidos ({activeProfileLabel})
                 </span>
                 <div className="grid grid-cols-3 gap-1.5">
                   {(
@@ -732,39 +1021,33 @@ export function CategoryLivePreview({
                 </div>
               </div>
 
-              {/* 4 grupos de Sliders Finos */}
-              <div className="space-y-2.5">
-                {/* 1. Colunas por linha */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-semibold text-[#1F1A17]">
-                      Colunas por linha
+              {/* Bloco Recolhível: Ajuste Fino (fechado por padrão) */}
+              <Collapsible
+                open={fineTuningOpen}
+                onOpenChange={setFineTuningOpen}
+              >
+                <CollapsibleTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between gap-2 rounded-md border border-[#ECE7E0] bg-white px-2 py-1.5 text-left text-[11px] font-semibold text-[#5C5248] hover:border-[#E3A008]/60 hover:text-[#1F1A17] transition-colors"
+                  >
+                    <span>Ajuste Fino</span>
+                    <span className="inline-flex items-center gap-1.5 text-[9.5px] font-medium text-[#8B7E72] tabular-nums">
+                      <span>
+                        {activePad}/{activeGap}/{activeIcon}/{activeLabel}/{activeRadius}px
+                      </span>
+                      <ChevronDown
+                        className={cn(
+                          "size-3.5 transition-transform duration-200",
+                          fineTuningOpen && "rotate-180"
+                        )}
+                      />
                     </span>
-                    <span className="rounded bg-white border border-[#ECE7E0] px-1.5 py-0.5 text-[10px] font-bold text-[#5C5248] tabular-nums">
-                      {activeCols} cols
-                    </span>
-                  </div>
-                  <Slider
-                    min={activeLimits.columns.min}
-                    max={activeLimits.columns.max}
-                    step={1}
-                    value={[activeCols]}
-                    disabled={isLayoutDisabled}
-                    onValueChange={([v]) => {
-                      if (typeof v === "number") {
-                        updateActiveLayoutField("columns", v)
-                      }
-                    }}
-                    aria-label="Colunas por linha"
-                    className="[&_[data-slot=slider-range]]:bg-[#E3A008] [&_[data-slot=slider-thumb]]:border-[#E3A008] [&_[data-slot=slider-thumb]]:size-3.5"
-                  />
-                </div>
+                  </button>
+                </CollapsibleTrigger>
 
-                {/* 2. Altura / Espessura do Card */}
-                <div className="space-y-2 rounded-md border border-[#ECE7E0]/80 bg-white/70 p-2">
-                  <span className="block text-[10px] font-bold uppercase tracking-wider text-[#7A6E63]">
-                    Altura / Espessura do Card
-                  </span>
+                <CollapsibleContent className="mt-2 space-y-2.5 rounded-md border border-[#ECE7E0]/80 bg-white/80 p-2.5">
+                  {/* 1. Padding interno */}
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[11px] font-medium text-[#5C5248]">
@@ -789,6 +1072,8 @@ export function CategoryLivePreview({
                       className="[&_[data-slot=slider-range]]:bg-[#E3A008] [&_[data-slot=slider-thumb]]:border-[#E3A008] [&_[data-slot=slider-thumb]]:size-3.5"
                     />
                   </div>
+
+                  {/* 2. Espaço (gap) */}
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[11px] font-medium text-[#5C5248]">
@@ -813,60 +1098,86 @@ export function CategoryLivePreview({
                       className="[&_[data-slot=slider-range]]:bg-[#E3A008] [&_[data-slot=slider-thumb]]:border-[#E3A008] [&_[data-slot=slider-thumb]]:size-3.5"
                     />
                   </div>
-                </div>
 
-                {/* 3. Tamanho do Ícone 3D */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-semibold text-[#1F1A17]">
-                      Tamanho do Ícone 3D
-                    </span>
-                    <span className="rounded bg-white border border-[#ECE7E0] px-1.5 py-0.5 text-[10px] font-bold text-[#5C5248] tabular-nums">
-                      {activeIcon}px
-                    </span>
+                  {/* 3. Tamanho do Ícone 3D */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-medium text-[#5C5248]">
+                        Tamanho do Ícone 3D
+                      </span>
+                      <span className="rounded bg-[#FAF8F5] border border-[#ECE7E0] px-1.5 py-0.5 text-[10px] font-bold text-[#5C5248] tabular-nums">
+                        {activeIcon}px
+                      </span>
+                    </div>
+                    <Slider
+                      min={activeLimits.icon_size.min}
+                      max={activeLimits.icon_size.max}
+                      step={1}
+                      value={[activeIcon]}
+                      disabled={isLayoutDisabled}
+                      onValueChange={([v]) => {
+                        if (typeof v === "number") {
+                          updateActiveLayoutField("icon_size", v)
+                        }
+                      }}
+                      aria-label="Tamanho do Ícone 3D"
+                      className="[&_[data-slot=slider-range]]:bg-[#E3A008] [&_[data-slot=slider-thumb]]:border-[#E3A008] [&_[data-slot=slider-thumb]]:size-3.5"
+                    />
                   </div>
-                  <Slider
-                    min={activeLimits.icon_size.min}
-                    max={activeLimits.icon_size.max}
-                    step={1}
-                    value={[activeIcon]}
-                    disabled={isLayoutDisabled}
-                    onValueChange={([v]) => {
-                      if (typeof v === "number") {
-                        updateActiveLayoutField("icon_size", v)
-                      }
-                    }}
-                    aria-label="Tamanho do Ícone 3D"
-                    className="[&_[data-slot=slider-range]]:bg-[#E3A008] [&_[data-slot=slider-thumb]]:border-[#E3A008] [&_[data-slot=slider-thumb]]:size-3.5"
-                  />
-                </div>
 
-                {/* 4. Tamanho do Texto */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-semibold text-[#1F1A17]">
-                      Tamanho do Texto
-                    </span>
-                    <span className="rounded bg-white border border-[#ECE7E0] px-1.5 py-0.5 text-[10px] font-bold text-[#5C5248] tabular-nums">
-                      {activeLabel}px
-                    </span>
+                  {/* 4. Tamanho do Texto */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-medium text-[#5C5248]">
+                        Tamanho do Texto
+                      </span>
+                      <span className="rounded bg-[#FAF8F5] border border-[#ECE7E0] px-1.5 py-0.5 text-[10px] font-bold text-[#5C5248] tabular-nums">
+                        {activeLabel}px
+                      </span>
+                    </div>
+                    <Slider
+                      min={activeLimits.label_size.min}
+                      max={activeLimits.label_size.max}
+                      step={1}
+                      value={[activeLabel]}
+                      disabled={isLayoutDisabled}
+                      onValueChange={([v]) => {
+                        if (typeof v === "number") {
+                          updateActiveLayoutField("label_size", v)
+                        }
+                      }}
+                      aria-label="Tamanho do Texto"
+                      className="[&_[data-slot=slider-range]]:bg-[#E3A008] [&_[data-slot=slider-thumb]]:border-[#E3A008] [&_[data-slot=slider-thumb]]:size-3.5"
+                    />
                   </div>
-                  <Slider
-                    min={activeLimits.label_size.min}
-                    max={activeLimits.label_size.max}
-                    step={1}
-                    value={[activeLabel]}
-                    disabled={isLayoutDisabled}
-                    onValueChange={([v]) => {
-                      if (typeof v === "number") {
-                        updateActiveLayoutField("label_size", v)
-                      }
-                    }}
-                    aria-label="Tamanho do Texto"
-                    className="[&_[data-slot=slider-range]]:bg-[#E3A008] [&_[data-slot=slider-thumb]]:border-[#E3A008] [&_[data-slot=slider-thumb]]:size-3.5"
-                  />
-                </div>
-              </div>
+
+                  {/* 5. Arredondamento (border-radius) */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-medium text-[#5C5248]">
+                        Arredondamento
+                      </span>
+                      <span className="rounded bg-[#FAF8F5] border border-[#ECE7E0] px-1.5 py-0.5 text-[10px] font-bold text-[#5C5248] tabular-nums">
+                        {activeRadius}px
+                      </span>
+                    </div>
+                    <Slider
+                      min={activeLimits.card_radius.min}
+                      max={activeLimits.card_radius.max}
+                      step={1}
+                      value={[activeRadius]}
+                      disabled={isLayoutDisabled}
+                      onValueChange={([v]) => {
+                        if (typeof v === "number") {
+                          updateActiveLayoutField("card_radius", v)
+                        }
+                      }}
+                      aria-label="Arredondamento dos cards"
+                      className="[&_[data-slot=slider-range]]:bg-[#E3A008] [&_[data-slot=slider-thumb]]:border-[#E3A008] [&_[data-slot=slider-thumb]]:size-3.5"
+                    />
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
 
               {/* Footer: Restaurar Padrão */}
               <div className="flex items-center justify-end border-t border-[#ECE7E0] pt-2">
@@ -879,15 +1190,240 @@ export function CategoryLivePreview({
                   className="h-7 px-2 text-[11px] font-semibold text-[#6E6258] hover:bg-white hover:text-[#1F1A17]"
                 >
                   <RotateCcw className="size-3 mr-1" />
-                  Restaurar Padrão ({isDesktop ? "Desktop" : "Mobile"})
+                  Restaurar Padrão ({activeProfileLabel})
                 </Button>
               </div>
             </CollapsibleContent>
           </Collapsible>
 
-          {homeBarItems.length === 0 ? (
+          {displayedHomeBarItems.length === 0 ? (
             <div className="rounded-lg border border-dashed border-[#ECE7E0] bg-[#F7F5F0]/70 px-3 py-5 text-center text-[11px] text-[#7A6E63]">
               Nenhum item ativo configurado para a barra da Home.
+            </div>
+          ) : isApp ? (
+            /* Moldura Fiel do App Batata Top (~390px) */
+            <div className="mx-auto w-full max-w-[390px] rounded-[26px] border-[4px] border-[#26211D] bg-white shadow-sm overflow-hidden">
+              {/* Status bar discreta do aparelho */}
+              <div className="flex items-center justify-between px-4 pt-2 pb-1.5 border-b border-[#F2EDE6] bg-white">
+                <span className="text-[10px] font-bold text-[#1F1B16] tabular-nums">
+                  9:41
+                </span>
+                <span className="h-2.5 w-14 rounded-full bg-[#26211D]" />
+                <span className="rounded-full bg-[#FFF4EE] px-1.5 py-0.5 text-[9px] font-bold text-[#C1440E]">
+                  App · 390px
+                </span>
+              </div>
+
+              {/* Superfície fiel a C:\dev\Batatop-app\app\index.js (bg #FFFFFF, px responsivo no frame) */}
+              <div className="bg-white px-3.5 sm:px-5 py-4">
+                <div
+                  className="grid"
+                  style={{
+                    gridTemplateColumns: `repeat(${activeCols}, minmax(0, 1fr))`,
+                    columnGap: `${appColGap}px`,
+                    rowGap: `${appRowGap}px`,
+                  }}
+                >
+                  {displayedHomeBarItems.map((entry) => {
+                    if (entry.kind === "simulated") {
+                      const { demo } = entry
+                      return (
+                        <div
+                          key={demo.id}
+                          aria-disabled="true"
+                          title={`${demo.name} (item demonstrativo do simulador)`}
+                          className="min-w-0 flex flex-col items-center select-none opacity-85"
+                        >
+                          <div
+                            style={{
+                              borderRadius: appCardRadius,
+                              paddingTop: appPadY,
+                              paddingBottom: appPadY,
+                              paddingLeft: appPadX,
+                              paddingRight: appPadX,
+                              marginBottom: 8,
+                            }}
+                            className="relative w-full flex items-center justify-center bg-[#F7F4EF] outline-1 outline-dashed outline-[#D9CFC2]"
+                          >
+                            <span className="absolute -top-[5px] -right-[3px] rounded-full bg-[#6E6258] px-1.5 py-[1px] text-[8px] font-bold uppercase tracking-wide text-white leading-none">
+                              Demo
+                            </span>
+                            <div
+                              style={{ width: appIconSize }}
+                              className="aspect-square max-w-full flex items-center justify-center pointer-events-none"
+                            >
+                              <CategoryIcon
+                                iconUrl={null}
+                                iconType="lucide"
+                                fallbackIcon={demo.fallback_icon}
+                                accentColor={demo.accent_color}
+                                alt={demo.name}
+                                sizeClassName="w-full h-full"
+                                iconClassName="w-[54%] h-[54%]"
+                                className="pointer-events-none"
+                              />
+                            </div>
+                          </div>
+                          <span
+                            style={{
+                              fontSize: appLabelSize,
+                              lineHeight: `${appLabelLineHeight}px`,
+                            }}
+                            className="w-full truncate text-center font-bold text-[#1F1B16]"
+                          >
+                            {demo.name}
+                          </span>
+                        </div>
+                      )
+                    }
+
+                    const { category: cat } = entry
+                    const isEmptyProductCat =
+                      cat.kind === "product_category" &&
+                      cat.active_products === 0
+                    const isDragging =
+                      dragState?.section === "home_bar" &&
+                      dragState.id === cat.id
+                    const isDropTarget =
+                      dragOverTarget?.section === "home_bar" &&
+                      dragOverTarget.id === cat.id &&
+                      dragState?.id !== cat.id
+
+                    return (
+                      <div
+                        key={cat.id}
+                        draggable={canDragHomeBar}
+                        onDragStart={(e) =>
+                          canDragHomeBar && startDrag(e, "home_bar", cat.id)
+                        }
+                        onDragOver={(e) => {
+                          if (
+                            !canDragHomeBar ||
+                            dragState?.section !== "home_bar"
+                          )
+                            return
+                          e.preventDefault()
+                          e.dataTransfer.dropEffect = "move"
+                          if (
+                            dragOverTarget?.section !== "home_bar" ||
+                            dragOverTarget.id !== cat.id
+                          ) {
+                            setDragOverTarget({
+                              section: "home_bar",
+                              id: cat.id,
+                            })
+                          }
+                        }}
+                        onDrop={(e) => handleDropHomeBar(e, cat.id)}
+                        onDragEnd={finishDrag}
+                        onClick={() => handleCardClick(cat)}
+                        role={onEditCategory ? "button" : undefined}
+                        tabIndex={onEditCategory ? 0 : undefined}
+                        onKeyDown={
+                          onEditCategory
+                            ? (e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault()
+                                  handleCardClick(cat)
+                                }
+                              }
+                            : undefined
+                        }
+                        title={
+                          isEmptyProductCat
+                            ? `${cat.name}: 0 ativos (oculta no app)`
+                            : cat.name
+                        }
+                        className={cn(
+                          "group min-w-0 flex flex-col items-center transition-all select-none",
+                          canDragHomeBar
+                            ? "cursor-grab active:cursor-grabbing"
+                            : onEditCategory
+                            ? "cursor-pointer"
+                            : "",
+                          isDragging && "opacity-45 scale-[0.96]"
+                        )}
+                      >
+                        <div
+                          style={{
+                            borderRadius: appCardRadius,
+                            paddingTop: appPadY,
+                            paddingBottom: appPadY,
+                            paddingLeft: appPadX,
+                            paddingRight: appPadX,
+                            marginBottom: 8,
+                          }}
+                          className={cn(
+                            "relative w-full flex items-center justify-center transition-all",
+                            isDropTarget
+                              ? "bg-[#FEF8EC] ring-2 ring-[#E3A008]"
+                              : isEmptyProductCat
+                              ? "bg-[#FEF8EC]/80 opacity-75"
+                              : "bg-[#F7F4EF] group-hover:bg-[#F3ECE0]"
+                          )}
+                        >
+                          {canDragHomeBar && (
+                            <GripVertical
+                              aria-hidden="true"
+                              className="pointer-events-none absolute top-1 left-1 size-3 text-[#B5A99B] opacity-0 group-hover:opacity-90 transition-opacity"
+                            />
+                          )}
+
+                          {cat.badge_text && (
+                            <span
+                              style={{
+                                backgroundColor: cat.badge_color || "#C1440E",
+                              }}
+                              className="absolute -top-[5px] -right-[3px] z-10 max-w-full truncate rounded-full px-1.5 py-[2px] text-[9px] font-extrabold uppercase tracking-[0.03em] text-white leading-none"
+                            >
+                              {cat.badge_text}
+                            </span>
+                          )}
+
+                          {isEmptyProductCat && (
+                            <span
+                              title="0 ativos (oculta no app)"
+                              aria-label="0 ativos (oculta no app)"
+                              className="absolute top-1.5 right-1.5 size-2 rounded-full bg-[#E3A008] ring-2 ring-white"
+                            />
+                          )}
+
+                          <div
+                            style={{ width: appIconSize }}
+                            className="aspect-square max-w-full flex items-center justify-center pointer-events-none"
+                          >
+                            <CategoryIcon
+                              iconUrl={cat.icon_url}
+                              iconType={cat.icon_type}
+                              fallbackIcon={cat.fallback_icon}
+                              accentColor={cat.accent_color}
+                              alt={cat.name}
+                              sizeClassName="w-full h-full"
+                              iconClassName="w-[54%] h-[54%]"
+                              className="pointer-events-none"
+                            />
+                          </div>
+                        </div>
+
+                        <span
+                          style={{
+                            fontSize: appLabelSize,
+                            lineHeight: `${appLabelLineHeight}px`,
+                          }}
+                          className="w-full truncate text-center font-bold text-[#1F1B16]"
+                        >
+                          {cat.name}
+                        </span>
+                        {isEmptyProductCat && (
+                          <span className="mt-0.5 text-[8.5px] font-medium text-[#8A6100] leading-tight">
+                            0 ativos
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
           ) : (
             <div
@@ -897,7 +1433,62 @@ export function CategoryLivePreview({
                 gap: `${previewGap}px`,
               }}
             >
-              {homeBarItems.map((cat) => {
+              {displayedHomeBarItems.map((entry) => {
+                if (entry.kind === "simulated") {
+                  const { demo } = entry
+                  return (
+                    <div
+                      key={demo.id}
+                      aria-disabled="true"
+                      title={`${demo.name} (item demonstrativo do simulador)`}
+                      style={{
+                        paddingTop: previewPadY,
+                        paddingBottom: previewPadY,
+                        paddingLeft: previewPadX,
+                        paddingRight: previewPadX,
+                        borderRadius: previewRadius,
+                      }}
+                      className="relative min-w-0 flex flex-col items-center border border-dashed border-[#D8CEC1] bg-[#F7F5F0]/55 text-center select-none opacity-85"
+                    >
+                      <span className="absolute top-1 right-1 rounded bg-[#6E6258]/85 px-1 py-[1px] text-[7.5px] font-bold uppercase text-white leading-none">
+                        Demo
+                      </span>
+                      {demo.badge_text && (
+                        <span
+                          style={{
+                            backgroundColor: demo.badge_color || "#C1440E",
+                          }}
+                          className="absolute -top-1.5 left-1/2 -translate-x-1/2 max-w-[90%] truncate rounded-full px-1.5 py-[1px] text-[8.5px] font-extrabold uppercase tracking-wide text-white shadow-xs"
+                        >
+                          {demo.badge_text}
+                        </span>
+                      )}
+                      <div
+                        style={{ width: previewIcon }}
+                        className="mt-0.5 aspect-square max-w-full flex items-center justify-center pointer-events-none"
+                      >
+                        <CategoryIcon
+                          iconUrl={null}
+                          iconType="lucide"
+                          fallbackIcon={demo.fallback_icon}
+                          accentColor={demo.accent_color}
+                          alt={demo.name}
+                          sizeClassName="w-full h-full"
+                          iconClassName="w-[54%] h-[54%]"
+                          className="pointer-events-none"
+                        />
+                      </div>
+                      <span
+                        style={{ fontSize: previewLabel, lineHeight: 1.25 }}
+                        className="mt-1 w-full truncate font-semibold text-[#1F1A17]"
+                      >
+                        {demo.name}
+                      </span>
+                    </div>
+                  )
+                }
+
+                const { category: cat } = entry
                 const isEmptyProductCat =
                   cat.kind === "product_category" && cat.active_products === 0
                 const isDragging =
@@ -951,9 +1542,10 @@ export function CategoryLivePreview({
                       paddingBottom: previewPadY,
                       paddingLeft: previewPadX,
                       paddingRight: previewPadX,
+                      borderRadius: previewRadius,
                     }}
                     className={cn(
-                      "group relative min-w-0 flex flex-col items-center rounded-xl border text-center transition-all select-none",
+                      "group relative min-w-0 flex flex-col items-center border text-center transition-all select-none",
                       canDragHomeBar
                         ? "cursor-grab active:cursor-grabbing"
                         : onEditCategory
@@ -1429,7 +2021,10 @@ export function CategoryLivePreview({
               type="button"
               size="sm"
               variant="outline"
-              onClick={onDiscardChanges}
+              onClick={() => {
+                setScaleOverride({})
+                onDiscardChanges?.()
+              }}
               disabled={savingChanges}
               className="h-7 px-2.5 text-xs border-[#ECE7E0] bg-white text-[#5C5248] hover:bg-[#F7F5F0]"
             >

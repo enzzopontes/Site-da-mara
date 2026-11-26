@@ -20,7 +20,7 @@ export const getCachedHomeGridLayout = unstable_cache(
   async (): Promise<HomeGridLayout> => {
     return fetchHomeGridLayoutFromDb()
   },
-  ["home-grid-layout-v1"],
+  ["home-grid-layout-v2"],
   {
     tags: [CATEGORIES_CACHE_TAG, HOME_GRID_LAYOUT_CACHE_TAG],
     revalidate: 60,
