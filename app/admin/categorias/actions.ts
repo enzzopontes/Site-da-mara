@@ -22,7 +22,13 @@ import {
   normalizeLegacyCategorySlug,
   sanitizeCategorySlug,
 } from "@/lib/category-icons"
-import { CATEGORIES_CACHE_TAG } from "@/lib/categories-server"
+import { CATEGORIES_CACHE_TAG, HOME_GRID_LAYOUT_CACHE_TAG } from "@/lib/categories-server"
+import {
+  DEFAULT_HOME_GRID_LAYOUT,
+  HOME_GRID_LAYOUT_LIMITS,
+  normalizeHomeGridLayout,
+  type HomeGridLayout,
+} from "@/lib/home-grid-layout"
 
 export type ActionResult<T = undefined> =
   | { ok: true; data: T }
@@ -119,6 +125,62 @@ const ReorderPayloadSchema = z.object({
     .min(1),
 })
 
+const HomeGridLayoutSchema = z.object({
+  mobile_columns: z
+    .number()
+    .int()
+    .min(HOME_GRID_LAYOUT_LIMITS.mobile_columns.min)
+    .max(HOME_GRID_LAYOUT_LIMITS.mobile_columns.max),
+  mobile_card_padding: z
+    .number()
+    .int()
+    .min(HOME_GRID_LAYOUT_LIMITS.mobile_card_padding.min)
+    .max(HOME_GRID_LAYOUT_LIMITS.mobile_card_padding.max),
+  mobile_card_gap: z
+    .number()
+    .int()
+    .min(HOME_GRID_LAYOUT_LIMITS.mobile_card_gap.min)
+    .max(HOME_GRID_LAYOUT_LIMITS.mobile_card_gap.max),
+  mobile_icon_size: z
+    .number()
+    .int()
+    .min(HOME_GRID_LAYOUT_LIMITS.mobile_icon_size.min)
+    .max(HOME_GRID_LAYOUT_LIMITS.mobile_icon_size.max),
+  mobile_label_size: z
+    .number()
+    .int()
+    .min(HOME_GRID_LAYOUT_LIMITS.mobile_label_size.min)
+    .max(HOME_GRID_LAYOUT_LIMITS.mobile_label_size.max),
+  desktop_columns: z
+    .number()
+    .int()
+    .min(HOME_GRID_LAYOUT_LIMITS.desktop_columns.min)
+    .max(HOME_GRID_LAYOUT_LIMITS.desktop_columns.max),
+  desktop_card_padding: z
+    .number()
+    .int()
+    .min(HOME_GRID_LAYOUT_LIMITS.desktop_card_padding.min)
+    .max(HOME_GRID_LAYOUT_LIMITS.desktop_card_padding.max),
+  desktop_card_gap: z
+    .number()
+    .int()
+    .min(HOME_GRID_LAYOUT_LIMITS.desktop_card_gap.min)
+    .max(HOME_GRID_LAYOUT_LIMITS.desktop_card_gap.max),
+  desktop_icon_size: z
+    .number()
+    .int()
+    .min(HOME_GRID_LAYOUT_LIMITS.desktop_icon_size.min)
+    .max(HOME_GRID_LAYOUT_LIMITS.desktop_icon_size.max),
+  desktop_label_size: z
+    .number()
+    .int()
+    .min(HOME_GRID_LAYOUT_LIMITS.desktop_label_size.min)
+    .max(HOME_GRID_LAYOUT_LIMITS.desktop_label_size.max),
+})
+
+const HOME_GRID_LAYOUT_COLUMNS =
+  "mobile_columns, mobile_card_padding, mobile_card_gap, mobile_icon_size, mobile_label_size, desktop_columns, desktop_card_padding, desktop_card_gap, desktop_icon_size, desktop_label_size"
+
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -162,6 +224,7 @@ async function assertAdmin() {
 function revalidateCatalogPages() {
   try {
     revalidateTag(CATEGORIES_CACHE_TAG, { expire: 0 })
+    revalidateTag(HOME_GRID_LAYOUT_CACHE_TAG, { expire: 0 })
     revalidatePath("/")
     revalidatePath("/cardapio")
     revalidatePath("/admin/categorias")
@@ -216,7 +279,13 @@ function extractStoragePathFromPublicUrl(publicUrl?: string | null): string | nu
 function isMissingTableError(error: any): boolean {
   const code = String(error?.code || "")
   const msg = String(error?.message || "")
-  return code === "42P01" || code === "PGRST205" || msg.includes("does not exist") || msg.includes("Could not find the table")
+  return (
+    code === "42P01" ||
+    code === "PGRST205" ||
+    msg.includes("does not exist") ||
+    msg.includes("Could not find the table") ||
+    msg.includes("schema cache")
+  )
 }
 
 export async function listCategoriesAdminAction(): Promise<
@@ -948,5 +1017,79 @@ export async function listCategoryIconsAction(): Promise<
     return { ok: true, data: { icons: storageIcons } }
   } catch (err: any) {
     return { ok: false, error: err?.message || "Erro ao carregar banco de ícones 3D." }
+  }
+}
+
+export async function getHomeGridLayoutAdminAction(): Promise<
+  ActionResult<{ layout: HomeGridLayout; migrationPending?: boolean }>
+> {
+  try {
+    const auth = await assertAdmin()
+    if (!auth.authorized) return { ok: false, error: auth.error }
+
+    const service = getServiceClient()
+    const { data, error } = await service
+      .from("home_grid_layout")
+      .select(HOME_GRID_LAYOUT_COLUMNS)
+      .eq("id", "default")
+      .maybeSingle()
+
+    if (error) {
+      if (isMissingTableError(error)) {
+        return {
+          ok: true,
+          data: { layout: { ...DEFAULT_HOME_GRID_LAYOUT }, migrationPending: true },
+        }
+      }
+      return { ok: false, error: `Erro ao carregar layout da grade: ${error.message}` }
+    }
+
+    return { ok: true, data: { layout: normalizeHomeGridLayout(data) } }
+  } catch (err: any) {
+    return { ok: false, error: err?.message || "Erro inesperado ao carregar layout da grade." }
+  }
+}
+
+export async function saveHomeGridLayoutAction(
+  rawInput: unknown
+): Promise<ActionResult<HomeGridLayout>> {
+  try {
+    const auth = await assertAdmin()
+    if (!auth.authorized) return { ok: false, error: auth.error }
+
+    const parsed = HomeGridLayoutSchema.safeParse(rawInput)
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message || "Configuração da grade inválida.",
+      }
+    }
+
+    const service = getServiceClient()
+    const { data, error } = await service
+      .from("home_grid_layout")
+      .upsert({ id: "default", ...parsed.data }, { onConflict: "id" })
+      .select(HOME_GRID_LAYOUT_COLUMNS)
+      .single()
+
+    if (error && isMissingTableError(error)) {
+      return {
+        ok: false,
+        code: "MIGRATION_PENDING",
+        error: "Tabela home_grid_layout pendente. Execute a migration scripts/031_home_grid_layout.sql no Supabase.",
+      }
+    }
+
+    if (error || !data) {
+      return {
+        ok: false,
+        error: error?.message || "Não foi possível salvar a configuração da grade.",
+      }
+    }
+
+    revalidateCatalogPages()
+    return { ok: true, data: normalizeHomeGridLayout(data) }
+  } catch (err: any) {
+    return { ok: false, error: err?.message || "Erro inesperado ao salvar configuração da grade." }
   }
 }

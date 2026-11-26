@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type DragEvent,
 } from "react"
@@ -46,11 +47,18 @@ import type {
 import {
   deleteCategorySafeAction,
   duplicateCategoryAction,
+  getHomeGridLayoutAdminAction,
   listCategoriesAdminAction,
   reorderCategoriesAction,
+  saveHomeGridLayoutAction,
   toggleCategoryActiveAction,
   type ReorderItemInput,
 } from "./actions"
+import {
+  DEFAULT_HOME_GRID_LAYOUT,
+  isSameHomeGridLayout,
+  type HomeGridLayout,
+} from "@/lib/home-grid-layout"
 import { CategoryFormModal } from "@/components/admin/categories/category-form-modal"
 import { CategoryDeleteModal } from "@/components/admin/categories/category-delete-modal"
 import { CategoryLivePreview } from "@/components/admin/categories/category-live-preview"
@@ -104,9 +112,18 @@ function moveArrayItem<T>(list: T[], fromIndex: number, toIndex: number): T[] {
 export default function AdminCategoriasPage() {
   const [categories, setCategories] = useState<CategoryWithCounts[]>([])
   const [savedCategories, setSavedCategories] = useState<CategoryWithCounts[]>([])
+  const [homeGridLayout, setHomeGridLayout] = useState<HomeGridLayout>(
+    DEFAULT_HOME_GRID_LAYOUT
+  )
+  const [savedHomeGridLayout, setSavedHomeGridLayout] =
+    useState<HomeGridLayout>(DEFAULT_HOME_GRID_LAYOUT)
+  const savedHomeGridLayoutRef = useRef<HomeGridLayout>(
+    DEFAULT_HOME_GRID_LAYOUT
+  )
   const [loading, setLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [migrationPending, setMigrationPending] = useState(false)
+  const [layoutMigrationPending, setLayoutMigrationPending] = useState(false)
   const [isOffline, setIsOffline] = useState(false)
 
   // Navigation, search & filters
@@ -146,8 +163,15 @@ export default function AdminCategoriasPage() {
   const [dragOverId, setDragOverId] = useState<string | null>(null)
 
   const writesDisabled = migrationPending || isOffline
+  const isHomeGridLayoutDirty = !isSameHomeGridLayout(
+    homeGridLayout,
+    savedHomeGridLayout
+  )
   const hasAnyUnsavedChanges =
-    dirtyTabs.home_bar || dirtyTabs.home_featured || dirtyTabs.menu
+    dirtyTabs.home_bar ||
+    dirtyTabs.home_featured ||
+    dirtyTabs.menu ||
+    isHomeGridLayoutDirty
   const isSavingOrder = savingAll || savingMode !== null
   const orderControlsDisabled = writesDisabled || isSavingOrder
 
@@ -165,30 +189,50 @@ export default function AdminCategoriasPage() {
     }
   }, [])
 
-  const loadCategories = useCallback(async (showSpinner = true) => {
-    if (showSpinner) setLoading(true)
-    setErrorMessage(null)
+  const loadCategories = useCallback(
+    async (showSpinner = true, showToastOnError = true) => {
+      if (showSpinner) setLoading(true)
+      setErrorMessage(null)
 
-    try {
-      const res = await listCategoriesAdminAction()
-      if (!res.ok) {
-        setErrorMessage(res.error || "Não foi possível carregar as categorias.")
-        return
+      try {
+        const [res, layoutRes] = await Promise.all([
+          listCategoriesAdminAction(),
+          getHomeGridLayoutAdminAction().catch(() => null),
+        ])
+        if (!res.ok) {
+          setErrorMessage(res.error || "Não foi possível carregar as categorias.")
+          return
+        }
+        setCategories(res.data.categories)
+        setSavedCategories(res.data.categories)
+        setMigrationPending(Boolean(res.data.migrationPending))
+        setDirtyTabs({ home_bar: false, home_featured: false, menu: false })
+        if (layoutRes && layoutRes.ok) {
+          setLayoutMigrationPending(Boolean(layoutRes.data.migrationPending))
+          setHomeGridLayout(layoutRes.data.layout)
+          setSavedHomeGridLayout(layoutRes.data.layout)
+          savedHomeGridLayoutRef.current = layoutRes.data.layout
+        } else {
+          setHomeGridLayout(savedHomeGridLayoutRef.current)
+          if (showToastOnError) {
+            toast.error(
+              (layoutRes && !layoutRes.ok ? layoutRes.error : undefined) ||
+                "Não foi possível carregar o layout da grade."
+            )
+          }
+        }
+      } catch (err: unknown) {
+        const msg =
+          err instanceof Error
+            ? err.message
+            : "Erro de conexão ao carregar categorias."
+        setErrorMessage(msg)
+      } finally {
+        if (showSpinner) setLoading(false)
       }
-      setCategories(res.data.categories)
-      setSavedCategories(res.data.categories)
-      setMigrationPending(Boolean(res.data.migrationPending))
-      setDirtyTabs({ home_bar: false, home_featured: false, menu: false })
-    } catch (err: unknown) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : "Erro de conexão ao carregar categorias."
-      setErrorMessage(msg)
-    } finally {
-      if (showSpinner) setLoading(false)
-    }
-  }, [])
+    },
+    []
+  )
 
   useEffect(() => {
     loadCategories(true)
@@ -287,7 +331,7 @@ export default function AdminCategoriasPage() {
     }
     if (hasAnyUnsavedChanges) {
       toast.warning(
-        "Salve ou descarte as alterações de ordem antes de continuar."
+        "Salve ou descarte as alterações de ordem ou layout da grade antes de continuar."
       )
       return
     }
@@ -306,7 +350,7 @@ export default function AdminCategoriasPage() {
     }
     if (hasAnyUnsavedChanges) {
       toast.warning(
-        "Salve ou descarte as alterações de ordem antes de editar uma categoria."
+        "Salve ou descarte as alterações de ordem ou layout da grade antes de editar uma categoria."
       )
       return
     }
@@ -380,7 +424,7 @@ export default function AdminCategoriasPage() {
     if (writesDisabled) return
     if (hasAnyUnsavedChanges) {
       toast.warning(
-        "Salve ou descarte as alterações de ordem antes de continuar."
+        "Salve ou descarte as alterações de ordem ou layout da grade antes de continuar."
       )
       return
     }
@@ -404,7 +448,7 @@ export default function AdminCategoriasPage() {
     if (writesDisabled) return
     if (hasAnyUnsavedChanges) {
       toast.warning(
-        "Salve ou descarte as alterações de ordem antes de continuar."
+        "Salve ou descarte as alterações de ordem ou layout da grade antes de continuar."
       )
       return
     }
@@ -695,11 +739,13 @@ export default function AdminCategoriasPage() {
     if (dirtyTabs.home_bar) modesToSave.push("home_bar")
     if (dirtyTabs.home_featured) modesToSave.push("home_featured")
     if (dirtyTabs.menu) modesToSave.push("menu")
-    if (modesToSave.length === 0) return
+    const saveLayout = isHomeGridLayoutDirty
+    if (modesToSave.length === 0 && !saveLayout) return
 
     setSavingAll(true)
     const succeededModes: OrderMode[] = []
-    let failedError: string | null = null
+    let savedLayoutData: HomeGridLayout | null = null
+    const failures: string[] = []
 
     try {
       for (const mode of modesToSave) {
@@ -708,12 +754,42 @@ export default function AdminCategoriasPage() {
           succeededModes.push(mode)
           continue
         }
-        const res = await reorderCategoriesAction(mode, items)
-        if (!res.ok) {
-          failedError = res.error || "Erro ao salvar alterações."
-          break
+        try {
+          const res = await reorderCategoriesAction(mode, items)
+          if (!res.ok) {
+            failures.push(res.error || "Erro ao salvar alterações de ordem.")
+            continue
+          }
+          succeededModes.push(mode)
+        } catch (err: unknown) {
+          failures.push(
+            err instanceof Error
+              ? err.message
+              : "Erro ao salvar alterações de ordem."
+          )
         }
-        succeededModes.push(mode)
+      }
+
+      if (saveLayout) {
+        try {
+          const layoutRes = await saveHomeGridLayoutAction(homeGridLayout)
+          if (layoutRes.ok) {
+            savedLayoutData = layoutRes.data
+          } else {
+            if (layoutRes.code === "MIGRATION_PENDING") {
+              setLayoutMigrationPending(true)
+            }
+            failures.push(
+              layoutRes.error || "Erro ao salvar layout da Grade 3D."
+            )
+          }
+        } catch (err: unknown) {
+          failures.push(
+            err instanceof Error
+              ? err.message
+              : "Erro ao salvar layout da Grade 3D."
+          )
+        }
       }
 
       if (succeededModes.length > 0) {
@@ -757,13 +833,27 @@ export default function AdminCategoriasPage() {
         })
       }
 
-      if (failedError) {
-        toast.error(failedError)
+      if (savedLayoutData) {
+        setHomeGridLayout(savedLayoutData)
+        setSavedHomeGridLayout(savedLayoutData)
+        savedHomeGridLayoutRef.current = savedLayoutData
+      }
+
+      const hasSuccesses = succeededModes.length > 0 || Boolean(savedLayoutData)
+
+      if (failures.length > 0 && hasSuccesses) {
+        toast.warning(
+          `Parte das alterações foi salva, mas houve falha em outra parte: ${failures.join(" ")}`
+        )
+      } else if (failures.length > 0) {
+        toast.error(failures.join(" "))
+      } else if (savedLayoutData && succeededModes.length > 0) {
+        toast.success("Alterações da grade e ordem salvas com sucesso!")
+      } else if (savedLayoutData) {
+        toast.success("Layout da Grade 3D salvo e publicado!")
       } else {
         toast.success("Ordem da vitrine e cardápio salva!")
       }
-    } catch {
-      toast.error("Erro ao salvar alterações.")
     } finally {
       setSavingAll(false)
     }
@@ -771,14 +861,15 @@ export default function AdminCategoriasPage() {
 
   function handleDiscardAllOrderChanges() {
     setCategories(savedCategories)
+    setHomeGridLayout(savedHomeGridLayout)
     setDirtyTabs({ home_bar: false, home_featured: false, menu: false })
-    toast.info("Alterações de ordem descartadas.")
+    toast.info("Alterações descartadas.")
   }
 
   function handlePreviewEditCategory(cat: CategoryWithCounts) {
     if (hasAnyUnsavedChanges) {
       toast.warning(
-        "Salve ou descarte as alterações de ordem antes de editar uma categoria."
+        "Salve ou descarte as alterações de ordem ou layout da grade antes de editar uma categoria."
       )
       return
     }
@@ -865,10 +956,17 @@ export default function AdminCategoriasPage() {
                 <Button
                   type="button"
                   variant="outline"
+                  disabled={loading || Boolean(errorMessage)}
                   className="xl:hidden border-[#ECE7E0] bg-[#FEF8EC] text-[#8A6100] hover:bg-[#FDEFC9]"
                 >
                   <Eye className="size-4 mr-1.5" />
                   Prévia ao Vivo
+                  {hasAnyUnsavedChanges && (
+                    <span
+                      className="ml-1.5 size-2 rounded-full bg-[#C1440E]"
+                      aria-hidden="true"
+                    />
+                  )}
                 </Button>
               </SheetTrigger>
               <SheetContent
@@ -889,6 +987,10 @@ export default function AdminCategoriasPage() {
                   hasUnsavedChanges={hasAnyUnsavedChanges}
                   savingChanges={isSavingOrder}
                   writesDisabled={writesDisabled}
+                  layoutWritesDisabled={writesDisabled || layoutMigrationPending}
+                  layoutMigrationPending={layoutMigrationPending}
+                  homeGridLayout={homeGridLayout}
+                  onChangeHomeGridLayout={setHomeGridLayout}
                   onEditCategory={handlePreviewEditCategory}
                   onReorderHomeBar={handlePreviewReorderHomeBar}
                   onReorderHomeFeatured={handlePreviewReorderHomeFeatured}
@@ -1865,6 +1967,10 @@ export default function AdminCategoriasPage() {
               hasUnsavedChanges={hasAnyUnsavedChanges}
               savingChanges={isSavingOrder}
               writesDisabled={writesDisabled}
+              layoutWritesDisabled={writesDisabled || layoutMigrationPending}
+              layoutMigrationPending={layoutMigrationPending}
+              homeGridLayout={homeGridLayout}
+              onChangeHomeGridLayout={setHomeGridLayout}
               onEditCategory={handlePreviewEditCategory}
               onReorderHomeBar={handlePreviewReorderHomeBar}
               onReorderHomeFeatured={handlePreviewReorderHomeFeatured}
@@ -1992,7 +2098,7 @@ function OrderTabToolbar({
             type="button"
             variant="outline"
             size="sm"
-            disabled={saving}
+            disabled={disabled || saving}
             onClick={onDiscard}
             className="border-[#ECE7E0] bg-white text-[#5C5248]"
           >

@@ -1,9 +1,15 @@
 "use client"
 
 import { ScrollReveal } from "@/components/ui/scroll-reveal"
-import { useEffect, useRef, useState } from "react"
+import type React from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { DEFAULT_CATEGORIES, getCategoryHref, type Category } from "@/lib/categories-db"
+import {
+  DEFAULT_HOME_GRID_LAYOUT,
+  normalizeHomeGridLayout,
+  type HomeGridLayout,
+} from "@/lib/home-grid-layout"
 import { CategoryIcon } from "@/components/category-icon"
 
 const DEFAULT_HOME_BAR_ITEMS = DEFAULT_CATEGORIES.filter(
@@ -12,13 +18,18 @@ const DEFAULT_HOME_BAR_ITEMS = DEFAULT_CATEGORIES.filter(
 
 export interface CategoryBarProps {
   items?: Category[]
+  layout?: HomeGridLayout
 }
 
-export function CategoryBar({ items = DEFAULT_HOME_BAR_ITEMS }: CategoryBarProps) {
+export function CategoryBar({
+  items = DEFAULT_HOME_BAR_ITEMS,
+  layout = DEFAULT_HOME_GRID_LAYOUT,
+}: CategoryBarProps) {
   const gridRef = useRef<HTMLDivElement>(null)
   const [isFloating, setIsFloating] = useState(false)
   const isFloatingRef = useRef(false)
   const [activeId, setActiveId] = useState<string>(() => items[0]?.id ?? "")
+  const gridLayout = useMemo(() => normalizeHomeGridLayout(layout), [layout])
 
   useEffect(() => {
     if (items.length === 0) {
@@ -86,6 +97,19 @@ export function CategoryBar({ items = DEFAULT_HOME_BAR_ITEMS }: CategoryBarProps
     ? [todosItem, ...orderedItems.filter((c) => c.id !== todosItem.id)]
     : orderedItems
 
+  const gridVars = {
+    "--cat-cols-m": String(gridLayout.mobile_columns),
+    "--cat-cols-d": String(gridLayout.desktop_columns),
+    "--cat-pad-m": `${gridLayout.mobile_card_padding}px`,
+    "--cat-pad-d": `${gridLayout.desktop_card_padding}px`,
+    "--cat-gap-m": `${gridLayout.mobile_card_gap}px`,
+    "--cat-gap-d": `${gridLayout.desktop_card_gap}px`,
+    "--cat-icon-m": `${gridLayout.mobile_icon_size}px`,
+    "--cat-icon-d": `${gridLayout.desktop_icon_size}px`,
+    "--cat-text-m": `${gridLayout.mobile_label_size}px`,
+    "--cat-text-d": `${gridLayout.desktop_label_size}px`,
+  } as React.CSSProperties
+
   return (
     <>
       {/* 1. Grade de Categorias "Gordinhas" no fluxo da página (estilo App Batata Top) */}
@@ -95,16 +119,19 @@ export function CategoryBar({ items = DEFAULT_HOME_BAR_ITEMS }: CategoryBarProps
         className="py-4 px-4 bg-white border-b border-[#ECE7E0]"
       >
         <div className="container mx-auto max-w-5xl">
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5 sm:gap-4">
+          <div
+            style={gridVars}
+            className="grid [grid-template-columns:repeat(var(--cat-cols-m),minmax(0,1fr))] sm:[grid-template-columns:repeat(var(--cat-cols-d),minmax(0,1fr))] [gap:var(--cat-gap-m)] sm:[gap:var(--cat-gap-d)]"
+          >
             {orderedItems.map((cat) => {
               const isActive = activeId === cat.id
               const href = getCategoryHref(cat)
               return (
-                <ScrollReveal key={cat.id} className="grid">
+                <ScrollReveal key={cat.id} className="grid min-w-0">
                   <Link
                     href={href}
                     onClick={() => setActiveId(cat.id)}
-                    className={`group relative flex flex-col items-center justify-center p-3 sm:p-4 rounded-2xl border transition-all active:scale-[0.95] ${
+                    className={`group relative flex flex-col items-center justify-center min-w-0 [padding:var(--cat-pad-m)] sm:[padding:var(--cat-pad-d)] rounded-2xl border transition-all active:scale-[0.95] ${
                       isActive
                         ? "bg-[#FEF8EC] border-[#E3A008] shadow-xs"
                         : "bg-[#F7F4EF] hover:bg-[#FEF8EC] border-[#ECE7E0] hover:border-[#E3A008]/60 shadow-2xs"
@@ -113,12 +140,12 @@ export function CategoryBar({ items = DEFAULT_HOME_BAR_ITEMS }: CategoryBarProps
                     {cat.badge_text && (
                       <span
                         style={{ backgroundColor: cat.badge_color || "#C1440E" }}
-                        className="absolute top-1.5 right-1.5 z-10 text-white uppercase tracking-wide text-[9px] font-extrabold px-1.5 py-0.5 rounded-full leading-none shadow-2xs pointer-events-none"
+                        className="absolute top-1.5 right-1.5 z-10 max-w-[calc(100%-0.75rem)] truncate text-white uppercase tracking-wide text-[9px] font-extrabold px-1.5 py-0.5 rounded-full leading-none shadow-2xs pointer-events-none"
                       >
                         {cat.badge_text}
                       </span>
                     )}
-                    <div className="w-13 h-13 sm:w-16 sm:h-16 flex items-center justify-center mb-1.5 sm:mb-2">
+                    <div className="aspect-square [width:var(--cat-icon-m)] sm:[width:var(--cat-icon-d)] max-w-full flex items-center justify-center mb-1.5 sm:mb-2">
                       <CategoryIcon
                         iconUrl={cat.icon_url}
                         iconType={cat.icon_type}
@@ -126,12 +153,12 @@ export function CategoryBar({ items = DEFAULT_HOME_BAR_ITEMS }: CategoryBarProps
                         accentColor={cat.accent_color}
                         alt={cat.name}
                         sizeClassName="w-full h-full"
-                        iconClassName="w-7 h-7"
+                        iconClassName="w-[54%] h-[54%]"
                         className="drop-shadow-[0_4px_8px_rgba(0,0,0,0.08)] group-hover:scale-105 transition-transform"
                       />
                     </div>
                     <span
-                      className={`text-xs sm:text-sm font-bold text-center truncate w-full transition-colors ${
+                      className={`[font-size:var(--cat-text-m)] sm:[font-size:var(--cat-text-d)] leading-[1.333] sm:leading-[1.429] font-bold text-center truncate w-full transition-colors ${
                         isActive ? "text-[#A16207]" : "text-[#1A1A1A] group-hover:text-[#E3A008]"
                       }`}
                     >

@@ -9,7 +9,8 @@ import { ScrollReveal } from "@/components/ui/scroll-reveal"
 import { OrderSummary } from "@/components/order-summary"
 import { productsManager, type Product } from "@/lib/products-db"
 import { couponsManager } from "@/lib/cupons-manager"
-import { getCachedActiveCategories } from "@/lib/categories-server"
+import { getCachedActiveCategories, getCachedHomeGridLayout } from "@/lib/categories-server"
+import { DEFAULT_HOME_GRID_LAYOUT } from "@/lib/home-grid-layout"
 import {
   DEFAULT_CATEGORIES,
   getHomeBarCategories,
@@ -23,25 +24,33 @@ export const revalidate = 60
 
 export default async function Home() {
   // Busca em paralelo com tolerância a falhas
-  const [categories, allProducts, rankingNames, mostRequestedData, totalCustomers, allCoupons] =
-    await Promise.all([
-      getCachedActiveCategories().catch(() => DEFAULT_CATEGORIES),
-      productsManager.getProducts().catch(() => [] as Product[]),
-      productsManager.getGlobalRankingNames(60).catch(() => [] as string[]),
-      productsManager.getMostRequestedProduct().catch(() => ({
-        product: {
-          id: "default",
-          name: "Batata Especial da Casa",
-          description: "Recheio generoso e queijo derretido",
-          price: 29.9,
-          image: "https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&w=800&q=80",
-        },
-        totalOrders: 0,
-        customerPhotos: [],
-      })),
-      productsManager.getTotalCustomers().catch(() => 0),
-      couponsManager.getCoupons().catch(() => [] as any[]),
-    ])
+  const [
+    categories,
+    homeGridLayout,
+    allProducts,
+    rankingNames,
+    mostRequestedData,
+    totalCustomers,
+    allCoupons,
+  ] = await Promise.all([
+    getCachedActiveCategories().catch(() => DEFAULT_CATEGORIES),
+    getCachedHomeGridLayout().catch(() => DEFAULT_HOME_GRID_LAYOUT),
+    productsManager.getProducts().catch(() => [] as Product[]),
+    productsManager.getGlobalRankingNames(60).catch(() => [] as string[]),
+    productsManager.getMostRequestedProduct().catch(() => ({
+      product: {
+        id: "default",
+        name: "Batata Especial da Casa",
+        description: "Recheio generoso e queijo derretido",
+        price: 29.9,
+        image: "https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&w=800&q=80",
+      },
+      totalOrders: 0,
+      customerPhotos: [],
+    })),
+    productsManager.getTotalCustomers().catch(() => 0),
+    couponsManager.getCoupons().catch(() => [] as any[]),
+  ])
 
   const activeCoupons = allCoupons.filter((c: any) => c.isActive)
   const homeCoupon = activeCoupons.find((c: any) => c.showOnHome) || activeCoupons[0]
@@ -138,7 +147,7 @@ export default async function Home() {
 
         {/* Barra de Categorias Rápidas (Chips estilo iFood com espaço reservado CLS = 0) */}
         <section aria-label="Navegação por categorias" className="w-full min-h-[60px] bg-white">
-          <CategoryBar items={homeBarItems} />
+          <CategoryBar items={homeBarItems} layout={homeGridLayout} />
         </section>
 
         {/* Carrossel Rotativo de Cupons da Home (Estilo Mobile iFood) */}

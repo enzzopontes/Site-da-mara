@@ -4,12 +4,15 @@ import { useMemo, useRef, useState, type DragEvent } from "react"
 import {
   AlertCircle,
   ArrowLeftRight,
+  ChevronDown,
   Eye,
   EyeOff,
   GripVertical,
   LayoutGrid,
   Loader2,
   Monitor,
+  RotateCcw,
+  SlidersHorizontal,
   Smartphone,
   Sparkles,
   Trophy,
@@ -23,8 +26,21 @@ import {
   type MenuLayoutZone,
 } from "@/lib/categories-db"
 import { normalizeLegacyCategorySlug } from "@/lib/category-icons"
+import {
+  DEFAULT_HOME_GRID_LAYOUT,
+  HOME_GRID_LAYOUT_LIMITS,
+  HOME_GRID_LAYOUT_PRESETS,
+  type HomeGridLayout,
+  type HomeGridPresetKey,
+} from "@/lib/home-grid-layout"
 import { CategoryIcon } from "@/components/category-icon"
 import { Button } from "@/components/ui/button"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
+import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 
@@ -34,6 +50,10 @@ export interface CategoryLivePreviewProps {
   hasUnsavedChanges?: boolean
   savingChanges?: boolean
   writesDisabled?: boolean
+  layoutWritesDisabled?: boolean
+  layoutMigrationPending?: boolean
+  homeGridLayout?: HomeGridLayout
+  onChangeHomeGridLayout?: (next: HomeGridLayout) => void
   onEditCategory?: (category: CategoryWithCounts) => void
   onReorderHomeBar?: (orderedVisibleIds: string[]) => void
   onReorderHomeFeatured?: (orderedVisibleIds: string[]) => void
@@ -78,6 +98,10 @@ export function CategoryLivePreview({
   hasUnsavedChanges = false,
   savingChanges = false,
   writesDisabled = false,
+  layoutWritesDisabled = false,
+  layoutMigrationPending = false,
+  homeGridLayout = DEFAULT_HOME_GRID_LAYOUT,
+  onChangeHomeGridLayout,
   onEditCategory,
   onReorderHomeBar,
   onReorderHomeFeatured,
@@ -87,6 +111,7 @@ export function CategoryLivePreview({
 }: CategoryLivePreviewProps) {
   const [viewport, setViewport] = useState<PreviewViewport>("mobile")
   const [simulateStoreAutoHide, setSimulateStoreAutoHide] = useState(false)
+  const [layoutEditorOpen, setLayoutEditorOpen] = useState(false)
   const [dragState, setDragState] = useState<DragState | null>(null)
   const [dragOverTarget, setDragOverTarget] = useState<DragOverTarget | null>(
     null
@@ -101,6 +126,155 @@ export function CategoryLivePreview({
     !writesDisabled && !savingChanges && Boolean(onReorderHomeFeatured)
   const canDragMenu =
     !writesDisabled && !savingChanges && Boolean(onReorderMenu)
+
+  const isDesktop = viewport === "desktop"
+  const isLayoutDisabled = Boolean(
+    writesDisabled ||
+      layoutWritesDisabled ||
+      savingChanges ||
+      !onChangeHomeGridLayout
+  )
+
+  const activeCols = isDesktop
+    ? homeGridLayout.desktop_columns
+    : homeGridLayout.mobile_columns
+  const activePad = isDesktop
+    ? homeGridLayout.desktop_card_padding
+    : homeGridLayout.mobile_card_padding
+  const activeGap = isDesktop
+    ? homeGridLayout.desktop_card_gap
+    : homeGridLayout.mobile_card_gap
+  const activeIcon = isDesktop
+    ? homeGridLayout.desktop_icon_size
+    : homeGridLayout.mobile_icon_size
+  const activeLabel = isDesktop
+    ? homeGridLayout.desktop_label_size
+    : homeGridLayout.mobile_label_size
+
+  const activeLimits = isDesktop
+    ? {
+        columns: HOME_GRID_LAYOUT_LIMITS.desktop_columns,
+        card_padding: HOME_GRID_LAYOUT_LIMITS.desktop_card_padding,
+        card_gap: HOME_GRID_LAYOUT_LIMITS.desktop_card_gap,
+        icon_size: HOME_GRID_LAYOUT_LIMITS.desktop_icon_size,
+        label_size: HOME_GRID_LAYOUT_LIMITS.desktop_label_size,
+      }
+    : {
+        columns: HOME_GRID_LAYOUT_LIMITS.mobile_columns,
+        card_padding: HOME_GRID_LAYOUT_LIMITS.mobile_card_padding,
+        card_gap: HOME_GRID_LAYOUT_LIMITS.mobile_card_gap,
+        icon_size: HOME_GRID_LAYOUT_LIMITS.mobile_icon_size,
+        label_size: HOME_GRID_LAYOUT_LIMITS.mobile_label_size,
+      }
+
+  const previewGap = isDesktop
+    ? Math.max(3, Math.round(activeGap * 0.35))
+    : Math.max(4, Math.round(activeGap * 0.7))
+  const previewPadY = isDesktop
+    ? Math.max(3, Math.round(activePad * 0.4))
+    : Math.max(4, Math.round(activePad * 0.72))
+  const previewPadX = isDesktop
+    ? Math.max(2, Math.round(activePad * 0.3))
+    : Math.max(3, Math.round(activePad * 0.5))
+  const previewIcon = isDesktop
+    ? Math.max(16, Math.min(36, Math.round(activeIcon * 0.44)))
+    : Math.max(22, Math.min(54, Math.round(activeIcon * 0.76)))
+  const previewLabel = isDesktop
+    ? Math.max(7.5, Math.round(activeLabel * 0.68 * 10) / 10)
+    : Math.max(8.5, Math.round(activeLabel * 0.86 * 10) / 10)
+
+  function matchesPreset(presetKey: HomeGridPresetKey): boolean {
+    if (isDesktop) {
+      const p = HOME_GRID_LAYOUT_PRESETS.desktop[presetKey]
+      return (
+        homeGridLayout.desktop_columns === p.desktop_columns &&
+        homeGridLayout.desktop_card_padding === p.desktop_card_padding &&
+        homeGridLayout.desktop_card_gap === p.desktop_card_gap &&
+        homeGridLayout.desktop_icon_size === p.desktop_icon_size &&
+        homeGridLayout.desktop_label_size === p.desktop_label_size
+      )
+    }
+    const p = HOME_GRID_LAYOUT_PRESETS.mobile[presetKey]
+    return (
+      homeGridLayout.mobile_columns === p.mobile_columns &&
+      homeGridLayout.mobile_card_padding === p.mobile_card_padding &&
+      homeGridLayout.mobile_card_gap === p.mobile_card_gap &&
+      homeGridLayout.mobile_icon_size === p.mobile_icon_size &&
+      homeGridLayout.mobile_label_size === p.mobile_label_size
+    )
+  }
+
+  function applyPreset(presetKey: HomeGridPresetKey) {
+    if (isLayoutDisabled || !onChangeHomeGridLayout) return
+    onChangeHomeGridLayout({
+      ...homeGridLayout,
+      ...HOME_GRID_LAYOUT_PRESETS[viewport][presetKey],
+    })
+  }
+
+  function updateActiveLayoutField(
+    field: "columns" | "card_padding" | "card_gap" | "icon_size" | "label_size",
+    value: number
+  ) {
+    if (isLayoutDisabled || !onChangeHomeGridLayout) return
+    const key = `${viewport}_${field}` as keyof HomeGridLayout
+    if (homeGridLayout[key] === value) return
+    onChangeHomeGridLayout({
+      ...homeGridLayout,
+      [key]: value,
+    })
+  }
+
+  const isActiveViewportDefault = isDesktop
+    ? homeGridLayout.desktop_columns ===
+        DEFAULT_HOME_GRID_LAYOUT.desktop_columns &&
+      homeGridLayout.desktop_card_padding ===
+        DEFAULT_HOME_GRID_LAYOUT.desktop_card_padding &&
+      homeGridLayout.desktop_card_gap ===
+        DEFAULT_HOME_GRID_LAYOUT.desktop_card_gap &&
+      homeGridLayout.desktop_icon_size ===
+        DEFAULT_HOME_GRID_LAYOUT.desktop_icon_size &&
+      homeGridLayout.desktop_label_size ===
+        DEFAULT_HOME_GRID_LAYOUT.desktop_label_size
+    : homeGridLayout.mobile_columns ===
+        DEFAULT_HOME_GRID_LAYOUT.mobile_columns &&
+      homeGridLayout.mobile_card_padding ===
+        DEFAULT_HOME_GRID_LAYOUT.mobile_card_padding &&
+      homeGridLayout.mobile_card_gap ===
+        DEFAULT_HOME_GRID_LAYOUT.mobile_card_gap &&
+      homeGridLayout.mobile_icon_size ===
+        DEFAULT_HOME_GRID_LAYOUT.mobile_icon_size &&
+      homeGridLayout.mobile_label_size ===
+        DEFAULT_HOME_GRID_LAYOUT.mobile_label_size
+
+  function resetActiveViewportLayout() {
+    if (
+      isLayoutDisabled ||
+      !onChangeHomeGridLayout ||
+      isActiveViewportDefault
+    ) {
+      return
+    }
+    if (isDesktop) {
+      onChangeHomeGridLayout({
+        ...homeGridLayout,
+        desktop_columns: DEFAULT_HOME_GRID_LAYOUT.desktop_columns,
+        desktop_card_padding: DEFAULT_HOME_GRID_LAYOUT.desktop_card_padding,
+        desktop_card_gap: DEFAULT_HOME_GRID_LAYOUT.desktop_card_gap,
+        desktop_icon_size: DEFAULT_HOME_GRID_LAYOUT.desktop_icon_size,
+        desktop_label_size: DEFAULT_HOME_GRID_LAYOUT.desktop_label_size,
+      })
+    } else {
+      onChangeHomeGridLayout({
+        ...homeGridLayout,
+        mobile_columns: DEFAULT_HOME_GRID_LAYOUT.mobile_columns,
+        mobile_card_padding: DEFAULT_HOME_GRID_LAYOUT.mobile_card_padding,
+        mobile_card_gap: DEFAULT_HOME_GRID_LAYOUT.mobile_card_gap,
+        mobile_icon_size: DEFAULT_HOME_GRID_LAYOUT.mobile_icon_size,
+        mobile_label_size: DEFAULT_HOME_GRID_LAYOUT.mobile_label_size,
+      })
+    }
+  }
 
   const categoryById = useMemo(
     () => new Map(categories.map((cat) => [cat.id, cat])),
@@ -478,16 +652,250 @@ export function CategoryLivePreview({
             </span>
           </div>
 
+          <Collapsible
+            open={layoutEditorOpen}
+            onOpenChange={setLayoutEditorOpen}
+            className="mb-2.5"
+          >
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-2 rounded-lg border border-[#ECE7E0] bg-[#FAF8F5] px-2.5 py-1.5 text-left transition-colors hover:border-[#E3A008]/60 hover:bg-[#FEF8EC]/50"
+              >
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <SlidersHorizontal className="size-3.5 shrink-0 text-[#E3A008]" />
+                  <span className="text-[11px] font-semibold text-[#1F1A17] truncate">
+                    Ajustar Tamanho &amp; Colunas
+                  </span>
+                </span>
+                <span className="flex items-center gap-1.5 shrink-0">
+                  <span className="rounded-full border border-[#E3A008]/35 bg-[#FEF8EC] px-1.5 py-0.5 text-[9.5px] font-bold text-[#A16207]">
+                    {viewport === "mobile" ? "Mobile" : "Desktop"}
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      "size-3.5 text-[#7A6E63] transition-transform duration-200",
+                      layoutEditorOpen && "rotate-180"
+                    )}
+                  />
+                </span>
+              </button>
+            </CollapsibleTrigger>
+
+            <CollapsibleContent className="mt-2.5 rounded-lg border border-[#ECE7E0] bg-[#FAF8F5] p-2.5 space-y-3">
+              {(layoutMigrationPending || writesDisabled) && (
+                <div
+                  role="status"
+                  className="flex items-start gap-1.5 rounded-md border border-[#E3A008]/40 bg-[#FEF8EC] px-2 py-1.5 text-[10.5px] leading-snug text-[#8A6100]"
+                >
+                  <AlertCircle className="size-3.5 shrink-0 mt-0.5 text-[#E3A008]" />
+                  <span>
+                    {layoutMigrationPending
+                      ? "Migration 031 pendente no Supabase. Execute scripts/031_home_grid_layout.sql para salvar o layout."
+                      : "Somente leitura (offline ou banco indisponível)."}
+                  </span>
+                </div>
+              )}
+
+              {/* Presets Rápidos */}
+              <div className="space-y-1.5">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-[#7A6E63]">
+                  Presets Rápidos ({viewport === "mobile" ? "Mobile" : "Desktop"})
+                </span>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(
+                    [
+                      { key: "compact", label: "Compacto" },
+                      { key: "default", label: "Padrão" },
+                      { key: "large", label: "Grande" },
+                    ] as const
+                  ).map(({ key, label }) => {
+                    const active = matchesPreset(key)
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        disabled={isLayoutDisabled}
+                        onClick={() => applyPreset(key)}
+                        aria-pressed={active}
+                        className={cn(
+                          "rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
+                          active
+                            ? "border-[#E3A008] bg-[#FEF8EC] text-[#A16207]"
+                            : "border-[#ECE7E0] bg-white text-[#6E6258] hover:border-[#E3A008]/60 hover:text-[#1F1A17]"
+                        )}
+                      >
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* 4 grupos de Sliders Finos */}
+              <div className="space-y-2.5">
+                {/* 1. Colunas por linha */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-semibold text-[#1F1A17]">
+                      Colunas por linha
+                    </span>
+                    <span className="rounded bg-white border border-[#ECE7E0] px-1.5 py-0.5 text-[10px] font-bold text-[#5C5248] tabular-nums">
+                      {activeCols} cols
+                    </span>
+                  </div>
+                  <Slider
+                    min={activeLimits.columns.min}
+                    max={activeLimits.columns.max}
+                    step={1}
+                    value={[activeCols]}
+                    disabled={isLayoutDisabled}
+                    onValueChange={([v]) => {
+                      if (typeof v === "number") {
+                        updateActiveLayoutField("columns", v)
+                      }
+                    }}
+                    aria-label="Colunas por linha"
+                    className="[&_[data-slot=slider-range]]:bg-[#E3A008] [&_[data-slot=slider-thumb]]:border-[#E3A008] [&_[data-slot=slider-thumb]]:size-3.5"
+                  />
+                </div>
+
+                {/* 2. Altura / Espessura do Card */}
+                <div className="space-y-2 rounded-md border border-[#ECE7E0]/80 bg-white/70 p-2">
+                  <span className="block text-[10px] font-bold uppercase tracking-wider text-[#7A6E63]">
+                    Altura / Espessura do Card
+                  </span>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-medium text-[#5C5248]">
+                        Padding interno
+                      </span>
+                      <span className="rounded bg-[#FAF8F5] border border-[#ECE7E0] px-1.5 py-0.5 text-[10px] font-bold text-[#5C5248] tabular-nums">
+                        {activePad}px
+                      </span>
+                    </div>
+                    <Slider
+                      min={activeLimits.card_padding.min}
+                      max={activeLimits.card_padding.max}
+                      step={1}
+                      value={[activePad]}
+                      disabled={isLayoutDisabled}
+                      onValueChange={([v]) => {
+                        if (typeof v === "number") {
+                          updateActiveLayoutField("card_padding", v)
+                        }
+                      }}
+                      aria-label="Padding interno do card"
+                      className="[&_[data-slot=slider-range]]:bg-[#E3A008] [&_[data-slot=slider-thumb]]:border-[#E3A008] [&_[data-slot=slider-thumb]]:size-3.5"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-medium text-[#5C5248]">
+                        Espaço (gap)
+                      </span>
+                      <span className="rounded bg-[#FAF8F5] border border-[#ECE7E0] px-1.5 py-0.5 text-[10px] font-bold text-[#5C5248] tabular-nums">
+                        {activeGap}px
+                      </span>
+                    </div>
+                    <Slider
+                      min={activeLimits.card_gap.min}
+                      max={activeLimits.card_gap.max}
+                      step={1}
+                      value={[activeGap]}
+                      disabled={isLayoutDisabled}
+                      onValueChange={([v]) => {
+                        if (typeof v === "number") {
+                          updateActiveLayoutField("card_gap", v)
+                        }
+                      }}
+                      aria-label="Espaço entre cards"
+                      className="[&_[data-slot=slider-range]]:bg-[#E3A008] [&_[data-slot=slider-thumb]]:border-[#E3A008] [&_[data-slot=slider-thumb]]:size-3.5"
+                    />
+                  </div>
+                </div>
+
+                {/* 3. Tamanho do Ícone 3D */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-semibold text-[#1F1A17]">
+                      Tamanho do Ícone 3D
+                    </span>
+                    <span className="rounded bg-white border border-[#ECE7E0] px-1.5 py-0.5 text-[10px] font-bold text-[#5C5248] tabular-nums">
+                      {activeIcon}px
+                    </span>
+                  </div>
+                  <Slider
+                    min={activeLimits.icon_size.min}
+                    max={activeLimits.icon_size.max}
+                    step={1}
+                    value={[activeIcon]}
+                    disabled={isLayoutDisabled}
+                    onValueChange={([v]) => {
+                      if (typeof v === "number") {
+                        updateActiveLayoutField("icon_size", v)
+                      }
+                    }}
+                    aria-label="Tamanho do Ícone 3D"
+                    className="[&_[data-slot=slider-range]]:bg-[#E3A008] [&_[data-slot=slider-thumb]]:border-[#E3A008] [&_[data-slot=slider-thumb]]:size-3.5"
+                  />
+                </div>
+
+                {/* 4. Tamanho do Texto */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-semibold text-[#1F1A17]">
+                      Tamanho do Texto
+                    </span>
+                    <span className="rounded bg-white border border-[#ECE7E0] px-1.5 py-0.5 text-[10px] font-bold text-[#5C5248] tabular-nums">
+                      {activeLabel}px
+                    </span>
+                  </div>
+                  <Slider
+                    min={activeLimits.label_size.min}
+                    max={activeLimits.label_size.max}
+                    step={1}
+                    value={[activeLabel]}
+                    disabled={isLayoutDisabled}
+                    onValueChange={([v]) => {
+                      if (typeof v === "number") {
+                        updateActiveLayoutField("label_size", v)
+                      }
+                    }}
+                    aria-label="Tamanho do Texto"
+                    className="[&_[data-slot=slider-range]]:bg-[#E3A008] [&_[data-slot=slider-thumb]]:border-[#E3A008] [&_[data-slot=slider-thumb]]:size-3.5"
+                  />
+                </div>
+              </div>
+
+              {/* Footer: Restaurar Padrão */}
+              <div className="flex items-center justify-end border-t border-[#ECE7E0] pt-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={isLayoutDisabled || isActiveViewportDefault}
+                  onClick={resetActiveViewportLayout}
+                  className="h-7 px-2 text-[11px] font-semibold text-[#6E6258] hover:bg-white hover:text-[#1F1A17]"
+                >
+                  <RotateCcw className="size-3 mr-1" />
+                  Restaurar Padrão ({isDesktop ? "Desktop" : "Mobile"})
+                </Button>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
           {homeBarItems.length === 0 ? (
             <div className="rounded-lg border border-dashed border-[#ECE7E0] bg-[#F7F5F0]/70 px-3 py-5 text-center text-[11px] text-[#7A6E63]">
               Nenhum item ativo configurado para a barra da Home.
             </div>
           ) : (
             <div
-              className={cn(
-                "grid gap-2",
-                viewport === "desktop" ? "grid-cols-6" : "grid-cols-3"
-              )}
+              className="grid"
+              style={{
+                gridTemplateColumns: `repeat(${activeCols}, minmax(0, 1fr))`,
+                gap: `${previewGap}px`,
+              }}
             >
               {homeBarItems.map((cat) => {
                 const isEmptyProductCat =
@@ -538,8 +946,14 @@ export function CategoryLivePreview({
                         ? `${cat.name}: 0 ativos (oculta na loja)`
                         : cat.name
                     }
+                    style={{
+                      paddingTop: previewPadY,
+                      paddingBottom: previewPadY,
+                      paddingLeft: previewPadX,
+                      paddingRight: previewPadX,
+                    }}
                     className={cn(
-                      "group relative flex flex-col items-center rounded-xl border px-1.5 py-2 text-center transition-all select-none",
+                      "group relative min-w-0 flex flex-col items-center rounded-xl border text-center transition-all select-none",
                       canDragHomeBar
                         ? "cursor-grab active:cursor-grabbing"
                         : onEditCategory
@@ -556,7 +970,12 @@ export function CategoryLivePreview({
                     {canDragHomeBar && (
                       <GripVertical
                         aria-hidden="true"
-                        className="pointer-events-none absolute top-1 left-1 size-3 text-[#B5A99B] opacity-50 group-hover:opacity-100 transition-opacity"
+                        className={cn(
+                          "pointer-events-none absolute top-1 left-1 size-3 text-[#B5A99B] group-hover:opacity-100 transition-opacity",
+                          isDesktop && activeCols >= 7
+                            ? "opacity-0"
+                            : "opacity-50"
+                        )}
                       />
                     )}
 
@@ -581,21 +1000,25 @@ export function CategoryLivePreview({
                       />
                     )}
 
-                    <CategoryIcon
-                      iconUrl={cat.icon_url}
-                      iconType={cat.icon_type}
-                      fallbackIcon={cat.fallback_icon}
-                      accentColor={cat.accent_color}
-                      alt={cat.name}
-                      sizeClassName={
-                        viewport === "desktop" ? "w-7 h-7" : "w-9 h-9"
-                      }
-                      iconClassName={
-                        viewport === "desktop" ? "w-3.5 h-3.5" : "w-4 h-4"
-                      }
-                      className="mt-0.5 pointer-events-none"
-                    />
-                    <span className="mt-1 w-full truncate text-[10px] font-semibold text-[#1F1A17]">
+                    <div
+                      style={{ width: previewIcon }}
+                      className="mt-0.5 aspect-square max-w-full flex items-center justify-center pointer-events-none"
+                    >
+                      <CategoryIcon
+                        iconUrl={cat.icon_url}
+                        iconType={cat.icon_type}
+                        fallbackIcon={cat.fallback_icon}
+                        accentColor={cat.accent_color}
+                        alt={cat.name}
+                        sizeClassName="w-full h-full"
+                        iconClassName="w-[54%] h-[54%]"
+                        className="pointer-events-none"
+                      />
+                    </div>
+                    <span
+                      style={{ fontSize: previewLabel, lineHeight: 1.25 }}
+                      className="mt-1 w-full truncate font-semibold text-[#1F1A17]"
+                    >
                       {cat.name}
                     </span>
                     {isEmptyProductCat && viewport === "mobile" && (
@@ -1025,7 +1448,7 @@ export function CategoryLivePreview({
                   Salvando...
                 </>
               ) : (
-                "Salvar ordem"
+                "Salvar"
               )}
             </Button>
           </div>
