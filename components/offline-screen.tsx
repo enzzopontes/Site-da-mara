@@ -13,7 +13,7 @@ export function OfflineScreen() {
     <div className="fixed inset-0 z-[9999] bg-white flex flex-col items-center justify-center p-4 text-center">
       <div className="mb-8">
         <Image
-          src="/logo.png"
+          src="/brand/logo.png"
           alt="batata top"
           width={64}
           height={64}

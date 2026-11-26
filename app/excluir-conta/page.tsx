@@ -117,7 +117,7 @@ export default function ExcluirContaPage() {
           <header className="text-center mb-4 sm:mb-8">
             <Link href="/" className="inline-block relative w-11 h-11 sm:w-20 sm:h-20 mx-auto mb-1.5 sm:mb-3">
               <Image
-                src="/logo.png"
+                src="/brand/logo.png"
                 alt="Batata Top Delivery"
                 fill
                 className="object-contain"

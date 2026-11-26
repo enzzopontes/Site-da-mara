@@ -170,7 +170,7 @@ function ActiveOrderCard({
       <div className="flex items-center justify-between pb-3 border-b border-[#F5F2ED]">
         <div className="flex items-center gap-3">
           <img
-            src="/logo.png"
+            src="/brand/logo.png"
             alt="Batata Top"
             className="w-10 h-10 rounded-xl object-contain shrink-0"
           />
@@ -360,7 +360,7 @@ function CompletedOrderCard({
       <div className="flex items-center justify-between pb-3 border-b border-[#F5F2ED]">
         <div className="flex items-center gap-3">
           <img
-            src="/logo.png"
+            src="/brand/logo.png"
             alt="Batata Top"
             className="w-10 h-10 rounded-xl object-contain shrink-0"
           />
@@ -681,7 +681,7 @@ export default function PedidosPage() {
         id: String(item.product_id || item.id || `reorder-${Date.now()}-${secureRandomHex(6)}`),
         name: item.name || item.product_name,
         price: Number(item.price || item.product_price || 0),
-        image: item.image || item.image_url || "/logo.png",
+        image: item.image || item.image_url || "/brand/logo.png",
         quantity: Number(item.quantity) || 1,
         category: item.category || "batata",
         pastaType: item.pastaType || undefined,

@@ -230,7 +230,7 @@ export function Header({ variant = "default" }: HeaderProps) {
         <div className="container mx-auto px-4 flex justify-center">
           <Link href="/" className="relative w-11 h-11 transition-transform hover:scale-105">
             <Image
-              src="/logo.png"
+              src="/brand/logo.png"
               alt="batata top Delivery"
               fill
               className="rounded-full object-contain pointer-events-none"

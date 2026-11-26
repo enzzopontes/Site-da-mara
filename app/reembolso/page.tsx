@@ -42,7 +42,7 @@ export default function ReembolsoPage() {
               aria-label="Ir para a página inicial da Batata Top"
             >
               <Image
-                src="/logo.png"
+                src="/brand/logo.png"
                 alt="Batata Top Delivery"
                 fill
                 className="object-contain"

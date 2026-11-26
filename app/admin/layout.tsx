@@ -447,7 +447,7 @@ function AdminLayoutContent({
         <div className="h-20 px-5 flex items-center justify-between border-b border-[#2D2721] bg-[#14100C]">
           <Link href="/admin" className="flex items-center gap-3 group">
             <img
-              src="/logo.png"
+              src="/brand/logo.png"
               alt="Batata Top Logo"
               className="h-14 w-14 object-contain shrink-0 group-hover:scale-105 transition-transform"
             />

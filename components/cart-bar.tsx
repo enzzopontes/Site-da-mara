@@ -161,7 +161,7 @@ export function CartBar() {
           className="flex-1 flex items-center gap-2 pr-2 min-w-0 group cursor-pointer"
         >
           <Image
-            src="/logo.png"
+            src="/brand/logo.png"
             alt="Batata Top Logo"
             width={48}
             height={48}

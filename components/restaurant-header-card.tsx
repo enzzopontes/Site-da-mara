@@ -211,7 +211,7 @@ export function RestaurantHeaderCard({
             <div className="relative shrink-0">
               <div className="w-18 h-18 sm:w-24 sm:h-24 md:w-26 md:h-26 rounded-full overflow-hidden shadow-md flex items-center justify-center">
                 <img
-                  src="/logo.png"
+                  src="/brand/logo.png"
                   alt="Batata Top Logo"
                   className="w-full h-full object-cover rounded-full"
                 />

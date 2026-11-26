@@ -418,7 +418,7 @@ export default function DetalhesPedidoPage() {
         id: String(item.product_id || item.id || `reorder-${Date.now()}-${idx}`),
         name: typeof item.name === "string" ? item.name : typeof item.product_name === "string" ? item.product_name : "Item",
         price: Number(item.price ?? item.product_price ?? 0) || 0,
-        image: item.image || item.image_url || "/logo.png",
+        image: item.image || item.image_url || "/brand/logo.png",
         quantity: Number(item.quantity) || 1,
         category: item.category || "batata",
         pastaType: typeof item.pastaType === "string" ? item.pastaType : undefined,

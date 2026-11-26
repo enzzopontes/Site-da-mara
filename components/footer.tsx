@@ -175,7 +175,7 @@ export function Footer() {
             <div className="flex items-center gap-3">
               <div className="relative w-8 h-8 grayscale opacity-70 flex-shrink-0">
                 <Image
-                  src="/logo.png"
+                  src="/brand/logo.png"
                   alt="Batata Top"
                   fill
                   className="object-contain"

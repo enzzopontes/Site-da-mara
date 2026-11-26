@@ -683,7 +683,7 @@ export function AddToCartDialog({
     onOpenChange(false)
   }
 
-  const imageUrl = product.image || "/placeholder.jpg"
+  const imageUrl = product.image || "/ui/placeholder.jpg"
 
   return (
     <ResponsiveModal open={open} onOpenChange={onOpenChange}>
@@ -705,7 +705,7 @@ export function AddToCartDialog({
               decoding="async"
               onLoad={() => setDialogImageLoaded(true)}
               onError={(e) => {
-                ;(e.target as HTMLImageElement).src = "/placeholder.jpg"
+                ;(e.target as HTMLImageElement).src = "/ui/placeholder.jpg"
               }}
               className={`w-full h-full object-cover ${
                 !dialogImageLoaded ? "opacity-0" : "opacity-100 transition-opacity duration-300"
@@ -920,7 +920,7 @@ export function AddToCartDialog({
                               decoding="async"
                               className="w-12 h-12 object-contain"
                               onError={(e) => {
-                                ;(e.target as HTMLImageElement).src = "/placeholder.jpg"
+                                ;(e.target as HTMLImageElement).src = "/ui/placeholder.jpg"
                               }}
                             />
                           </div>

@@ -315,7 +315,7 @@ export default function CheckoutPage() {
         if (prods && prods.length > 0) {
           const mapped = prods.map((p: any) => ({
             ...p,
-            image: p.image_url || p.image || "/placeholder.jpg",
+            image: p.image_url || p.image || "/ui/placeholder.jpg",
           }))
           setRecommendedProducts(mapped)
         }
@@ -691,7 +691,7 @@ export default function CheckoutPage() {
       id: String(product.id),
       name: product.name || product.nome,
       price: Number(product.price || product.preco || 0),
-      image: product.image || product.image_url || product.imagem || "/placeholder.jpg",
+      image: product.image || product.image_url || product.imagem || "/ui/placeholder.jpg",
       quantity: 1,
       category: product.category || product.categoria || "batata",
       adicionais: [],

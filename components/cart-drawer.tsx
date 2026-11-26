@@ -19,7 +19,7 @@ interface CartDrawerProps {
 }
 
 function resolveProductImage(img?: string) {
-  if (!img) return "/placeholder.jpg"
+  if (!img) return "/ui/placeholder.jpg"
   if (img.startsWith("/") || img.startsWith("http")) return img
   return `/products/${img}`
 }
