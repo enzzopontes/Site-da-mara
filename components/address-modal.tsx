@@ -26,13 +26,26 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
     };
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs transition-opacity p-0 sm:p-4">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs transition-opacity p-0 sm:p-4"
+    >
       <div
         role="dialog"
         aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
         className="flex h-[92vh] sm:h-[680px] w-full sm:max-w-md flex-col overflow-hidden rounded-t-[28px] sm:rounded-3xl bg-[#FAF8F5] shadow-2xl transition-all"
       >
         <AddressFlow

@@ -7,6 +7,27 @@ export interface ReverseGeocodeResult {
   displayName?: string
 }
 
+export interface SearchAddressResult {
+  place_id: number | string
+  display_name: string
+  lat: string
+  lon: string
+  address?: {
+    road?: string
+    pedestrian?: string
+    suburb?: string
+    neighbourhood?: string
+    quarter?: string
+    city?: string
+    town?: string
+    municipality?: string
+    village?: string
+    state?: string
+    postcode?: string
+    house_number?: string
+  }
+}
+
 /**
  * Limpa nomes em inglês de ruas gerados por geocodificadores ("50 Street" -> "Rua 50")
  */
@@ -31,75 +52,50 @@ export function formatCep(rawCep: string): string {
 }
 
 /**
- * Serviço de geocodificação reversa com timeout de 10s e fallbacks.
+ * Serviço de geocodificação reversa com timeout de 12s e fallbacks.
  */
+export async function searchAddress(
+  query: string,
+  signal?: AbortSignal
+): Promise<SearchAddressResult[]> {
+  const trimmed = query.trim()
+  if (!trimmed) return []
+
+  const res = await fetch(`/api/geocode/search?q=${encodeURIComponent(trimmed)}`, {
+    signal,
+  })
+  if (!res.ok) return []
+
+  const data = await res.json()
+  return Array.isArray(data?.results) ? data.results : []
+}
+
 export const mapsService = {
-  async reverseGeocode(latitude: number, longitude: number): Promise<ReverseGeocodeResult> {
+  async reverseGeocode(latitude: number, longitude: number): Promise<ReverseGeocodeResult | null> {
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 10000)
+    const timeoutId = setTimeout(() => controller.abort(), 12000)
 
     try {
-      // 1. Tenta endpoint interno do Next.js (Google Maps / Nominatim BR)
-      const localResponse = await fetch(
+      const response = await fetch(
         `/api/geocode/reverse?lat=${latitude}&lng=${longitude}`,
         { signal: controller.signal }
       )
 
-      if (localResponse.ok) {
-        const data = await localResponse.json()
-        if (data && (data.street || data.city)) {
-          clearTimeout(timeoutId)
-          return {
-            ...data,
-            street: cleanStreetName(data.street || ""),
-          }
-        }
+      if (!response.ok) return null
+
+      const data = await response.json()
+      if (!data) return null
+
+      return {
+        ...data,
+        street: cleanStreetName(data.street || ""),
       }
     } catch {
-      // Fallback em caso de erro na rota interna
-    }
-
-    // 2. Fallback client-side para Nominatim (OpenStreetMap) em Português
-    try {
-      const osmUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&addressdetails=1&accept-language=pt-BR,pt;q=0.9`
-      const osmResponse = await fetch(osmUrl, {
-        headers: {
-          Accept: "application/json",
-          "Accept-Language": "pt-BR,pt;q=0.9",
-          "User-Agent": "BatataTopDelivery/1.0 (contato@batatatopiacanga.com.br)",
-        },
-        signal: controller.signal,
-      })
-      
-      if (osmResponse.ok) {
-        const osmData = await osmResponse.json()
-        const address = osmData.address || {}
-
-        const rawStreet = address.road || address.pedestrian || address.street || address.residential || ""
-        const street = cleanStreetName(rawStreet)
-        const neighborhood = address.suburb || address.neighbourhood || address.quarter || address.residential || ""
-        const city = address.city || address.town || address.municipality || address.village || "Iacanga"
-        const state = address.state_code || (address.state === "São Paulo" ? "SP" : address.state) || "SP"
-        const rawPostcode = address.postcode || "17150-000"
-        const cep = formatCep(rawPostcode) || "17150-000"
-
-        clearTimeout(timeoutId)
-        return {
-          street,
-          neighborhood,
-          city,
-          state,
-          cep,
-          displayName: osmData.display_name,
-        }
-      }
-    } catch (err) {
-      clearTimeout(timeoutId)
-      throw err
+      return null
     } finally {
       clearTimeout(timeoutId)
     }
-
-    throw new Error("Não foi possível obter os dados do endereço para estas coordenadas.")
   },
+
+  searchAddress,
 }

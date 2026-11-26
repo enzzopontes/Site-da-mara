@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { addressesManager, Address } from "@/lib/addresses-manager";
-import { mapsService, cleanStreetName } from "@/lib/maps-service";
+import { mapsService, cleanStreetName, SearchAddressResult } from "@/lib/maps-service";
 import { appToast } from "@/lib/app-toast";
 import { useRouter } from "next/navigation";
 import { OutOfAreaDialog } from "@/components/address-selection/out-of-area-dialog";
@@ -47,8 +47,8 @@ interface Coords {
 }
 
 const DEFAULT_IACANGA_COORDS: Coords = {
-  lat: -21.8402,
-  lng: -49.0058, // Centro de Iacanga - SP
+  lat: -21.8928,
+  lng: -49.0226, // Centro de Iacanga - SP
 };
 
 const GUEST_STORAGE_KEY = "batata_top_guest_address";
@@ -56,27 +56,8 @@ const CIDADE_PERMITIDA = "Iacanga";
 const UF_PERMITIDA = "SP";
 const SEARCH_DEBOUNCE_MS = 400;
 const MIN_SEARCH_CHARS = 3;
-const NOMINATIM_CONTACT = "contato@batatatop.com.br";
 
-interface NominatimResult {
-  place_id: number | string;
-  lat: string;
-  lon: string;
-  display_name: string;
-  address?: {
-    road?: string;
-    pedestrian?: string;
-    house_number?: string;
-    suburb?: string;
-    neighbourhood?: string;
-    quarter?: string;
-    city?: string;
-    town?: string;
-    municipality?: string;
-    state?: string;
-    postcode?: string;
-  };
-}
+type NominatimResult = SearchAddressResult;
 
 function normalizeText(value?: string | null): string {
   return (value || "")
@@ -152,6 +133,7 @@ const FloatingCenterPin: React.FC<{ isMoving: boolean }> = ({ isMoving }) => {
 // -------------------------------------------------------------
 interface MapSelectorViewProps {
   center: Coords;
+  hasApiKey: boolean;
   isMoving: boolean;
   onDragStart: () => void;
   onCameraIdle: (coords: Coords) => void;
@@ -162,8 +144,11 @@ interface MapSelectorViewProps {
   isLocatingGps: boolean;
 }
 
+const COORD_EPSILON = 0.00005;
+
 const MapSelectorView: React.FC<MapSelectorViewProps> = ({
   center,
+  hasApiKey,
   isMoving,
   onDragStart,
   onCameraIdle,
@@ -175,18 +160,45 @@ const MapSelectorView: React.FC<MapSelectorViewProps> = ({
 }) => {
   const map = useMap();
   const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastUserCenterRef = useRef<Coords | null>(null);
 
-  // Recentraliza o mapa imediatamente se a coordenada do centro mudar
+  // Limpa timer pendente ao desmontar
   useEffect(() => {
-    if (map && center) {
-      map.panTo(center);
+    return () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    };
+  }, []);
+
+  // Recentraliza o mapa apenas quando a mudança for programática e > 0.00005 graus
+  useEffect(() => {
+    if (!map || !center) return;
+
+    const lastUser = lastUserCenterRef.current;
+    if (
+      lastUser &&
+      Math.abs(lastUser.lat - center.lat) <= COORD_EPSILON &&
+      Math.abs(lastUser.lng - center.lng) <= COORD_EPSILON
+    ) {
+      return;
     }
+
+    const currentCenter = map.getCenter();
+    if (
+      currentCenter &&
+      Math.abs(currentCenter.lat() - center.lat) <= COORD_EPSILON &&
+      Math.abs(currentCenter.lng() - center.lng) <= COORD_EPSILON
+    ) {
+      return;
+    }
+
+    map.panTo(center);
   }, [map, center]);
 
   const handleCameraChange = useCallback(
     (ev: MapCameraChangedEvent) => {
       const c = ev.detail.center;
       if (!c) return;
+      lastUserCenterRef.current = { lat: c.lat, lng: c.lng };
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
       idleTimerRef.current = setTimeout(() => {
         onCameraIdle({ lat: c.lat, lng: c.lng });
@@ -215,17 +227,32 @@ const MapSelectorView: React.FC<MapSelectorViewProps> = ({
 
       {/* Mapa */}
       <div className="relative flex-1 w-full h-full">
-        <Map
-          defaultCenter={center}
-          defaultZoom={17}
-          gestureHandling="greedy"
-          disableDefaultUI={true}
-          onDragstart={onDragStart}
-          onCameraChanged={handleCameraChange}
-          className="h-full w-full"
-        />
-
-        <FloatingCenterPin isMoving={isMoving} />
+        {hasApiKey ? (
+          <>
+            <Map
+              defaultCenter={center}
+              defaultZoom={17}
+              gestureHandling="greedy"
+              disableDefaultUI={true}
+              onDragstart={onDragStart}
+              onCameraChanged={handleCameraChange}
+              className="h-full w-full"
+            />
+            <FloatingCenterPin isMoving={isMoving} />
+          </>
+        ) : (
+          <div className="flex h-full w-full flex-col items-center justify-center bg-[#FAF8F5] px-6 pb-20 text-center">
+            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#E59500]/15 text-[#E59500]">
+              <MapPin className="h-7 w-7" />
+            </div>
+            <p className="text-sm font-extrabold text-slate-800">
+              Mapa indisponível no momento
+            </p>
+            <p className="mt-1.5 max-w-xs text-xs text-slate-500 leading-relaxed">
+              Você ainda pode usar sua localização atual pelo GPS, voltar para buscar o endereço ou confirmar a posição selecionada.
+            </p>
+          </div>
+        )}
 
         {isResolving && (
           <div className="pointer-events-none absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 rounded-full bg-white/95 px-3.5 py-1.5 shadow-md backdrop-blur-xs">
@@ -293,7 +320,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
   // Localização rápida do GPS (sem travar)
   const [currentCoords, setCurrentCoords] = useState<Coords>(DEFAULT_IACANGA_COORDS);
   const [gpsAddressText, setGpsAddressText] = useState<string>("");
-  const [isDetectingGps, setIsDetectingGps] = useState<boolean>(true);
+  const [isDetectingGps, setIsDetectingGps] = useState<boolean>(false);
 
   // Estados do Mapa
   const [mapCoords, setMapCoords] = useState<Coords>(DEFAULT_IACANGA_COORDS);
@@ -339,7 +366,8 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchAbortRef = useRef<AbortController | null>(null);
 
-  const geocoderRef = useRef<google.maps.Geocoder | null>(null);
+  const geocodeRequestIdRef = useRef<number>(0);
+  const preservedCoordsRef = useRef<Coords | null>(null);
 
   useEffect(() => {
     return () => {
@@ -391,103 +419,52 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
     loadSavedAddresses();
   }, [loadSavedAddresses]);
 
-  // 2. Geocodificador em Português do Brasil com fallbacks
-  const reverseGeocode = useCallback(
-    (coords: Coords): Promise<{ street: string; neighborhood: string; city: string; state: string; cep: string; formatted: string }> => {
-      return new Promise((resolve) => {
-        if (!geocoderRef.current && typeof google !== "undefined" && google.maps) {
-          geocoderRef.current = new google.maps.Geocoder();
+  // 2. Geocodificador reverso via mapsService (evita chamadas client-side ao google.maps.Geocoder)
+  const applyReverseGeocode = useCallback(
+    async (coords: Coords, updateGpsText = false) => {
+      const reqId = ++geocodeRequestIdRef.current;
+      setIsResolvingAddress(true);
+      try {
+        const raw = await mapsService.reverseGeocode(coords.lat, coords.lng);
+        if (reqId !== geocodeRequestIdRef.current) return null;
+        if (!raw) {
+          if (updateGpsText) {
+            setGpsAddressText("Localização encontrada");
+          }
+          return null;
         }
-
-        if (geocoderRef.current) {
-          geocoderRef.current.geocode(
-            {
-              location: coords,
-              language: "pt-BR",
-              region: "BR",
-            },
-            async (results, status) => {
-              if (status === google.maps.GeocoderStatus.OK && results && results[0]) {
-                const res = results[0];
-                let street = "";
-                let neighborhood = "";
-                let city = "";
-                let state = "";
-                let cep = "";
-
-                for (const c of res.address_components) {
-                  const types = c.types;
-                  if (types.includes("route")) street = c.long_name;
-                  else if (types.includes("sublocality_level_1") || types.includes("sublocality")) neighborhood = c.long_name;
-                  else if (types.includes("administrative_area_level_2")) city = c.long_name;
-                  else if (!city && types.includes("locality")) city = c.long_name;
-                  else if (types.includes("administrative_area_level_1")) state = c.short_name;
-                  else if (types.includes("postal_code")) cep = c.long_name;
-                }
-
-                street = cleanStreetName(street || res.formatted_address.split(",")[0]);
-
-                resolve({
-                  street,
-                  neighborhood,
-                  city,
-                  state,
-                  cep,
-                  formatted: res.formatted_address,
-                });
-                return;
-              }
-
-              // Fallback para mapsService se Google Maps Geocoder falhar
-              try {
-                const fallbackData = await mapsService.reverseGeocode(coords.lat, coords.lng);
-                resolve({
-                  street: cleanStreetName(fallbackData.street),
-                  neighborhood: fallbackData.neighborhood,
-                  city: fallbackData.city || "",
-                  state: fallbackData.state || "",
-                  cep: fallbackData.cep,
-                  formatted: fallbackData.displayName || `${fallbackData.street}, ${fallbackData.neighborhood}`,
-                });
-              } catch {
-                resolve({
-                  street: "",
-                  neighborhood: "",
-                  city: "",
-                  state: "",
-                  cep: "",
-                  formatted: "",
-                });
-              }
-            }
-          );
-          return;
+        const data = {
+          street: cleanStreetName(raw.street),
+          neighborhood: raw.neighborhood,
+          city: raw.city || "",
+          state: raw.state || "",
+          cep: raw.cep,
+          formatted: raw.displayName || `${raw.street}, ${raw.neighborhood}`,
+        };
+        setSelectedStreet(data.street);
+        setSelectedNeighborhood(data.neighborhood);
+        setSelectedCity(data.city);
+        setSelectedState(data.state);
+        setSelectedCep(data.cep);
+        if (updateGpsText) {
+          if (data.formatted) {
+            setGpsAddressText(data.formatted);
+          } else if (data.city || data.state) {
+            setGpsAddressText(`${data.city} - ${data.state}`);
+          }
         }
-
-        // Sem SDK do Google Maps carregado: usa mapsService imediatamente
-        mapsService
-          .reverseGeocode(coords.lat, coords.lng)
-          .then((fallbackData) => {
-            resolve({
-              street: cleanStreetName(fallbackData.street),
-              neighborhood: fallbackData.neighborhood,
-              city: fallbackData.city || "",
-              state: fallbackData.state || "",
-              cep: fallbackData.cep,
-              formatted: fallbackData.displayName || `${fallbackData.street}, ${fallbackData.neighborhood}`,
-            });
-          })
-          .catch(() => {
-            resolve({
-              street: "",
-              neighborhood: "",
-              city: "",
-              state: "",
-              cep: "",
-              formatted: "",
-            });
-          });
-      });
+        return data;
+      } catch {
+        if (reqId !== geocodeRequestIdRef.current) return null;
+        if (updateGpsText) {
+          setGpsAddressText("Localização encontrada");
+        }
+        return null;
+      } finally {
+        if (reqId === geocodeRequestIdRef.current) {
+          setIsResolvingAddress(false);
+        }
+      }
     },
     []
   );
@@ -510,31 +487,12 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
               lat: pos.coords.latitude,
               lng: pos.coords.longitude,
             };
+            preservedCoordsRef.current = coords;
             setCurrentCoords(coords);
             setMapCoords(coords);
             setIsDetectingGps(false);
 
-            if (forcePan) {
-              setIsResolvingAddress(true);
-            }
-
-            try {
-              const decoded = await reverseGeocode(coords);
-              setSelectedStreet(decoded.street);
-              setSelectedNeighborhood(decoded.neighborhood);
-              setSelectedCity(decoded.city);
-              setSelectedState(decoded.state);
-              setSelectedCep(decoded.cep);
-              if (decoded.formatted) {
-                setGpsAddressText(decoded.formatted);
-              } else {
-                setGpsAddressText(`${decoded.city} - ${decoded.state}`);
-              }
-            } catch {
-              setGpsAddressText("Localização encontrada");
-            } finally {
-              setIsResolvingAddress(false);
-            }
+            await applyReverseGeocode(coords, true);
 
             resolve(coords);
           },
@@ -572,13 +530,8 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
         );
       });
     },
-    [reverseGeocode]
+    [applyReverseGeocode]
   );
-
-  // Inicialização: tenta obter localização
-  useEffect(() => {
-    locateUser(false);
-  }, [locateUser]);
 
   // Helpers de reset de formulário e busca Nominatim
   const resetNewAddressForm = useCallback(() => {
@@ -624,20 +577,14 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
 
       setIsSearching(true);
       try {
-        const q = encodeURIComponent(`${trimmed}, ${CIDADE_PERMITIDA}, ${UF_PERMITIDA}, Brasil`);
-        const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${q}&addressdetails=1&limit=6&countrycodes=br&email=${encodeURIComponent(NOMINATIM_CONTACT)}`;
-        const res = await fetch(url, {
-          headers: { "Accept-Language": "pt-BR" },
-          signal: controller.signal,
-        });
-        if (!res.ok) throw new Error("Nominatim search failed");
-        const data: NominatimResult[] = await res.json();
+        const data = await mapsService.searchAddress(trimmed, controller.signal);
 
         const filtered = (Array.isArray(data) ? data : []).filter((item) => {
           const city =
             item.address?.city ||
             item.address?.town ||
             item.address?.municipality ||
+            item.address?.village ||
             "";
           const state = item.address?.state || "";
           return (
@@ -670,8 +617,12 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
       addr.road || addr.pedestrian || item.display_name.split(",")[0] || ""
     );
     const neighborhood = addr.suburb || addr.neighbourhood || addr.quarter || "";
-    const city = addr.city || addr.town || addr.municipality || CIDADE_PERMITIDA;
+    const city = addr.city || addr.town || addr.municipality || addr.village || CIDADE_PERMITIDA;
     const state = addr.state || UF_PERMITIDA;
+
+    geocodeRequestIdRef.current += 1;
+    setIsResolvingAddress(false);
+    preservedCoordsRef.current = coords;
 
     resetNewAddressForm();
     setMapCoords(coords);
@@ -691,16 +642,10 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
   const handleOpenMapFromSearch = async () => {
     resetNewAddressForm();
     clearSearch();
+    preservedCoordsRef.current = DEFAULT_IACANGA_COORDS;
     setMapCoords(DEFAULT_IACANGA_COORDS);
     setStep("map");
-    setIsResolvingAddress(true);
-    const data = await reverseGeocode(DEFAULT_IACANGA_COORDS);
-    setSelectedStreet(data.street);
-    setSelectedNeighborhood(data.neighborhood);
-    setSelectedCity(data.city);
-    setSelectedState(data.state);
-    setSelectedCep(data.cep);
-    setIsResolvingAddress(false);
+    await applyReverseGeocode(DEFAULT_IACANGA_COORDS);
   };
 
   // 4. Clicar em "Usar localização atual": ABRE O MAPA E LOCALIZA COM PRECISÃO
@@ -711,15 +656,9 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
 
     const coords = await locateUser(true);
     if (!coords) {
+      preservedCoordsRef.current = currentCoords;
       setMapCoords(currentCoords);
-      reverseGeocode(currentCoords).then((data) => {
-        setSelectedStreet(data.street);
-        setSelectedNeighborhood(data.neighborhood);
-        setSelectedCity(data.city);
-        setSelectedState(data.state);
-        setSelectedCep(data.cep);
-        setIsResolvingAddress(false);
-      });
+      await applyReverseGeocode(currentCoords);
     }
   };
 
@@ -727,17 +666,22 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
   const handleCameraIdle = useCallback(
     async (coords: Coords) => {
       setIsMapMoving(false);
+
+      const preserved = preservedCoordsRef.current;
+      if (
+        preserved &&
+        Math.abs(preserved.lat - coords.lat) < 0.0002 &&
+        Math.abs(preserved.lng - coords.lng) < 0.0002
+      ) {
+        preservedCoordsRef.current = null;
+        return;
+      }
+      preservedCoordsRef.current = null;
+
       setMapCoords(coords);
-      setIsResolvingAddress(true);
-      const data = await reverseGeocode(coords);
-      setSelectedStreet(data.street);
-      setSelectedNeighborhood(data.neighborhood);
-      setSelectedCity(data.city);
-      setSelectedState(data.state);
-      setSelectedCep(data.cep);
-      setIsResolvingAddress(false);
+      await applyReverseGeocode(coords);
     },
-    [reverseGeocode]
+    [applyReverseGeocode]
   );
 
   // 6. Confirma no mapa -> valida área de entrega e vai para detalhes
@@ -766,22 +710,20 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
 
   const handleRecenterIacanga = async () => {
     setOutOfAreaOpen(false);
+    preservedCoordsRef.current = DEFAULT_IACANGA_COORDS;
     setMapCoords(DEFAULT_IACANGA_COORDS);
     setStep("map");
-    setIsResolvingAddress(true);
-    const data = await reverseGeocode(DEFAULT_IACANGA_COORDS);
-    setSelectedStreet(data.street);
-    setSelectedNeighborhood(data.neighborhood);
-    setSelectedCity(data.city);
-    setSelectedState(data.state);
-    setSelectedCep(data.cep);
-    setIsResolvingAddress(false);
+    await applyReverseGeocode(DEFAULT_IACANGA_COORDS);
   };
 
   // 7. Clicar em cima do endereço cadastrado: APENAS SELECIONA! Não abre mapa.
   const handleSelectSavedAddress = async (addr: Address) => {
     if (user) {
-      await addressesManager.setDefaultAddress(user.id, addr.id);
+      const ok = await addressesManager.setDefaultAddress(user.id, addr.id);
+      if (!ok) {
+        appToast.error("Erro ao selecionar endereço", "Tente novamente em instantes.");
+        return;
+      }
     } else {
       localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify({ ...addr, is_default: true }));
     }
@@ -789,9 +731,13 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
     window.dispatchEvent(new Event("address-changed"));
     appToast.success("Endereço selecionado!", `${addr.street}, ${addr.number}`);
 
-    if (onSuccess) onSuccess(addr);
-    if (onClose) onClose();
-    else router.push(redirectUrl);
+    if (onSuccess) {
+      onSuccess(addr);
+    } else if (onClose) {
+      onClose();
+    } else {
+      router.push(redirectUrl);
+    }
   };
 
   // 8. Ação do Menu 3 Pontos: Solicitar confirmação antes de excluir
@@ -945,9 +891,13 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
       window.dispatchEvent(new Event("address-changed"));
       appToast.success("Endereço salvo com sucesso!", `${saved.street}, ${saved.number}`);
 
-      if (onSuccess && saved) onSuccess(saved);
-      if (onClose) onClose();
-      else router.push(redirectUrl);
+      if (onSuccess && saved) {
+        onSuccess(saved);
+      } else if (onClose) {
+        onClose();
+      } else {
+        router.push(redirectUrl);
+      }
     } catch (e) {
       console.error(e);
       appToast.error("Erro ao salvar endereço.");
@@ -1332,8 +1282,12 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
         {step === "map" && (
           <MapSelectorView
             center={mapCoords}
+            hasApiKey={Boolean(apiKey)}
             isMoving={isMapMoving}
-            onDragStart={() => setIsMapMoving(true)}
+            onDragStart={() => {
+              preservedCoordsRef.current = null;
+              setIsMapMoving(true);
+            }}
             onCameraIdle={handleCameraIdle}
             onConfirm={handleConfirmMap}
             isResolving={isResolvingAddress}
@@ -1364,16 +1318,18 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
               <div className="w-6" />
             </div>
 
-            <div className="flex-1 overflow-y-auto pb-24">
+            <div className="flex-1 overflow-y-auto pb-6">
               {/* Miniatura do Mapa com Ajustar Marcador */}
               <div className="relative h-44 w-full bg-[#E5F2E9] overflow-hidden border-b border-slate-100">
-                <Map
-                  defaultCenter={mapCoords}
-                  defaultZoom={17}
-                  gestureHandling="none"
-                  disableDefaultUI={true}
-                  className="h-full w-full pointer-events-none"
-                />
+                {apiKey && (
+                  <Map
+                    defaultCenter={mapCoords}
+                    defaultZoom={17}
+                    gestureHandling="none"
+                    disableDefaultUI={true}
+                    className="h-full w-full pointer-events-none"
+                  />
+                )}
 
                 <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full flex flex-col items-center">
                   <svg width="34" height="40" viewBox="0 0 42 48" fill="none">
@@ -1582,7 +1538,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
             </div>
 
             {/* Botão Ver batatas */}
-            <div className="fixed sm:static bottom-0 inset-x-0 p-4 bg-white border-t border-slate-100 shadow-md">
+            <div className="sticky bottom-0 inset-x-0 p-4 bg-white border-t border-slate-100 shadow-md shrink-0">
               <button
                 type="button"
                 disabled={!isDetailsValid || isSaving}

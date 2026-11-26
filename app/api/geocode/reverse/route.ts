@@ -1,36 +1,133 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
-import { formatCep } from "@/lib/maps-service"
-import { authenticateRequestUser } from "@/lib/supabase/route-auth"
+import { cleanStreetName, formatCep } from "@/lib/maps-service"
 
-function getSupabaseAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) return null
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
+const NOMINATIM_USER_AGENT = "BatataTopIacanga/1.0 (contato@batatatop.com.br)"
+const CACHE_TTL_MS = 5 * 60 * 1000
+const CACHE_MAX_ENTRIES = 200
+
+const BRAZIL_STATES: Record<string, string> = {
+  acre: "AC",
+  alagoas: "AL",
+  amapa: "AP",
+  amazonas: "AM",
+  bahia: "BA",
+  ceara: "CE",
+  "distrito federal": "DF",
+  "espirito santo": "ES",
+  goias: "GO",
+  maranhao: "MA",
+  "mato grosso": "MT",
+  "mato grosso do sul": "MS",
+  "minas gerais": "MG",
+  para: "PA",
+  paraiba: "PB",
+  parana: "PR",
+  pernambuco: "PE",
+  piaui: "PI",
+  "rio de janeiro": "RJ",
+  "rio grande do norte": "RN",
+  "rio grande do sul": "RS",
+  rondonia: "RO",
+  roraima: "RR",
+  "santa catarina": "SC",
+  "sao paulo": "SP",
+  sergipe: "SE",
+  tocantins: "TO",
 }
 
-function cleanStreetName(name: string): string {
-  if (!name) return ""
-  let s = name.trim()
-  // Normaliza nomes em inglês vindos de geocodificadores: "50 Street" -> "Rua 50", "50th Street" -> "Rua 50"
-  s = s.replace(/^(\d+)(?:st|nd|rd|th)?\s+Street$/i, "Rua $1")
-  s = s.replace(/\b(\d+)\s+Street\b/i, "Rua $1")
-  s = s.replace(/\bStreet\s+(\d+)\b/i, "Rua $1")
-  return s
+interface ReverseGeocodePayload {
+  street: string
+  number: string
+  neighborhood: string
+  city: string
+  state: string
+  cep: string
+  zipCode: string
+  displayName?: string
+  source: "google" | "photon" | "nominatim" | "bigdatacloud"
+}
+
+interface PhotonFeature {
+  properties?: {
+    osm_key?: string
+    name?: string
+    street?: string
+    housenumber?: string
+    locality?: string
+    district?: string
+    city?: string
+    state?: string
+    postcode?: string
+  }
+}
+
+const reverseCache = new Map<string, { expiresAt: number; data: ReverseGeocodePayload }>()
+
+function getCached(key: string): ReverseGeocodePayload | null {
+  const entry = reverseCache.get(key)
+  if (!entry) return null
+  if (entry.expiresAt <= Date.now()) {
+    reverseCache.delete(key)
+    return null
+  }
+  return entry.data
+}
+
+function setCached(key: string, data: ReverseGeocodePayload) {
+  if (reverseCache.size >= CACHE_MAX_ENTRIES) {
+    const oldestKey = reverseCache.keys().next().value
+    if (oldestKey !== undefined) {
+      reverseCache.delete(oldestKey)
+    }
+  }
+  reverseCache.set(key, { expiresAt: Date.now() + CACHE_TTL_MS, data })
+}
+
+function normalizeBrazilState(state?: string): string {
+  if (!state) return ""
+  const trimmed = state.trim()
+  if (!trimmed) return ""
+
+  const withoutPrefix = trimmed.replace(/^BR-/i, "").trim()
+  if (/^[A-Za-z]{2}$/.test(withoutPrefix)) {
+    return withoutPrefix.toUpperCase()
+  }
+
+  const normalized = withoutPrefix
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+
+  return BRAZIL_STATES[normalized] || withoutPrefix
+}
+
+function isIacanga(city: string): boolean {
+  return (
+    city
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase() === "iacanga"
+  )
+}
+
+function pickBestPhotonFeature(features: PhotonFeature[]): PhotonFeature | null {
+  if (!features.length) return null
+  return (
+    features.find((f) => {
+      const p = f.properties
+      return Boolean(p && (p.street || (p.osm_key === "highway" && p.name)))
+    }) ||
+    features.find((f) => {
+      const p = f.properties
+      return Boolean(p && (p.name || p.city || p.district))
+    }) ||
+    features[0]
+  )
 }
 
 export async function GET(req: NextRequest) {
-  // NEW-14 FIX: Exige sessão autenticada (Bearer ou cookie SSR) para proteger cota do Google Maps
-  const service = getSupabaseAdmin()
-  const user = await authenticateRequestUser(req, service)
-  if (!user) {
-    return NextResponse.json(
-      { error: "Autenticação obrigatória para geocodificação." },
-      { status: 401 }
-    )
-  }
-
   const { searchParams } = new URL(req.url)
   const latStr = searchParams.get("lat")
   const lngStr = searchParams.get("lng")
@@ -60,9 +157,20 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY
+  const cacheKey = `${lat.toFixed(4)},${lng.toFixed(4)}`
+  const cached = getCached(cacheKey)
+  if (cached) {
+    return NextResponse.json(cached)
+  }
 
-  // 1. Tenta Google Maps Geocoding API oficial se a chave estiver configurada
+  const respond = (payload: ReverseGeocodePayload) => {
+    setCached(cacheKey, payload)
+    return NextResponse.json(payload)
+  }
+
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY
+
+  // 1. Google Geocoding API (apenas se chave server-side configurada)
   if (apiKey) {
     try {
       const googleUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&language=pt-BR&region=br&key=${apiKey}`
@@ -73,94 +181,201 @@ export async function GET(req: NextRequest) {
         if (gData.status === "OK" && gData.results && gData.results[0]) {
           const first = gData.results[0]
           let street = ""
+          let number = ""
           let neighborhood = ""
-          let city = "Iacanga"
-          let state = "SP"
-          let cep = ""
+          let city = ""
+          let state = ""
+          let rawCep = ""
 
-          for (const c of first.address_components) {
-            const types = c.types
+          for (const c of first.address_components || []) {
+            const types: string[] = c.types || []
             if (types.includes("route")) street = c.long_name
-            else if (types.includes("sublocality_level_1") || types.includes("sublocality")) neighborhood = c.long_name
-            else if (types.includes("administrative_area_level_2")) city = c.long_name
+            else if (types.includes("street_number")) number = c.long_name
+            else if (types.includes("sublocality_level_1") || types.includes("sublocality")) {
+              neighborhood = c.long_name
+            } else if (types.includes("administrative_area_level_2")) city = c.long_name
+            else if (!city && types.includes("locality")) city = c.long_name
             else if (types.includes("administrative_area_level_1")) state = c.short_name
-            else if (types.includes("postal_code")) cep = c.long_name
+            else if (types.includes("postal_code")) rawCep = c.long_name
           }
 
           if (!street && first.formatted_address) {
             street = first.formatted_address.split(",")[0]
           }
 
-          return NextResponse.json({
+          const zipCode = formatCep(rawCep) || (isIacanga(city) ? "17180-000" : "")
+
+          return respond({
             street: cleanStreetName(street),
+            number,
             neighborhood,
             city,
-            state,
-            cep: formatCep(cep) || "17150-000",
+            state: normalizeBrazilState(state),
+            cep: zipCode,
+            zipCode,
             displayName: first.formatted_address,
+            source: "google",
           })
+        } else if (process.env.NODE_ENV !== "production") {
+          console.warn(`[geocode/reverse] Google Geocoding status=${gData.status ?? "unknown"}`)
         }
+      } else if (process.env.NODE_ENV !== "production") {
+        console.warn(`[geocode/reverse] Google Geocoding HTTP ${googleRes.status}`)
       }
     } catch {
-      // Segue para fallback do Nominatim
+      // Segue para Photon
     }
   }
 
-  // 2. Fallback Nominatim (OpenStreetMap) em Português
-  try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 9000)
+  let partialResult: ReverseGeocodePayload | null = null
 
+  // 2. Photon (Komoot / OpenStreetMap)
+  try {
+    const photonUrl = `https://photon.komoot.io/reverse?lat=${lat}&lon=${lng}&radius=0.5&limit=3`
+    const photonRes = await fetch(photonUrl, {
+      headers: {
+        "User-Agent": NOMINATIM_USER_AGENT,
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(6000),
+    })
+
+    if (photonRes.ok) {
+      const photonData = await photonRes.json()
+      const features: PhotonFeature[] = Array.isArray(photonData?.features)
+        ? photonData.features
+        : []
+      const best = pickBestPhotonFeature(features)
+      const p = best?.properties
+
+      if (p) {
+        const street = cleanStreetName(
+          p.street || (p.osm_key === "highway" ? p.name : "") || p.name || ""
+        )
+        const number = p.housenumber || ""
+        const city = p.city || p.district || ""
+        const neighborhood =
+          p.locality || (p.district && p.district !== p.city ? p.district : "") || ""
+        const state = normalizeBrazilState(p.state)
+        const zipCode = formatCep(p.postcode || "") || (isIacanga(city) ? "17180-000" : "")
+        const displayName = [street, number, neighborhood, city, state]
+          .filter(Boolean)
+          .join(", ")
+
+        const payload: ReverseGeocodePayload = {
+          street,
+          number,
+          neighborhood,
+          city,
+          state,
+          cep: zipCode,
+          zipCode,
+          displayName: displayName || undefined,
+          source: "photon",
+        }
+
+        if (city) {
+          return respond(payload)
+        }
+        if (street || neighborhood || state) {
+          partialResult = payload
+        }
+      }
+    }
+  } catch {
+    // Segue para Nominatim
+  }
+
+  // 3. Fallback Nominatim (OpenStreetMap) em Português
+  try {
     const osmUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&addressdetails=1&accept-language=pt-BR,pt;q=0.9`
     const res = await fetch(osmUrl, {
       headers: {
-        "User-Agent": "BatataTopDelivery/1.0 (contato@batatatopiacanga.com.br)",
+        "User-Agent": NOMINATIM_USER_AGENT,
         Accept: "application/json",
         "Accept-Language": "pt-BR,pt;q=0.9",
       },
-      signal: controller.signal,
+      signal: AbortSignal.timeout(6000),
     })
-    clearTimeout(timeout)
 
-    if (!res.ok) {
-      return NextResponse.json(
-        { error: "Serviço de mapas indisponível." },
-        { status: 502 }
-      )
+    if (res.ok) {
+      const data = await res.json()
+      const addr = data?.address || {}
+
+      const rawStreet = addr.road || addr.pedestrian || addr.street || addr.residential || ""
+      const street = cleanStreetName(rawStreet)
+      const number = addr.house_number || ""
+      const neighborhood =
+        addr.suburb || addr.neighbourhood || addr.quarter || addr.city_district || ""
+      const city = addr.city || addr.town || addr.municipality || addr.village || ""
+      const state = normalizeBrazilState(addr["ISO3166-2-lvl4"] || addr.state)
+      const zipCode = formatCep(addr.postcode || "") || (isIacanga(city) ? "17180-000" : "")
+
+      const payload: ReverseGeocodePayload = {
+        street,
+        number,
+        neighborhood,
+        city,
+        state,
+        cep: zipCode,
+        zipCode,
+        displayName: data?.display_name,
+        source: "nominatim",
+      }
+
+      if (city) {
+        return respond(payload)
+      }
+      if (!partialResult && (street || neighborhood || state)) {
+        partialResult = payload
+      }
     }
-
-    const data = await res.json()
-    const addr = data.address || {}
-
-    const rawStreet = addr.road || addr.pedestrian || addr.street || addr.residential || ""
-    const street = cleanStreetName(rawStreet)
-    const neighborhood =
-      addr.suburb || addr.neighbourhood || addr.quarter || addr.city_district || ""
-    const city = addr.city || addr.town || addr.municipality || addr.village || "Iacanga"
-    const state =
-      addr["ISO3166-2-lvl4"]?.replace("BR-", "") ||
-      (addr.state === "São Paulo" ? "SP" : addr.state) ||
-      "SP"
-    const cep = formatCep(addr.postcode || "17150-000") || "17150-000"
-
-    return NextResponse.json({
-      street,
-      neighborhood,
-      city,
-      state,
-      cep,
-      displayName: data.display_name,
-    })
-  } catch (error: any) {
-    if (error.name === "AbortError") {
-      return NextResponse.json(
-        { error: "Tempo limite esgotado ao consultar serviço de mapas." },
-        { status: 504 }
-      )
-    }
-    return NextResponse.json(
-      { error: "Falha ao processar geocodificação reversa." },
-      { status: 500 }
-    )
+  } catch {
+    // Segue para BigDataCloud
   }
+
+  // 4. Fallback BigDataCloud (quando Photon e Nominatim falham ou não retornam cidade)
+  try {
+    const bdcUrl = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=pt`
+    const bdcRes = await fetch(bdcUrl, {
+      headers: {
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(5000),
+    })
+
+    if (bdcRes.ok) {
+      const data = await bdcRes.json()
+      const city = data?.city || data?.locality || ""
+      const state = normalizeBrazilState(
+        data?.principalSubdivisionCode || data?.principalSubdivision
+      )
+      const zipCode = isIacanga(city) ? "17180-000" : ""
+
+      if (city || state) {
+        return respond({
+          street: "",
+          number: "",
+          neighborhood: "",
+          city,
+          state,
+          cep: zipCode,
+          zipCode,
+          displayName: [city, state].filter(Boolean).join(", ") || undefined,
+          source: "bigdatacloud",
+        })
+      }
+    }
+  } catch {
+    // Todos os provedores falharam
+  }
+
+  if (partialResult) {
+    return respond(partialResult)
+  }
+
+  return NextResponse.json(
+    { error: "Serviço de mapas indisponível." },
+    { status: 502 }
+  )
 }

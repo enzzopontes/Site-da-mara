@@ -125,6 +125,7 @@ export function GuestTopbar({ onOpenAuth, desktopOnly = false }: GuestTopbarProp
     pathname.startsWith("/login") ||
     pathname.startsWith("/cadastro") ||
     pathname.startsWith("/enderecos") ||
+    pathname.startsWith("/selecionar-endereco") ||
     pathname.startsWith("/cupons") ||
     pathname.startsWith("/admin") ||
     pathname.startsWith("/payments") ||

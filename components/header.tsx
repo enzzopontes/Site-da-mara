@@ -7,7 +7,6 @@ import {
   Search,
   User,
   ChevronDown,
-  MapPin,
   Home,
   UtensilsCrossed,
   Package,
@@ -275,7 +274,6 @@ export function Header({ variant = "default" }: HeaderProps) {
                     {greeting}
                   </span>
                   <div className="flex items-center gap-1 min-w-0 max-w-[210px] xs:max-w-[240px] sm:max-w-[300px]">
-                    <MapPin className="h-3.5 w-3.5 text-[#E3A008] flex-shrink-0" />
                     <span className="text-sm sm:text-base font-bold text-[#1A1A1A] truncate leading-snug group-hover:text-[#E3A008] transition-colors">
                       {defaultAddress}
                     </span>

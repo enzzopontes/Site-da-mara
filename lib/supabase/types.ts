@@ -82,3 +82,23 @@ export interface WaitTimeState {
   last_order_time: string
   updated_at: string
 }
+
+export interface Address {
+  id: string
+  user_id: string
+  label: string | null
+  street: string
+  number: string
+  complement: string | null
+  neighborhood: string
+  city: string
+  state: string
+  cep: string
+  zip_code?: string | null
+  reference_point: string | null
+  latitude: number | null
+  longitude: number | null
+  is_default: boolean
+  created_at: string
+  updated_at: string
+}

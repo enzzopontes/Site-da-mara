@@ -173,7 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           neighborhood: typeof parsed.neighborhood === "string" ? parsed.neighborhood.trim() : "",
           city: typeof parsed.city === "string" && parsed.city.trim() ? parsed.city.trim() : "Iacanga",
           state: typeof parsed.state === "string" && parsed.state.trim() ? parsed.state.trim() : "SP",
-          cep: typeof parsed.cep === "string" && parsed.cep.trim() ? parsed.cep.trim() : "17150-000",
+          cep: typeof parsed.cep === "string" && parsed.cep.trim() ? parsed.cep.trim() : "17180-000",
           is_default: !count,
           label: normalizedLabel,
           reference_point:

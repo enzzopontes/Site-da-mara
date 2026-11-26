@@ -30,6 +30,15 @@ export function useCurrentLocation(options?: UseCurrentLocationOptions) {
             const { latitude, longitude } = position.coords
             const address = await mapsService.reverseGeocode(latitude, longitude)
 
+            if (!address) {
+              appToast.error(
+                "Erro ao obter endereço",
+                "Não foi possível converter suas coordenadas. Digite o CEP manualmente."
+              )
+              resolve(null)
+              return
+            }
+
             if (options?.onSuccess) {
               options.onSuccess(address)
             }

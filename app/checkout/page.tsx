@@ -1434,8 +1434,7 @@ export default function CheckoutPage() {
       <AddressModal
         isOpen={isAddressModalOpen}
         onClose={() => setIsAddressModalOpen(false)}
-        onAddressSelect={(addr) => {
-          setUseNewAddress(true)
+        onAddressSelect={async (addr) => {
           setRua(addr.street)
           setNumero(addr.number === "S/N" ? "" : addr.number)
           setComplemento(addr.complement || "")
@@ -1448,6 +1447,33 @@ export default function CheckoutPage() {
             lng: addr.longitude ?? null,
           })
           setIsAddressModalOpen(false)
+
+          if (user) {
+            try {
+              const fresh = await addressesManager.getUserAddresses(user.id)
+              setAddresses(fresh)
+              const matched =
+                fresh.find((a) => a.id === addr.id) ||
+                fresh.find(
+                  (a) =>
+                    a.street === addr.street &&
+                    a.number === addr.number &&
+                    a.neighborhood === addr.neighborhood
+                ) ||
+                fresh.find((a) => a.is_default) ||
+                fresh[0]
+              if (matched) {
+                setSelectedAddressId(matched.id)
+                setUseNewAddress(false)
+              } else {
+                setUseNewAddress(true)
+              }
+            } catch {
+              setUseNewAddress(true)
+            }
+          } else {
+            setUseNewAddress(true)
+          }
         }}
       />
     </div>
