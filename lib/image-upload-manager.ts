@@ -1,5 +1,6 @@
 import { getSupabaseBrowserClient } from "./supabase/client"
 import { validateImagePayload, sanitizeFileName } from "./security-validation"
+import { buildUploadStoragePath } from "./product-image-naming"
 
 export const STORAGE_BUCKET = "Products"
 
@@ -206,7 +207,8 @@ class ImageUploadManager {
    */
   async uploadImage(
     file: File,
-    category: ImageCategory = "general"
+    category: ImageCategory = "general",
+    options?: { preferredName?: string }
   ): Promise<{ id: string; url: string; name: string }> {
     try {
       console.log(`[ImageUploadManager] Iniciando upload - Arquivo: ${file.name}, Categoria: ${category}`);
@@ -252,16 +254,64 @@ class ImageUploadManager {
       const effectiveMime = validation.normalizedMime || effectiveMimeCandidate
       const ext = this.mimeToExt(effectiveMime) || compressed.ext
       const randomSuffix = Math.random().toString(36).substr(2, 9)
-      const storagePath = `uploads/${category}/${Date.now()}-${randomSuffix}.${ext}`
+
+      const isStorageCollisionError = (err: { message?: string } | null): boolean => {
+        if (!err) return false
+        const errMsg = (err.message || "").toLowerCase()
+        const statusCode = String((err as any).statusCode ?? (err as any).status ?? "")
+        return (
+          statusCode === "409" ||
+          errMsg.includes("already exists") ||
+          errMsg.includes("duplicate") ||
+          errMsg.includes("resource already exists")
+        )
+      }
 
       try {
-        const { error: storageError } = await this.supabase.storage
-          .from(STORAGE_BUCKET)
-          .upload(storagePath, compressed.blob, {
-            contentType: effectiveMime,
-            cacheControl: "31536000",
-            upsert: false,
+        let storagePath = ""
+        let storageError: { message?: string } | null = null
+
+        for (let collisionIndex = 0; collisionIndex <= 8; collisionIndex++) {
+          storagePath = buildUploadStoragePath(category, ext, {
+            preferredName: options?.preferredName,
+            fallbackFileName: file.name,
+            collisionIndex: collisionIndex > 0 ? collisionIndex : undefined,
           })
+
+          const uploadRes = await this.supabase.storage
+            .from(STORAGE_BUCKET)
+            .upload(storagePath, compressed.blob, {
+              contentType: effectiveMime,
+              cacheControl: "31536000",
+              upsert: false,
+            })
+
+          storageError = uploadRes.error
+          if (!storageError || !isStorageCollisionError(storageError)) {
+            break
+          }
+        }
+
+        if (storageError && isStorageCollisionError(storageError)) {
+          const uniqueTag = Date.now().toString(36).slice(-4)
+          const fallbackBasePath = buildUploadStoragePath(category, ext, {
+            preferredName: options?.preferredName,
+            fallbackFileName: file.name,
+            randomFallback: `${Date.now()}-${randomSuffix}`,
+          })
+          storagePath = /\.[^.]+$/.test(fallbackBasePath)
+            ? fallbackBasePath.replace(/\.([^.]+)$/, `-${uniqueTag}-${randomSuffix}.$1`)
+            : `${fallbackBasePath}-${uniqueTag}-${randomSuffix}`
+
+          const finalRes = await this.supabase.storage
+            .from(STORAGE_BUCKET)
+            .upload(storagePath, compressed.blob, {
+              contentType: effectiveMime,
+              cacheControl: "31536000",
+              upsert: false,
+            })
+          storageError = finalRes.error
+        }
 
         if (!storageError) {
           try {
@@ -295,7 +345,7 @@ class ImageUploadManager {
           return {
             id: storagePath,
             url: publicUrlData.publicUrl,
-            name: file.name,
+            name: storagePath.split("/").pop() || safeName,
           }
         }
 

@@ -19,6 +19,7 @@ interface PhotoBankPickerProps {
   enabled?: boolean
   usedUrls?: string[]
   category?: "product" | "promo" | "general"
+  preferredName?: string
   emptyUsedMessage?: string
   hidePreview?: boolean
 }
@@ -107,6 +108,7 @@ export function PhotoBankPicker({
   enabled = true,
   usedUrls = [],
   category = "product",
+  preferredName,
   emptyUsedMessage = "Todas as fotos do banco já estão em uso em outros produtos.",
   hidePreview = false,
 }: PhotoBankPickerProps) {
@@ -201,7 +203,9 @@ export function PhotoBankPicker({
 
       try {
         const safeCategory = ALLOWED_CATEGORIES.has(category) ? category : "product"
-        const uploaded = await imageUploadManager.uploadImage(file, safeCategory)
+        const uploaded = await imageUploadManager.uploadImage(file, safeCategory, {
+          preferredName,
+        })
         if (!isMountedRef.current) return
         onSelect(uploaded.url || `/api/images/${uploaded.id}`)
         await loadPhotos()
@@ -222,7 +226,7 @@ export function PhotoBankPicker({
         }
       }
     },
-    [onSelect, loadPhotos, category]
+    [onSelect, loadPhotos, category, preferredName]
   )
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
