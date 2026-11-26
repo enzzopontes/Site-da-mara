@@ -74,15 +74,6 @@ class AddressesManager {
       const hasExistingAddresses = (count ?? 0) > 0;
       const shouldBeDefault = address.is_default === true || !hasExistingAddresses;
 
-      if (shouldBeDefault) {
-        const { error: resetError } = await client
-          .from("addresses")
-          .update({ is_default: false })
-          .eq("user_id", address.user_id);
-
-        if (resetError) throw resetError;
-      }
-
       const { data, error } = await client
         .from("addresses")
         .insert([{ ...address, is_default: shouldBeDefault }])
@@ -108,37 +99,8 @@ class AddressesManager {
         userId = userData?.user?.id;
       }
 
-      const { is_default, ...safeUpdates } = updates;
-      let payload: Partial<Address>;
-
-      if (is_default === true) {
-        if (!userId) {
-          const { data: existing, error: fetchError } = await client
-            .from("addresses")
-            .select("user_id")
-            .eq("id", id)
-            .single();
-
-          if (fetchError) throw fetchError;
-          userId = existing?.user_id;
-        }
-
-        if (!userId) {
-          throw new Error("Usuário não identificado para definir endereço padrão.");
-        }
-
-        const { error: resetError } = await client
-          .from("addresses")
-          .update({ is_default: false })
-          .eq("user_id", userId)
-          .neq("id", id);
-
-        if (resetError) throw resetError;
-
-        payload = { ...safeUpdates, is_default: true };
-      } else {
-        payload = safeUpdates;
-      }
+      const { id: _id, user_id: _userId, ...safeUpdates } = updates;
+      const payload: Partial<Address> = { ...safeUpdates };
 
       if (Object.keys(payload).length === 0) {
         let selectQuery = client.from("addresses").select("*").eq("id", id);
@@ -202,21 +164,16 @@ class AddressesManager {
       const client = this.supabase;
       if (!client || !userId) return false;
 
-      const { error: resetError } = await client
-        .from("addresses")
-        .update({ is_default: false })
-        .eq("user_id", userId);
-
-      if (resetError) throw resetError;
-
-      const { error } = await client
+      const { data, error } = await client
         .from("addresses")
         .update({ is_default: true })
         .eq("id", addressId)
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .select("id")
+        .maybeSingle();
 
       if (error) throw error;
-      return true;
+      return Boolean(data?.id);
     } catch (error: any) {
       console.error("[AddressesManager] Erro ao definir padrão:", error.message || error);
       return false;

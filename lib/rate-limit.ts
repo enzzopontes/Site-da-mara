@@ -10,6 +10,7 @@ interface RateLimitRecord {
 
 const store = new Map<string, RateLimitRecord>();
 
+const MAX_ENTRIES = 5000;
 let lastCleanup = Date.now();
 const CLEANUP_INTERVAL_MS = 3 * 60 * 1000; // Limpeza a cada 3 minutos
 
@@ -22,6 +23,22 @@ function cleanupExpired() {
     if (now > record.resetTime) {
       store.delete(key);
     }
+  }
+}
+
+function enforceCap(now: number) {
+  if (store.size < MAX_ENTRIES) return;
+
+  for (const [key, record] of store.entries()) {
+    if (now > record.resetTime) {
+      store.delete(key);
+    }
+  }
+
+  while (store.size >= MAX_ENTRIES) {
+    const oldestKey = store.keys().next().value;
+    if (oldestKey === undefined) break;
+    store.delete(oldestKey);
   }
 }
 
@@ -43,6 +60,10 @@ export function checkRateLimit(
   const record = store.get(key);
 
   if (!record || now > record.resetTime) {
+    if (record) {
+      store.delete(key);
+    }
+    enforceCap(now);
     store.set(key, {
       count: 1,
       resetTime: now + windowMs,

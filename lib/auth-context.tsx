@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react"
 import { getSupabaseBrowserClient } from "./supabase/client"
+import { addressesManager } from "./addresses-manager"
 import type { User, Session } from "@supabase/supabase-js"
 import {
   validateEmail,
@@ -141,40 +142,75 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const raw = localStorage.getItem(GUEST_ADDRESS_STORAGE_KEY)
         if (!raw) return
 
-        const parsed = JSON.parse(raw) as Record<string, unknown> | null
+        let parsed: Record<string, unknown> | null = null
+        try {
+          parsed = JSON.parse(raw) as Record<string, unknown> | null
+        } catch {
+          localStorage.removeItem(GUEST_ADDRESS_STORAGE_KEY)
+          return
+        }
+
         if (
           !parsed ||
           typeof parsed !== "object" ||
           typeof parsed.street !== "string" ||
           !parsed.street.trim()
         ) {
+          localStorage.removeItem(GUEST_ADDRESS_STORAGE_KEY)
           return
         }
 
-        const { count, error: countError } = await supabase
-          .from("addresses")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", currentUser.id)
+        const city = typeof parsed.city === "string" && parsed.city.trim() ? parsed.city.trim() : "Iacanga"
+        const state = typeof parsed.state === "string" && parsed.state.trim() ? parsed.state.trim() : "SP"
+        const normalizedCity = city
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+        const normalizedState = state
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
 
-        if (countError) return
+        if (normalizedCity !== "iacanga" || (normalizedState !== "sp" && normalizedState !== "sao paulo")) {
+          localStorage.removeItem(GUEST_ADDRESS_STORAGE_KEY)
+          return
+        }
+
+        const street = parsed.street.trim()
+        const number =
+          parsed.number != null && String(parsed.number).trim()
+            ? String(parsed.number).trim()
+            : "S/N"
+        const neighborhood = typeof parsed.neighborhood === "string" ? parsed.neighborhood.trim() : ""
+
+        const existingAddresses = await addressesManager.getUserAddresses(currentUser.id)
+        const normalizePart = (value: string | null | undefined) => (value ?? "").trim().toLowerCase()
+        const isDuplicate = existingAddresses.some(
+          (addr) =>
+            normalizePart(addr.street) === normalizePart(street) &&
+            normalizePart(addr.number) === normalizePart(number) &&
+            normalizePart(addr.neighborhood) === normalizePart(neighborhood)
+        )
+
+        if (isDuplicate) {
+          localStorage.removeItem(GUEST_ADDRESS_STORAGE_KEY)
+          return
+        }
 
         const rawLabel = typeof parsed.label === "string" ? parsed.label.trim().toLowerCase() : ""
         const normalizedLabel: "casa" | "trabalho" | null =
           rawLabel === "casa" ? "casa" : rawLabel === "trabalho" ? "trabalho" : null
 
-        const { error: insertError } = await supabase.from("addresses").insert({
+        const created = await addressesManager.addAddress({
           user_id: currentUser.id,
-          street: parsed.street.trim(),
-          number:
-            parsed.number != null && String(parsed.number).trim()
-              ? String(parsed.number).trim()
-              : "S/N",
+          street,
+          number,
           complement: typeof parsed.complement === "string" ? parsed.complement.trim() : "",
-          neighborhood: typeof parsed.neighborhood === "string" ? parsed.neighborhood.trim() : "",
-          city: typeof parsed.city === "string" && parsed.city.trim() ? parsed.city.trim() : "Iacanga",
-          state: typeof parsed.state === "string" && parsed.state.trim() ? parsed.state.trim() : "SP",
+          neighborhood,
+          city,
+          state: normalizedState === "sao paulo" ? "SP" : state.toUpperCase(),
           cep: typeof parsed.cep === "string" && parsed.cep.trim() ? parsed.cep.trim() : "17180-000",
-          is_default: !count,
+          is_default: existingAddresses.length === 0,
           label: normalizedLabel,
           reference_point:
             typeof parsed.reference_point === "string" && parsed.reference_point.trim()
@@ -190,7 +226,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               : null,
         })
 
-        if (insertError) return
+        if (!created) return
 
         localStorage.removeItem(GUEST_ADDRESS_STORAGE_KEY)
         window.dispatchEvent(new Event("address-changed"))
@@ -200,7 +236,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         flushingGuestAddressRef.current = false
       }
     },
-    [supabase]
+    []
   )
 
   useEffect(() => {

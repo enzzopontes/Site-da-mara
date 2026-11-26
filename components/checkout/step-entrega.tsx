@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import {
   MapPin,
   Bike,
@@ -43,6 +43,8 @@ interface StepEntregaProps {
   setCep?: (v: string) => void
   buscandoCep: boolean
   enderecoError: string
+  setEnderecoError?: (v: string) => void
+  setNewAddressCoords?: (coords: { lat: number | null; lng: number | null }) => void
   nome: string
   setNome: (v: string) => void
   telefone: string
@@ -72,6 +74,8 @@ export function StepEntrega({
   handleCepChange,
   buscandoCep,
   enderecoError,
+  setEnderecoError,
+  setNewAddressCoords,
   nome,
   setNome,
   telefone,
@@ -82,14 +86,46 @@ export function StepEntrega({
   const [showAddressPicker, setShowAddressPicker] = useState(false)
   const numeroRef = useRef<HTMLInputElement>(null)
 
+  useEffect(() => {
+    if (!showAddressPicker) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowAddressPicker(false)
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [showAddressPicker])
+
   const { isLocating, requestLocation } = useCurrentLocation({
     numberInputRef: numeroRef,
     onSuccess: (loc) => {
+      const normalize = (value: string) =>
+        (value || "")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .trim()
+
+      const cityNorm = normalize(loc.city)
+      const stateNorm = normalize(loc.state)
+      const isValidState = !stateNorm || stateNorm === "sp" || stateNorm === "sao paulo"
+
+      if (cityNorm !== "iacanga" || !isValidState) {
+        setEnderecoError?.("No momento entregamos exclusivamente em Iacanga - SP.")
+        return
+      }
+
+      setEnderecoError?.("")
       if (loc.street) setRua(loc.street)
       if (loc.neighborhood) setBairro(loc.neighborhood)
       if (loc.cep) {
         if (setCep) setCep(loc.cep)
         else handleCepChange(loc.cep)
+      }
+      const coords = loc as { lat?: number | null; lng?: number | null }
+      if (typeof coords.lat === "number" && typeof coords.lng === "number") {
+        setNewAddressCoords?.({ lat: coords.lat, lng: coords.lng })
       }
     },
   })
@@ -405,8 +441,17 @@ export function StepEntrega({
 
       {/* Modal / Seleção de Endereços Salvos */}
       {showAddressPicker && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs p-0 sm:p-4">
-          <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl space-y-4 animate-in slide-in-from-bottom duration-200">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Selecione um Endereço"
+          onClick={() => setShowAddressPicker(false)}
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs p-0 sm:p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl space-y-4 animate-in slide-in-from-bottom duration-200"
+          >
             <div className="flex items-center justify-between">
               <h3 className="text-base font-black text-[#1F1B16]">Selecione um Endereço</h3>
               <button

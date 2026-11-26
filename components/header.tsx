@@ -60,6 +60,7 @@ export function Header({ variant = "default" }: HeaderProps) {
   const [isHeaderHidden, setIsHeaderHidden] = useState(false)
 
   const hiddenRef = useRef(false)
+  const addressRequestIdRef = useRef(0)
 
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0)
@@ -91,6 +92,8 @@ export function Header({ variant = "default" }: HeaderProps) {
 
   const loadDefaultAddress = async (isActive: () => boolean = () => true) => {
     if (authLoading || !isActive()) return
+    const requestId = ++addressRequestIdRef.current
+    const isCurrent = () => isActive() && requestId === addressRequestIdRef.current
     setAddressLoading(true)
     try {
       let nextAddress = "Iacanga - SP"
@@ -113,11 +116,11 @@ export function Header({ variant = "default" }: HeaderProps) {
           }
         }
       }
-      if (isActive()) setDefaultAddress(nextAddress)
+      if (isCurrent()) setDefaultAddress(nextAddress)
     } catch {
-      if (isActive()) setDefaultAddress("Iacanga - SP")
+      if (isCurrent()) setDefaultAddress("Iacanga - SP")
     } finally {
-      if (isActive()) setAddressLoading(false)
+      if (isCurrent()) setAddressLoading(false)
     }
   }
 

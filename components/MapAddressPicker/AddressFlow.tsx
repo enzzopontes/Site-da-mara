@@ -161,6 +161,7 @@ const MapSelectorView: React.FC<MapSelectorViewProps> = ({
   const map = useMap();
   const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastUserCenterRef = useRef<Coords | null>(null);
+  const [isCameraPending, setIsCameraPending] = useState(false);
 
   // Limpa timer pendente ao desmontar
   useEffect(() => {
@@ -199,8 +200,10 @@ const MapSelectorView: React.FC<MapSelectorViewProps> = ({
       const c = ev.detail.center;
       if (!c) return;
       lastUserCenterRef.current = { lat: c.lat, lng: c.lng };
+      setIsCameraPending(true);
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
       idleTimerRef.current = setTimeout(() => {
+        setIsCameraPending(false);
         onCameraIdle({ lat: c.lat, lng: c.lng });
       }, 200);
     },
@@ -208,7 +211,7 @@ const MapSelectorView: React.FC<MapSelectorViewProps> = ({
   );
 
   return (
-    <div className="relative flex flex-col h-full w-full bg-[#E5F2E9] overflow-hidden">
+    <div className="relative flex flex-col flex-1 h-full w-full bg-[#E5F2E9] overflow-hidden">
       {/* Header do Mapa com cantos inferiores arredondados */}
       <div className="z-30 flex items-center justify-between px-4 py-3.5 bg-white rounded-b-2xl shadow-sm shrink-0">
         <button
@@ -285,7 +288,7 @@ const MapSelectorView: React.FC<MapSelectorViewProps> = ({
         <button
           type="button"
           onClick={onConfirm}
-          disabled={isResolving}
+          disabled={isResolving || isMoving || isCameraPending}
           className="w-full py-3.5 px-4 bg-[#E59500] hover:bg-[#D48600] active:scale-[0.99] text-white font-bold text-sm rounded-2xl shadow-lg transition-all flex items-center justify-center cursor-pointer disabled:opacity-60"
         >
           {isResolving ? (
@@ -326,6 +329,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
   const [mapCoords, setMapCoords] = useState<Coords>(DEFAULT_IACANGA_COORDS);
   const [isMapMoving, setIsMapMoving] = useState<boolean>(false);
   const [isResolvingAddress, setIsResolvingAddress] = useState<boolean>(false);
+  const [geocodeFailed, setGeocodeFailed] = useState<boolean>(false);
 
   // Endereço Decodificado
   const [selectedStreet, setSelectedStreet] = useState<string>("");
@@ -368,6 +372,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
 
   const geocodeRequestIdRef = useRef<number>(0);
   const preservedCoordsRef = useRef<Coords | null>(null);
+  const hasExplicitCoordsRef = useRef<boolean>(false);
 
   useEffect(() => {
     return () => {
@@ -407,10 +412,14 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
           const parsed = JSON.parse(raw);
           if (parsed?.street) {
             setSavedAddresses([parsed]);
+          } else {
+            setSavedAddresses([]);
           }
         } catch {
           setSavedAddresses([]);
         }
+      } else {
+        setSavedAddresses([]);
       }
     }
   }, [user]);
@@ -424,10 +433,17 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
     async (coords: Coords, updateGpsText = false) => {
       const reqId = ++geocodeRequestIdRef.current;
       setIsResolvingAddress(true);
+      setGeocodeFailed(false);
       try {
         const raw = await mapsService.reverseGeocode(coords.lat, coords.lng);
         if (reqId !== geocodeRequestIdRef.current) return null;
         if (!raw) {
+          setSelectedStreet("");
+          setSelectedNeighborhood("");
+          setSelectedCity("");
+          setSelectedState("");
+          setSelectedCep("");
+          setGeocodeFailed(true);
           if (updateGpsText) {
             setGpsAddressText("Localização encontrada");
           }
@@ -446,6 +462,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
         setSelectedCity(data.city);
         setSelectedState(data.state);
         setSelectedCep(data.cep);
+        setGeocodeFailed(false);
         if (updateGpsText) {
           if (data.formatted) {
             setGpsAddressText(data.formatted);
@@ -456,6 +473,12 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
         return data;
       } catch {
         if (reqId !== geocodeRequestIdRef.current) return null;
+        setSelectedStreet("");
+        setSelectedNeighborhood("");
+        setSelectedCity("");
+        setSelectedState("");
+        setSelectedCep("");
+        setGeocodeFailed(true);
         if (updateGpsText) {
           setGpsAddressText("Localização encontrada");
         }
@@ -488,6 +511,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
               lng: pos.coords.longitude,
             };
             preservedCoordsRef.current = coords;
+            hasExplicitCoordsRef.current = true;
             setCurrentCoords(coords);
             setMapCoords(coords);
             setIsDetectingGps(false);
@@ -578,6 +602,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
       setIsSearching(true);
       try {
         const data = await mapsService.searchAddress(trimmed, controller.signal);
+        if (searchAbortRef.current !== controller || controller.signal.aborted) return;
 
         const filtered = (Array.isArray(data) ? data : []).filter((item) => {
           const city =
@@ -596,12 +621,15 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
         setSearchSuggestions(filtered);
         setSearchNotFound(filtered.length === 0);
       } catch (err: any) {
+        if (searchAbortRef.current !== controller || controller.signal.aborted) return;
         if (err?.name !== "AbortError") {
           setSearchSuggestions([]);
           setSearchNotFound(true);
         }
       } finally {
-        setIsSearching(false);
+        if (searchAbortRef.current === controller && !controller.signal.aborted) {
+          setIsSearching(false);
+        }
       }
     }, SEARCH_DEBOUNCE_MS);
   }, []);
@@ -610,8 +638,8 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
     const addr = item.address || {};
     const lat = parseFloat(item.lat);
     const lng = parseFloat(item.lon);
-    const coords: Coords =
-      Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : DEFAULT_IACANGA_COORDS;
+    const hasValidCoords = Number.isFinite(lat) && Number.isFinite(lng);
+    const coords: Coords = hasValidCoords ? { lat, lng } : DEFAULT_IACANGA_COORDS;
 
     const street = cleanStreetName(
       addr.road || addr.pedestrian || item.display_name.split(",")[0] || ""
@@ -622,7 +650,9 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
 
     geocodeRequestIdRef.current += 1;
     setIsResolvingAddress(false);
+    setGeocodeFailed(false);
     preservedCoordsRef.current = coords;
+    hasExplicitCoordsRef.current = hasValidCoords;
 
     resetNewAddressForm();
     setMapCoords(coords);
@@ -643,6 +673,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
     resetNewAddressForm();
     clearSearch();
     preservedCoordsRef.current = DEFAULT_IACANGA_COORDS;
+    hasExplicitCoordsRef.current = true;
     setMapCoords(DEFAULT_IACANGA_COORDS);
     setStep("map");
     await applyReverseGeocode(DEFAULT_IACANGA_COORDS);
@@ -657,6 +688,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
     const coords = await locateUser(true);
     if (!coords) {
       preservedCoordsRef.current = currentCoords;
+      hasExplicitCoordsRef.current = true;
       setMapCoords(currentCoords);
       await applyReverseGeocode(currentCoords);
     }
@@ -678,6 +710,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
       }
       preservedCoordsRef.current = null;
 
+      hasExplicitCoordsRef.current = true;
       setMapCoords(coords);
       await applyReverseGeocode(coords);
     },
@@ -686,12 +719,20 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
 
   // 6. Confirma no mapa -> valida área de entrega e vai para detalhes
   const handleConfirmMap = () => {
-    if (isResolvingAddress) return;
+    if (isResolvingAddress || isMapMoving) return;
+    if (geocodeFailed) {
+      appToast.error(
+        "Não foi possível identificar o endereço",
+        "Mova o pino no mapa ou tente novamente em instantes."
+      );
+      return;
+    }
     if (!isWithinDeliveryArea(selectedCity, selectedState)) {
       setOutOfAreaOpen(true);
       return;
     }
 
+    hasExplicitCoordsRef.current = true;
     const hasNeighborhood = Boolean(
       selectedNeighborhood && selectedNeighborhood.trim().length >= 2
     );
@@ -711,6 +752,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
   const handleRecenterIacanga = async () => {
     setOutOfAreaOpen(false);
     preservedCoordsRef.current = DEFAULT_IACANGA_COORDS;
+    hasExplicitCoordsRef.current = true;
     setMapCoords(DEFAULT_IACANGA_COORDS);
     setStep("map");
     await applyReverseGeocode(DEFAULT_IACANGA_COORDS);
@@ -753,7 +795,11 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
     setIsDeleting(true);
     try {
       if (user) {
-        await addressesManager.deleteAddress(toDelete.id);
+        const ok = await addressesManager.deleteAddress(toDelete.id, user.id);
+        if (!ok) {
+          appToast.error("Erro ao remover endereço.");
+          return;
+        }
       } else {
         localStorage.removeItem(GUEST_STORAGE_KEY);
       }
@@ -778,6 +824,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
 
     // NEW-12 FIX: Preserva ID do endereço em edição, coordenadas, referência e label compatível com addresses_label_check
     setEditingAddressId(addr.id);
+    setGeocodeFailed(false);
     setSelectedStreet(addr.street);
     setSelectedNeighborhood(addr.neighborhood);
     setSelectedCity(addr.city);
@@ -791,6 +838,10 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
 
     if (addr.latitude != null && addr.longitude != null) {
       setMapCoords({ lat: Number(addr.latitude), lng: Number(addr.longitude) });
+      hasExplicitCoordsRef.current = true;
+    } else {
+      setMapCoords(DEFAULT_IACANGA_COORDS);
+      hasExplicitCoordsRef.current = false;
     }
 
     if (addr.number === "S/N") {
@@ -821,7 +872,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
 
   // 10. Salva endereço final
   const handleSaveFinalAddress = async () => {
-    if (!isWithinDeliveryArea(selectedCity, selectedState)) {
+    if (geocodeFailed || !isWithinDeliveryArea(selectedCity, selectedState)) {
       setOutOfAreaOpen(true);
       return;
     }
@@ -867,8 +918,8 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
         is_default: true,
         label: dbLabel,
         reference_point: pontoReferencia.trim() || null,
-        latitude: mapCoords?.lat ?? null,
-        longitude: mapCoords?.lng ?? null,
+        latitude: hasExplicitCoordsRef.current ? (mapCoords?.lat ?? null) : null,
+        longitude: hasExplicitCoordsRef.current ? (mapCoords?.lng ?? null) : null,
       };
 
       let saved: Address | null = null;
@@ -913,7 +964,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
 
   return (
     <APIProvider apiKey={apiKey} libraries={["places", "geocoding"]}>
-      <div className={`relative w-full h-full flex flex-col bg-[#FAF8F5] text-slate-800 ${isModal ? "max-h-[92vh] rounded-3xl overflow-hidden shadow-2xl" : "min-h-screen"}`}>
+      <div className={`relative w-full h-full flex flex-col bg-[#FAF8F5] text-slate-800 ${isModal ? "max-h-[92vh] rounded-3xl overflow-hidden shadow-2xl" : step === "map" ? "h-dvh overflow-hidden" : "min-h-screen"}`}>
 
         {/* ======================================================== */}
         {/* ESTADO 1: LISTA DE ENDEREÇOS E GPS                       */}
@@ -1049,6 +1100,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
             {/* ======================================================== */}
             {menuAddress && (
               <div
+                data-nested-dialog="true"
                 onClick={() => setMenuAddress(null)}
                 className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-xs transition-opacity"
               >
@@ -1104,6 +1156,7 @@ export const AddressFlow: React.FC<AddressFlowProps> = ({
               <div
                 role="dialog"
                 aria-modal="true"
+                data-nested-dialog="true"
                 aria-labelledby="confirm-delete-address-title"
                 onClick={() => !isDeleting && setConfirmDeleteAddress(null)}
                 className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"

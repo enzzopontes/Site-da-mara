@@ -48,7 +48,7 @@ export function formatCep(rawCep: string): string {
   if (digits.length === 8) {
     return digits.replace(/(\d{5})(\d{3})/, "$1-$2")
   }
-  return digits
+  return ""
 }
 
 /**

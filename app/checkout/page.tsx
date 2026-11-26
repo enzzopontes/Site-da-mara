@@ -168,6 +168,13 @@ export default function CheckoutPage() {
   })
   const [enderecoError, setEnderecoError] = useState("")
   const [buscandoCep, setBuscandoCep] = useState(false)
+  const cepAbortRef = useRef<AbortController | null>(null)
+  const cepRequestIdRef = useRef(0)
+  const selectedAddressIdRef = useRef(selectedAddressId)
+
+  useEffect(() => {
+    selectedAddressIdRef.current = selectedAddressId
+  }, [selectedAddressId])
 
   // Pagamento e opções do pedido
   const [formaPagamento, setFormaPagamento] = useState<
@@ -320,6 +327,40 @@ export default function CheckoutPage() {
     }
     init()
   }, [user, applyStoreSettings])
+
+  // Sincroniza endereços quando alterados/removidos no AddressModal
+  useEffect(() => {
+    if (!user?.id) return
+    let active = true
+
+    const handleAddressChanged = async () => {
+      try {
+        const fresh = await addressesManager.getUserAddresses(user.id)
+        if (!active) return
+        setAddresses(fresh)
+        const currentId = selectedAddressIdRef.current
+        if (!fresh.some((a) => a.id === currentId)) {
+          const fallback = fresh.find((a) => a.is_default) || fresh[0]
+          if (fallback) {
+            setSelectedAddressId(fallback.id)
+            setUseNewAddress(false)
+            setEnderecoError("")
+          } else {
+            setSelectedAddressId("")
+            setUseNewAddress(true)
+          }
+        }
+      } catch {
+        // Silêncio
+      }
+    }
+
+    window.addEventListener("address-changed", handleAddressChanged)
+    return () => {
+      active = false
+      window.removeEventListener("address-changed", handleAddressChanged)
+    }
+  }, [user?.id])
 
   // Assina atualizações em tempo real de store_settings (loja aberta, taxa de entrega e promoção ativa)
   useEffect(() => {
@@ -519,25 +560,47 @@ export default function CheckoutPage() {
       .substring(0, 9)
     setCep(formatted)
     const digits = formatted.replace(/\D/g, "")
-    if (digits.length === 8) {
-      setBuscandoCep(true)
-      try {
-        const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`)
-        const data = await res.json()
-        if (!data.erro) {
-          setRua(data.logradouro || "")
-          setBairro(data.bairro || "")
-          if ((data.localidade || "").toLowerCase().trim() !== "iacanga") {
-            setEnderecoError("No momento entregamos exclusivamente em Iacanga - SP.")
-          } else {
-            setEnderecoError("")
-          }
+
+    cepAbortRef.current?.abort()
+    const requestId = ++cepRequestIdRef.current
+
+    if (digits.length < 8) {
+      setEnderecoError("")
+      setBuscandoCep(false)
+      return
+    }
+
+    const controller = new AbortController()
+    cepAbortRef.current = controller
+    setBuscandoCep(true)
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`, {
+        signal: controller.signal,
+      })
+      const data = await res.json()
+      if (requestId !== cepRequestIdRef.current) return
+      if (!data.erro) {
+        setRua(data.logradouro || "")
+        setBairro(data.bairro || "")
+        const normalizedCity = (data.localidade || "")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .trim()
+        const normalizedUf = (data.uf || "").toUpperCase().trim()
+        if (normalizedCity !== "iacanga" || (normalizedUf && normalizedUf !== "SP")) {
+          setEnderecoError("No momento entregamos exclusivamente em Iacanga - SP.")
         } else {
-          setEnderecoError("CEP não encontrado. Digite o endereço manualmente.")
+          setEnderecoError("")
         }
-      } catch {
-        // Silêncio em erro de rede ViaCEP
-      } finally {
+      } else {
+        setEnderecoError("")
+        appToast.warning("CEP não encontrado", "Digite a rua e o bairro manualmente.")
+      }
+    } catch {
+      // Silêncio em abort ou erro de rede ViaCEP
+    } finally {
+      if (requestId === cepRequestIdRef.current) {
         setBuscandoCep(false)
       }
     }
@@ -710,11 +773,11 @@ export default function CheckoutPage() {
     }
 
     if (deliveryType === "delivery") {
-      if (enderecoError) {
-        setErrorMessage(enderecoError)
-        return false
-      }
       if (useNewAddress) {
+        if (enderecoError) {
+          setErrorMessage(enderecoError)
+          return false
+        }
         if (!rua.trim() || !numero.trim() || !bairro.trim()) {
           setErrorMessage("Preencha Rua, Número e Bairro do seu endereço de entrega.")
           return false
@@ -974,17 +1037,26 @@ export default function CheckoutPage() {
         // Persiste o endereço preenchido para próximos pedidos
         if (deliveryType === "delivery" && useNewAddress && rua && numero) {
           if (user) {
-            addressesManager.addAddress({
-              user_id: user.id,
-              street: rua.trim(),
-              number: numero.trim(),
-              complement: complemento.trim(),
-              neighborhood: bairro.trim(),
-              city: "Iacanga",
-              state: "SP",
-              cep: cep.trim() || "17180-000",
-              is_default: addresses.length === 0,
-            }).catch(() => {})
+            addressesManager
+              .addAddress({
+                user_id: user.id,
+                street: rua.trim(),
+                number: numero.trim(),
+                complement: complemento.trim(),
+                neighborhood: bairro.trim(),
+                city: "Iacanga",
+                state: "SP",
+                cep: cep.trim() || "17180-000",
+                is_default: addresses.length === 0,
+                latitude: newAddressCoords?.lat ?? null,
+                longitude: newAddressCoords?.lng ?? null,
+              })
+              .then((saved) => {
+                if (saved) {
+                  window.dispatchEvent(new Event("address-changed"))
+                }
+              })
+              .catch(() => {})
           } else {
             try {
               localStorage.setItem("batata_top_guest_address", JSON.stringify({
@@ -1322,6 +1394,8 @@ export default function CheckoutPage() {
             handleCepChange={handleCepChange}
             buscandoCep={buscandoCep}
             enderecoError={enderecoError}
+            setEnderecoError={setEnderecoError}
+            setNewAddressCoords={setNewAddressCoords}
             nome={nome}
             setNome={setNome}
             telefone={telefone}
@@ -1435,8 +1509,9 @@ export default function CheckoutPage() {
         isOpen={isAddressModalOpen}
         onClose={() => setIsAddressModalOpen(false)}
         onAddressSelect={async (addr) => {
+          setEnderecoError("")
           setRua(addr.street)
-          setNumero(addr.number === "S/N" ? "" : addr.number)
+          setNumero(addr.number || "S/N")
           setComplemento(addr.complement || "")
           setBairro(addr.neighborhood)
           if (addr.cep) {

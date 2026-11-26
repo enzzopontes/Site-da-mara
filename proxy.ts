@@ -8,22 +8,29 @@ export default async function proxy(request: NextRequest) {
 
   // 0. Rate Limiting por IP (Proteção contra força bruta, scraping e DDoS)
   const clientIp =
-    request.headers.get("x-vercel-ip") ||
-    request.headers.get("x-real-ip") ||
+    request.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip")?.trim() ||
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     "127.0.0.1"
 
   // Rate limit para APIs (60 req/min, 180/min para webhook do MP)
   if (url.pathname.startsWith("/api/")) {
+    const isGeocode =
+      url.pathname === "/api/geocode" || url.pathname.startsWith("/api/geocode/")
     const isWebhook = url.pathname.startsWith("/api/mercadopago/webhook")
     const limit = isWebhook ? 180 : 60
-    const rl = checkRateLimit(`api:${clientIp}`, limit, 60 * 1000)
+    const rateLimitKey = isGeocode ? `geocode:${clientIp}` : `api:${clientIp}`
+    const rl = checkRateLimit(rateLimitKey, limit, 60 * 1000)
 
     if (!rl.success) {
       return NextResponse.json(
         { error: "Limite de requisições excedido. Aguarde um minuto e tente novamente." },
         { status: 429, headers: { "Retry-After": "60" } }
       )
+    }
+
+    if (isGeocode) {
+      return NextResponse.next()
     }
   }
 

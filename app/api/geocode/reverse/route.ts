@@ -56,6 +56,7 @@ interface PhotonFeature {
     locality?: string
     district?: string
     city?: string
+    county?: string
     state?: string
     postcode?: string
   }
@@ -112,6 +113,14 @@ function isIacanga(city: string): boolean {
   )
 }
 
+function resolveCep(rawCep: string | undefined, city: string): string {
+  const formatted = formatCep(rawCep || "")
+  if (/^\d{5}-\d{3}$/.test(formatted)) {
+    return formatted
+  }
+  return isIacanga(city) ? "17180-000" : ""
+}
+
 function pickBestPhotonFeature(features: PhotonFeature[]): PhotonFeature | null {
   if (!features.length) return null
   return (
@@ -121,7 +130,7 @@ function pickBestPhotonFeature(features: PhotonFeature[]): PhotonFeature | null 
     }) ||
     features.find((f) => {
       const p = f.properties
-      return Boolean(p && (p.name || p.city || p.district))
+      return Boolean(p && (p.name || p.city || p.county || p.district))
     }) ||
     features[0]
   )
@@ -164,7 +173,9 @@ export async function GET(req: NextRequest) {
   }
 
   const respond = (payload: ReverseGeocodePayload) => {
-    setCached(cacheKey, payload)
+    if (payload.street && payload.city) {
+      setCached(cacheKey, payload)
+    }
     return NextResponse.json(payload)
   }
 
@@ -203,7 +214,7 @@ export async function GET(req: NextRequest) {
             street = first.formatted_address.split(",")[0]
           }
 
-          const zipCode = formatCep(rawCep) || (isIacanga(city) ? "17180-000" : "")
+          const zipCode = resolveCep(rawCep, city)
 
           return respond({
             street: cleanStreetName(street),
@@ -250,14 +261,14 @@ export async function GET(req: NextRequest) {
 
       if (p) {
         const street = cleanStreetName(
-          p.street || (p.osm_key === "highway" ? p.name : "") || p.name || ""
+          p.street || (p.osm_key === "highway" ? p.name || "" : "")
         )
         const number = p.housenumber || ""
-        const city = p.city || p.district || ""
+        const city = p.city || p.county || ""
         const neighborhood =
-          p.locality || (p.district && p.district !== p.city ? p.district : "") || ""
+          p.locality || (p.district && p.district !== city ? p.district : "") || ""
         const state = normalizeBrazilState(p.state)
-        const zipCode = formatCep(p.postcode || "") || (isIacanga(city) ? "17180-000" : "")
+        const zipCode = resolveCep(p.postcode, city)
         const displayName = [street, number, neighborhood, city, state]
           .filter(Boolean)
           .join(", ")
@@ -309,7 +320,7 @@ export async function GET(req: NextRequest) {
         addr.suburb || addr.neighbourhood || addr.quarter || addr.city_district || ""
       const city = addr.city || addr.town || addr.municipality || addr.village || ""
       const state = normalizeBrazilState(addr["ISO3166-2-lvl4"] || addr.state)
-      const zipCode = formatCep(addr.postcode || "") || (isIacanga(city) ? "17180-000" : "")
+      const zipCode = resolveCep(addr.postcode, city)
 
       const payload: ReverseGeocodePayload = {
         street,
@@ -350,18 +361,28 @@ export async function GET(req: NextRequest) {
       const state = normalizeBrazilState(
         data?.principalSubdivisionCode || data?.principalSubdivision
       )
-      const zipCode = isIacanga(city) ? "17180-000" : ""
 
       if (city || state) {
+        const street = partialResult?.street || ""
+        const number = partialResult?.number || ""
+        const neighborhood = partialResult?.neighborhood || ""
+        const resolvedCity = city || partialResult?.city || ""
+        const resolvedState = state || partialResult?.state || ""
+        const zipCode = resolveCep(partialResult?.zipCode || partialResult?.cep, resolvedCity)
+        const displayName =
+          [street, number, neighborhood, resolvedCity, resolvedState]
+            .filter(Boolean)
+            .join(", ") || undefined
+
         return respond({
-          street: "",
-          number: "",
-          neighborhood: "",
-          city,
-          state,
+          street,
+          number,
+          neighborhood,
+          city: resolvedCity,
+          state: resolvedState,
           cep: zipCode,
           zipCode,
-          displayName: [city, state].filter(Boolean).join(", ") || undefined,
+          displayName,
           source: "bigdatacloud",
         })
       }
@@ -371,7 +392,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (partialResult) {
-    return respond(partialResult)
+    return NextResponse.json(partialResult)
   }
 
   return NextResponse.json(

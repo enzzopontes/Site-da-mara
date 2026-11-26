@@ -1,18 +1,28 @@
 "use client"
 
-import { useState, useCallback, RefObject } from "react"
+import { useState, useCallback, useRef, RefObject } from "react"
 import { mapsService, type ReverseGeocodeResult } from "@/lib/maps-service"
 import { appToast } from "@/lib/app-toast"
 
+export type CurrentLocationResult = ReverseGeocodeResult & {
+  lat?: number
+  lng?: number
+}
+
 interface UseCurrentLocationOptions {
-  onSuccess?: (address: ReverseGeocodeResult) => void
+  onSuccess?: (address: CurrentLocationResult) => void
   numberInputRef?: RefObject<HTMLInputElement | null>
 }
 
 export function useCurrentLocation(options?: UseCurrentLocationOptions) {
   const [isLocating, setIsLocating] = useState(false)
+  const inFlightRef = useRef(false)
 
   const requestLocation = useCallback(async () => {
+    if (inFlightRef.current) {
+      return null
+    }
+
     if (typeof window === "undefined" || !navigator.geolocation) {
       appToast.warning(
         "GPS não suportado",
@@ -21,9 +31,10 @@ export function useCurrentLocation(options?: UseCurrentLocationOptions) {
       return null
     }
 
+    inFlightRef.current = true
     setIsLocating(true)
 
-    return new Promise<ReverseGeocodeResult | null>((resolve) => {
+    return new Promise<CurrentLocationResult | null>((resolve) => {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           try {
@@ -39,8 +50,38 @@ export function useCurrentLocation(options?: UseCurrentLocationOptions) {
               return
             }
 
+            // Validação de cidade de entrega (Iacanga/SP) antes de mutar estado
+            const normalizedCity = (address.city || "").trim().toLowerCase()
+            const normalizedState = (address.state || "").trim().toUpperCase()
+            const isInDeliveryArea =
+              normalizedCity === "iacanga" &&
+              (normalizedState === "" ||
+                normalizedState === "SP" ||
+                normalizedState === "SÃO PAULO" ||
+                normalizedState === "SAO PAULO")
+
+            if (!isInDeliveryArea) {
+              const detectedLabel = [address.city?.trim(), address.state?.trim()]
+                .filter(Boolean)
+                .join("/")
+              appToast.warning(
+                "Fora da área de entrega principal",
+                detectedLabel
+                  ? `Local detectado em ${detectedLabel}. Entregamos apenas em Iacanga/SP.`
+                  : "Local detectado fora da área de entrega. Entregamos apenas em Iacanga/SP."
+              )
+              resolve(null)
+              return
+            }
+
+            const result: CurrentLocationResult = {
+              ...address,
+              lat: latitude,
+              lng: longitude,
+            }
+
             if (options?.onSuccess) {
-              options.onSuccess(address)
+              options.onSuccess(result)
             }
 
             // Foco automático no campo Número
@@ -50,20 +91,12 @@ export function useCurrentLocation(options?: UseCurrentLocationOptions) {
               }, 50)
             }
 
-            // Validação de cidade de entrega (Iacanga)
-            if (address.city.toLowerCase() !== "iacanga") {
-              appToast.warning(
-                "Fora da área de entrega principal",
-                `Local detectado em ${address.city}/${address.state}. Entregamos prioritariamente em Iacanga.`
-              )
-            } else {
-              appToast.success(
-                "Localização detectada!",
-                "Endereço preenchido. Digite o número da sua residência."
-              )
-            }
+            appToast.success(
+              "Localização detectada!",
+              "Endereço preenchido. Digite o número da sua residência."
+            )
 
-            resolve(address)
+            resolve(result)
           } catch (err: any) {
             appToast.error(
               "Erro ao obter endereço",
@@ -71,10 +104,12 @@ export function useCurrentLocation(options?: UseCurrentLocationOptions) {
             )
             resolve(null)
           } finally {
+            inFlightRef.current = false
             setIsLocating(false)
           }
         },
         (error) => {
+          inFlightRef.current = false
           setIsLocating(false)
 
           switch (error.code) {

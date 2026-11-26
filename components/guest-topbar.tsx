@@ -20,16 +20,16 @@ export function GuestTopbar({ onOpenAuth, desktopOnly = false }: GuestTopbarProp
 
   // Monitora alterações do estado do mapa e modal de endereço
   useEffect(() => {
-    const handleMapState = (e: any) => {
-      setIsMapActive(Boolean(e.detail?.active))
-    }
-
     const checkDataset = () => {
       const active =
         document.body.dataset.mapActive === "true" ||
         document.documentElement.dataset.mapActive === "true" ||
         document.body.dataset.addressModalOpen === "true"
       setIsMapActive(active)
+    }
+
+    const handleMapState = () => {
+      checkDataset()
     }
 
     window.addEventListener("map-view-active", handleMapState)

@@ -94,7 +94,6 @@ export interface Address {
   city: string
   state: string
   cep: string
-  zip_code?: string | null
   reference_point: string | null
   latitude: number | null
   longitude: number | null

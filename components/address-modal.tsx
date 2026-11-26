@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { Address } from "@/lib/addresses-manager";
 import { AddressFlow } from "@/components/MapAddressPicker/AddressFlow";
 
@@ -11,6 +11,8 @@ interface AddressModalProps {
 }
 
 export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalProps) {
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
     if (isOpen) {
       document.body.dataset.addressModalOpen = "true";
@@ -29,7 +31,12 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      const hasNestedDialog = Array.from(
+        document.querySelectorAll('[role="dialog"], [role="alertdialog"], [data-nested-dialog="true"]')
+      ).some((el) => el !== dialogRef.current);
+      if (hasNestedDialog) return;
+      onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
@@ -43,6 +50,7 @@ export function AddressModal({ isOpen, onClose, onAddressSelect }: AddressModalP
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs transition-opacity p-0 sm:p-4"
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}

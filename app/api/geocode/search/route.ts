@@ -48,6 +48,7 @@ interface PhotonFeature {
     locality?: string
     district?: string
     city?: string
+    county?: string
     state?: string
     postcode?: string
     countrycode?: string
@@ -165,8 +166,8 @@ export async function GET(req: NextRequest) {
 
       const brazilFeatures = features.filter(isBrazilFeature)
       brazilFeatures.sort((a, b) => {
-        const aCity = a.properties?.city || a.properties?.district
-        const bCity = b.properties?.city || b.properties?.district
+        const aCity = a.properties?.city || a.properties?.county
+        const bCity = b.properties?.city || b.properties?.county
         const aMatch = isIacanga(aCity) ? 1 : 0
         const bMatch = isIacanga(bCity) ? 1 : 0
         return bMatch - aMatch
@@ -183,9 +184,9 @@ export async function GET(req: NextRequest) {
           const road = cleanStreetName(
             p.street || (p.osm_key === "highway" ? p.name : "") || p.name || ""
           )
-          const city = p.city || p.district || ""
+          const city = p.city || p.county || ""
           const neighborhood =
-            p.locality || (p.district && p.district !== p.city ? p.district : "") || ""
+            p.locality || (p.district && p.district !== city ? p.district : "") || ""
           const state = normalizeBrazilState(p.state)
 
           return {
@@ -206,8 +207,10 @@ export async function GET(req: NextRequest) {
         })
         .filter((item): item is SearchAddressResult => item !== null)
 
-      setCached(cacheKey, results)
-      return NextResponse.json({ results }, { status: 200 })
+      if (results.length > 0) {
+        setCached(cacheKey, results)
+        return NextResponse.json({ results }, { status: 200 })
+      }
     }
   } catch {
     // Segue para fallback do Nominatim
@@ -227,7 +230,31 @@ export async function GET(req: NextRequest) {
 
     if (res.ok) {
       const data = await res.json()
-      const results: SearchAddressResult[] = Array.isArray(data) ? data : []
+      const rawItems: SearchAddressResult[] = Array.isArray(data) ? data : []
+      const results: SearchAddressResult[] = rawItems.map((item) => {
+        const addr = item.address
+        if (!addr) return item
+
+        return {
+          ...item,
+          address: {
+            ...addr,
+            road: addr.road ? cleanStreetName(addr.road) : addr.road,
+            state: addr.state ? normalizeBrazilState(addr.state) : addr.state,
+          },
+        }
+      })
+
+      results.sort((a, b) => {
+        const aCity =
+          a.address?.city || a.address?.town || a.address?.municipality || a.address?.village
+        const bCity =
+          b.address?.city || b.address?.town || b.address?.municipality || b.address?.village
+        const aMatch = isIacanga(aCity) ? 1 : 0
+        const bMatch = isIacanga(bCity) ? 1 : 0
+        return bMatch - aMatch
+      })
+
       setCached(cacheKey, results)
       return NextResponse.json({ results }, { status: 200 })
     }
