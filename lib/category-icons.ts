@@ -36,6 +36,34 @@ export const FALLBACK_ICON_NAMES = [
   "ChefHat",
   "Percent",
   "Gift",
+  "CookingPot",
+  "HandPlatter",
+  "Microwave",
+  "Cake",
+  "CakeSlice",
+  "Dessert",
+  "Donut",
+  "Candy",
+  "IceCreamBowl",
+  "Popsicle",
+  "Croissant",
+  "Drumstick",
+  "Ham",
+  "Fish",
+  "EggFried",
+  "Popcorn",
+  "Beer",
+  "Wine",
+  "Martini",
+  "GlassWater",
+  "Citrus",
+  "Milk",
+  "Wheat",
+  "Cherry",
+  "Carrot",
+  "Package",
+  "ShoppingBasket",
+  "Crown",
 ] as const
 
 export type FallbackIconName = (typeof FALLBACK_ICON_NAMES)[number]
@@ -98,6 +126,7 @@ export function isSafeCategoryHref(raw?: string | null): boolean {
   const trimmed = raw.trim()
   if (!trimmed) return false
   if (/[\u0000-\u001f\u007f]/.test(trimmed)) return false
+  if (trimmed.includes("\\")) return false
 
   const lower = trimmed.toLowerCase()
   if (

@@ -24,9 +24,38 @@ import {
   ChefHat,
   Percent,
   Gift,
+  CookingPot,
+  HandPlatter,
+  Microwave,
+  Cake,
+  CakeSlice,
+  Dessert,
+  Donut,
+  Candy,
+  IceCreamBowl,
+  Popsicle,
+  Croissant,
+  Drumstick,
+  Ham,
+  Fish,
+  EggFried,
+  Popcorn,
+  Beer,
+  Wine,
+  Martini,
+  GlassWater,
+  Citrus,
+  Milk,
+  Wheat,
+  Cherry,
+  Carrot,
+  Package,
+  ShoppingBasket,
+  Crown,
   type LucideIcon,
 } from "lucide-react"
 import type { CategoryIconType } from "@/lib/categories-db"
+import { isSafeIconUrl } from "@/lib/category-icons"
 
 const LUCIDE_ICON_MAP: Record<string, LucideIcon> = {
   UtensilsCrossed,
@@ -51,6 +80,34 @@ const LUCIDE_ICON_MAP: Record<string, LucideIcon> = {
   ChefHat,
   Percent,
   Gift,
+  CookingPot,
+  HandPlatter,
+  Microwave,
+  Cake,
+  CakeSlice,
+  Dessert,
+  Donut,
+  Candy,
+  IceCreamBowl,
+  Popsicle,
+  Croissant,
+  Drumstick,
+  Ham,
+  Fish,
+  EggFried,
+  Popcorn,
+  Beer,
+  Wine,
+  Martini,
+  GlassWater,
+  Citrus,
+  Milk,
+  Wheat,
+  Cherry,
+  Carrot,
+  Package,
+  ShoppingBasket,
+  Crown,
 }
 
 export function getLucideIconComponent(name?: string | null): LucideIcon {
@@ -85,7 +142,8 @@ export function CategoryIcon({
     setImgError(false)
   }, [iconUrl, iconType])
 
-  const shouldShowImage = iconType !== "lucide" && Boolean(iconUrl) && !imgError
+  const shouldShowImage =
+    iconType !== "lucide" && Boolean(iconUrl) && isSafeIconUrl(iconUrl) && !imgError
 
   if (shouldShowImage && iconUrl) {
     return (

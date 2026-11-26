@@ -173,11 +173,44 @@ function revalidateCatalogPages() {
 
 function extractStoragePathFromPublicUrl(publicUrl?: string | null): string | null {
   if (!publicUrl) return null
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!supabaseUrl) return null
+
+  let url: URL
+  let expectedOrigin: string
+  try {
+    url = new URL(publicUrl)
+    expectedOrigin = new URL(supabaseUrl).origin
+  } catch {
+    return null
+  }
+
+  if (url.origin !== expectedOrigin) return null
+
   const marker = "/storage/v1/object/public/category-icons/"
-  const idx = publicUrl.indexOf(marker)
-  if (idx === -1) return null
-  const pathPart = publicUrl.slice(idx + marker.length).split("?")[0]
-  return pathPart ? decodeURIComponent(pathPart) : null
+  if (!url.pathname.startsWith(marker)) return null
+
+  const rawPath = url.pathname.slice(marker.length)
+  if (!rawPath) return null
+
+  let decoded: string
+  try {
+    decoded = decodeURIComponent(rawPath)
+  } catch {
+    return null
+  }
+
+  if (
+    !decoded ||
+    decoded.startsWith("/") ||
+    decoded.includes("..") ||
+    decoded.includes("\\") ||
+    /[\u0000-\u001f\u007f]/.test(decoded)
+  ) {
+    return null
+  }
+
+  return decoded
 }
 
 function isMissingTableError(error: any): boolean {
@@ -721,10 +754,18 @@ export async function deleteCategorySafeAction(
     }
 
     // Best-effort cleanup of uploaded icon in category-icons bucket
-    if (cat.icon_type === "upload") {
+    if (cat.icon_type === "upload" && cat.icon_url) {
       const storagePath = extractStoragePathFromPublicUrl(cat.icon_url)
       if (storagePath) {
-        await service.storage.from("category-icons").remove([storagePath]).catch(() => {})
+        const { data: refs, error: refsErr } = await service
+          .from("categories")
+          .select("id")
+          .eq("icon_url", cat.icon_url)
+          .limit(1)
+
+        if (!refsErr && refs && refs.length === 0) {
+          await service.storage.from("category-icons").remove([storagePath]).catch(() => {})
+        }
       }
     }
 
@@ -783,11 +824,18 @@ export async function uploadCategoryIconAction(
         /<script\b/i,
         /\bon[a-z]+\s*=/i,
         /javascript\s*:/i,
+        /vbscript\s*:/i,
         /data\s*:\s*text\/html/i,
+        /data\s*:\s*image\/svg\+xml/i,
+        /&#x?[0-9a-f]+;?/i,
         /<foreignObject\b/i,
         /<iframe\b/i,
         /<object\b/i,
         /<embed\b/i,
+        /<use\b/i,
+        /<animate[a-z]*\b/i,
+        /<set\b/i,
+        /<meta\b/i,
       ]
       if (!/<svg\b/i.test(svgText) || dangerousSvgPatterns.some((pattern) => pattern.test(svgText))) {
         return {
@@ -816,12 +864,89 @@ export async function uploadCategoryIconAction(
     if (removeOld && oldUrl) {
       const oldPath = extractStoragePathFromPublicUrl(oldUrl)
       if (oldPath && oldPath !== filePath) {
-        await service.storage.from("category-icons").remove([oldPath]).catch(() => {})
+        const { data: refs, error: refsErr } = await service
+          .from("categories")
+          .select("id")
+          .eq("icon_url", oldUrl)
+          .limit(1)
+
+        if (!refsErr && refs && refs.length === 0) {
+          await service.storage.from("category-icons").remove([oldPath]).catch(() => {})
+        }
       }
     }
 
     return { ok: true, data: { publicUrl: urlData.publicUrl } }
   } catch (err: any) {
     return { ok: false, error: err?.message || "Erro ao enviar imagem." }
+  }
+}
+
+export interface CategoryBankIconItem {
+  id: string
+  name: string
+  url: string
+  source: "storage" | "preset_3d"
+  createdAt?: string | null
+}
+
+export async function listCategoryIconsAction(): Promise<
+  ActionResult<{ icons: CategoryBankIconItem[] }>
+> {
+  try {
+    const auth = await assertAdmin()
+    if (!auth.authorized) return { ok: false, error: auth.error }
+
+    const service = getServiceClient()
+    const pageSize = 100
+    const maxPages = 5
+    const allItems: Array<{ name: string; id: string | null; created_at?: string | null }> = []
+
+    for (let page = 0; page < maxPages; page++) {
+      const { data: batch, error } = await service.storage
+        .from("category-icons")
+        .list("", {
+          limit: pageSize,
+          offset: page * pageSize,
+          sortBy: { column: "created_at", order: "desc" },
+        })
+
+      if (error) {
+        return { ok: false, error: `Erro ao listar banco de ícones 3D: ${error.message}` }
+      }
+
+      if (!batch || batch.length === 0) break
+      allItems.push(...batch)
+      if (batch.length < pageSize) break
+    }
+
+    const allowedImageExt = /\.(png|webp|jpe?g|svg)$/i
+    const storageIcons: CategoryBankIconItem[] = allItems
+      .filter(
+        (item) =>
+          Boolean(item.name) &&
+          !item.name.startsWith(".") &&
+          !item.name.endsWith("/") &&
+          item.id !== null &&
+          allowedImageExt.test(item.name)
+      )
+      .map((item) => {
+        const { data: urlData } = service.storage.from("category-icons").getPublicUrl(item.name)
+        return {
+          id: `storage:${item.name}`,
+          name: item.name
+            .replace(/^\d+-/, "")
+            .replace(/\.[^/.]+$/, "")
+            .replace(/[-_]+/g, " ")
+            .trim() || "Ícone 3D",
+          url: urlData.publicUrl,
+          source: "storage" as const,
+          createdAt: item.created_at ?? null,
+        }
+      })
+
+    return { ok: true, data: { icons: storageIcons } }
+  } catch (err: any) {
+    return { ok: false, error: err?.message || "Erro ao carregar banco de ícones 3D." }
   }
 }

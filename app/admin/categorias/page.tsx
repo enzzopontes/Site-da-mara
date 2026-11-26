@@ -132,6 +132,7 @@ export default function AdminCategoriasPage() {
   )
   const [deletingSimple, setDeletingSimple] = useState(false)
   const [savingMode, setSavingMode] = useState<OrderMode | null>(null)
+  const [savingAll, setSavingAll] = useState(false)
 
   // Dirty flags per ordering tab
   const [dirtyTabs, setDirtyTabs] = useState<Record<OrderMode, boolean>>({
@@ -145,6 +146,10 @@ export default function AdminCategoriasPage() {
   const [dragOverId, setDragOverId] = useState<string | null>(null)
 
   const writesDisabled = migrationPending || isOffline
+  const hasAnyUnsavedChanges =
+    dirtyTabs.home_bar || dirtyTabs.home_featured || dirtyTabs.menu
+  const isSavingOrder = savingAll || savingMode !== null
+  const orderControlsDisabled = writesDisabled || isSavingOrder
 
   // Online / offline listener
   useEffect(() => {
@@ -197,7 +202,10 @@ export default function AdminCategoriasPage() {
       (c) => c.kind === "product_category"
     ).length
     const shortcuts = categories.filter((c) => c.kind === "home_shortcut").length
-    return { total, active, products, shortcuts }
+    const pendingHomeBar = categories.filter(
+      (c) => c.kind === "product_category" && !c.show_on_home_bar
+    ).length
+    return { total, active, products, shortcuts, pendingHomeBar }
   }, [categories])
 
   // Next default orders for new categories
@@ -277,6 +285,12 @@ export default function AdminCategoriasPage() {
       )
       return
     }
+    if (hasAnyUnsavedChanges) {
+      toast.warning(
+        "Salve ou descarte as alterações de ordem antes de continuar."
+      )
+      return
+    }
     setEditingCategory(null)
     setFormOpen(true)
   }
@@ -287,6 +301,12 @@ export default function AdminCategoriasPage() {
         migrationPending
           ? "Execute a migração 030_dynamic_categories.sql antes de editar."
           : "Você está offline. Reconecte-se para editar."
+      )
+      return
+    }
+    if (hasAnyUnsavedChanges) {
+      toast.warning(
+        "Salve ou descarte as alterações de ordem antes de editar uma categoria."
       )
       return
     }
@@ -358,6 +378,12 @@ export default function AdminCategoriasPage() {
 
   async function handleDuplicate(category: CategoryWithCounts) {
     if (writesDisabled) return
+    if (hasAnyUnsavedChanges) {
+      toast.warning(
+        "Salve ou descarte as alterações de ordem antes de continuar."
+      )
+      return
+    }
     setDuplicatingIds((prev) => ({ ...prev, [category.id]: true }))
     try {
       const res = await duplicateCategoryAction(category.id)
@@ -376,6 +402,12 @@ export default function AdminCategoriasPage() {
 
   function handleRequestDelete(category: CategoryWithCounts) {
     if (writesDisabled) return
+    if (hasAnyUnsavedChanges) {
+      toast.warning(
+        "Salve ou descarte as alterações de ordem antes de continuar."
+      )
+      return
+    }
     if (category.total_products > 0) {
       setDeleteModalCategory(category)
       setDeleteModalProductCount(category.total_products)
@@ -525,31 +557,34 @@ export default function AdminCategoriasPage() {
     toast.info("Alterações descartadas.")
   }
 
-  async function handleSaveOrder(mode: OrderMode) {
-    if (writesDisabled || savingMode) return
-
-    let items: ReorderItemInput[] = []
+  function buildReorderPayload(mode: OrderMode): ReorderItemInput[] {
     if (mode === "home_bar") {
-      items = homeBarList.map((cat, idx) => ({
+      return homeBarList.map((cat, idx) => ({
         id: cat.id,
         order: idx,
         show_on_home_bar: cat.show_on_home_bar,
       }))
-    } else if (mode === "home_featured") {
-      items = homeFeaturedList.map((cat, idx) => ({
+    }
+    if (mode === "home_featured") {
+      return homeFeaturedList.map((cat, idx) => ({
         id: cat.id,
         order: idx,
         show_on_home_featured: cat.show_on_home_featured,
         home_featured_limit: Math.min(24, Math.max(1, cat.home_featured_limit)),
       }))
-    } else {
-      items = menuList.map((cat, idx) => ({
-        id: cat.id,
-        order: idx,
-        show_on_menu: cat.show_on_menu,
-        menu_layout_zone: cat.menu_layout_zone,
-      }))
     }
+    return menuList.map((cat, idx) => ({
+      id: cat.id,
+      order: idx,
+      show_on_menu: cat.show_on_menu,
+      menu_layout_zone: cat.menu_layout_zone,
+    }))
+  }
+
+  async function handleSaveOrder(mode: OrderMode) {
+    if (writesDisabled || savingMode || savingAll) return
+
+    const items = buildReorderPayload(mode)
 
     if (items.length === 0) return
 
@@ -601,6 +636,154 @@ export default function AdminCategoriasPage() {
     } finally {
       setSavingMode(null)
     }
+  }
+
+  function handlePreviewReorderHomeBar(orderedVisibleIds: string[]) {
+    if (writesDisabled || isSavingOrder) return
+    const visibleSet = new Set(orderedVisibleIds)
+    const remainingIds = homeBarList
+      .filter((cat) => !visibleSet.has(cat.id))
+      .map((cat) => cat.id)
+    applyOrderedIds("home_bar", [...orderedVisibleIds, ...remainingIds])
+  }
+
+  function handlePreviewReorderHomeFeatured(orderedVisibleIds: string[]) {
+    if (writesDisabled || isSavingOrder) return
+    const visibleSet = new Set(orderedVisibleIds)
+    const remainingIds = homeFeaturedList
+      .filter((cat) => !visibleSet.has(cat.id))
+      .map((cat) => cat.id)
+    applyOrderedIds("home_featured", [...orderedVisibleIds, ...remainingIds])
+  }
+
+  function handlePreviewReorderMenu(
+    items: Array<{ id: string; menu_layout_zone: MenuLayoutZone }>
+  ) {
+    if (writesDisabled || isSavingOrder) return
+    const visibleSet = new Set(items.map((item) => item.id))
+    const remainingItems = menuList
+      .filter((cat) => !visibleSet.has(cat.id))
+      .map((cat) => ({
+        id: cat.id,
+        menu_layout_zone: cat.menu_layout_zone,
+      }))
+    const combined = [...items, ...remainingItems]
+    const updateById = new Map(
+      combined.map((item, idx) => [
+        item.id,
+        { menu_order: idx, menu_layout_zone: item.menu_layout_zone },
+      ])
+    )
+    setCategories((prev) =>
+      prev.map((cat) => {
+        const next = updateById.get(cat.id)
+        if (!next) return cat
+        return {
+          ...cat,
+          menu_order: next.menu_order,
+          menu_layout_zone: next.menu_layout_zone,
+        }
+      })
+    )
+    setDirtyTabs((prev) => ({ ...prev, menu: true }))
+  }
+
+  async function handleSaveAllDirtyOrders() {
+    if (writesDisabled || savingAll || savingMode) return
+
+    const modesToSave: OrderMode[] = []
+    if (dirtyTabs.home_bar) modesToSave.push("home_bar")
+    if (dirtyTabs.home_featured) modesToSave.push("home_featured")
+    if (dirtyTabs.menu) modesToSave.push("menu")
+    if (modesToSave.length === 0) return
+
+    setSavingAll(true)
+    const succeededModes: OrderMode[] = []
+    let failedError: string | null = null
+
+    try {
+      for (const mode of modesToSave) {
+        const items = buildReorderPayload(mode)
+        if (items.length === 0) {
+          succeededModes.push(mode)
+          continue
+        }
+        const res = await reorderCategoriesAction(mode, items)
+        if (!res.ok) {
+          failedError = res.error || "Erro ao salvar alterações."
+          break
+        }
+        succeededModes.push(mode)
+      }
+
+      if (succeededModes.length > 0) {
+        const savedSet = new Set(succeededModes)
+        setDirtyTabs((prev) => ({
+          home_bar: savedSet.has("home_bar") ? false : prev.home_bar,
+          home_featured: savedSet.has("home_featured")
+            ? false
+            : prev.home_featured,
+          menu: savedSet.has("menu") ? false : prev.menu,
+        }))
+        setSavedCategories((prev) => {
+          const currentById = new Map(categories.map((cat) => [cat.id, cat]))
+          return prev.map((saved) => {
+            const current = currentById.get(saved.id)
+            if (!current) return saved
+            return {
+              ...saved,
+              ...(savedSet.has("home_bar")
+                ? {
+                    home_bar_order: current.home_bar_order,
+                    show_on_home_bar: current.show_on_home_bar,
+                  }
+                : {}),
+              ...(savedSet.has("home_featured")
+                ? {
+                    home_featured_order: current.home_featured_order,
+                    show_on_home_featured: current.show_on_home_featured,
+                    home_featured_limit: current.home_featured_limit,
+                  }
+                : {}),
+              ...(savedSet.has("menu")
+                ? {
+                    menu_order: current.menu_order,
+                    show_on_menu: current.show_on_menu,
+                    menu_layout_zone: current.menu_layout_zone,
+                  }
+                : {}),
+            }
+          })
+        })
+      }
+
+      if (failedError) {
+        toast.error(failedError)
+      } else {
+        toast.success("Ordem da vitrine e cardápio salva!")
+      }
+    } catch {
+      toast.error("Erro ao salvar alterações.")
+    } finally {
+      setSavingAll(false)
+    }
+  }
+
+  function handleDiscardAllOrderChanges() {
+    setCategories(savedCategories)
+    setDirtyTabs({ home_bar: false, home_featured: false, menu: false })
+    toast.info("Alterações de ordem descartadas.")
+  }
+
+  function handlePreviewEditCategory(cat: CategoryWithCounts) {
+    if (hasAnyUnsavedChanges) {
+      toast.warning(
+        "Salve ou descarte as alterações de ordem antes de editar uma categoria."
+      )
+      return
+    }
+    setPreviewSheetOpen(false)
+    openEditModal(cat)
   }
 
   return (
@@ -664,11 +847,12 @@ export default function AdminCategoriasPage() {
               </span>
               <div>
                 <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-[#1F1A17]">
-                  Categorias &amp; Vitrine
+                  Vitrine, Ícones 3D &amp; Categorias
                 </h1>
                 <p className="text-xs sm:text-sm text-[#6E6258]">
-                  Configure categorias, atalhos 3D, destaques da página inicial
-                  e a estrutura do cardápio.
+                  Organize a Vitrine da Home, faça upload de ícones 3D e arraste
+                  a ordem na Prévia ao Vivo. Novas categorias de produtos podem
+                  ser criadas em Produtos ou aqui.
                 </p>
               </div>
             </div>
@@ -702,6 +886,15 @@ export default function AdminCategoriasPage() {
                 <CategoryLivePreview
                   categories={categories}
                   activeTab={activeTab}
+                  hasUnsavedChanges={hasAnyUnsavedChanges}
+                  savingChanges={isSavingOrder}
+                  writesDisabled={writesDisabled}
+                  onEditCategory={handlePreviewEditCategory}
+                  onReorderHomeBar={handlePreviewReorderHomeBar}
+                  onReorderHomeFeatured={handlePreviewReorderHomeFeatured}
+                  onReorderMenu={handlePreviewReorderMenu}
+                  onSaveChanges={handleSaveAllDirtyOrders}
+                  onDiscardChanges={handleDiscardAllOrderChanges}
                 />
               </SheetContent>
             </Sheet>
@@ -748,6 +941,13 @@ export default function AdminCategoriasPage() {
                 Atalhos
                 <strong className="font-bold">{kpis.shortcuts}</strong>
               </span>
+              {kpis.pendingHomeBar > 0 && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#E3A008]/55 bg-[#FEF8EC] px-3 py-1 text-xs font-semibold text-[#8A6100]">
+                  <Sparkles className="size-3.5 text-[#E3A008]" />
+                  Fora da Home
+                  <strong className="font-bold">{kpis.pendingHomeBar}</strong>
+                </span>
+              )}
             </div>
           )}
 
@@ -967,15 +1167,21 @@ export default function AdminCategoriasPage() {
                     const isProductCat = cat.kind === "product_category"
                     const isToggling = Boolean(togglingIds[cat.id])
                     const isDuplicating = Boolean(duplicatingIds[cat.id])
+                    const isPendingHomeBar =
+                      isProductCat && !cat.show_on_home_bar
+                    const needs3dIcon =
+                      !cat.icon_url || cat.icon_type === "lucide"
 
                     return (
                       <article
                         key={cat.id}
                         className={cn(
                           "rounded-2xl border bg-white p-3.5 sm:p-4 shadow-xs transition-all",
-                          cat.is_active
-                            ? "border-[#ECE7E0] hover:border-[#E3A008]/50"
-                            : "border-[#ECE7E0]/80 bg-[#FAF9F7] opacity-80"
+                          !cat.is_active
+                            ? "border-[#ECE7E0]/80 bg-[#FAF9F7] opacity-80"
+                            : isPendingHomeBar
+                            ? "border-[#E3A008]/55 bg-[#FEF8EC]/25 hover:border-[#E3A008]"
+                            : "border-[#ECE7E0] hover:border-[#E3A008]/50"
                         )}
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -1065,6 +1271,14 @@ export default function AdminCategoriasPage() {
                                     Ranking
                                   </span>
                                 )}
+                                {isPendingHomeBar && (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-[#FEF8EC] border border-[#E3A008]/50 px-2 py-0.5 text-[11px] font-semibold text-[#8A6100]">
+                                    <Sparkles className="size-3 text-[#E3A008]" />
+                                    {needs3dIcon
+                                      ? "Aguardando ícone 3D / fora da Home"
+                                      : "Fora da Home (Vitrine)"}
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -1144,18 +1358,27 @@ export default function AdminCategoriasPage() {
                   title="Ordem da Grade 3D da Home"
                   subtitle="Arraste os cartões ou use as setas para definir a ordem dos ícones 3D na página inicial."
                   dirty={dirtyTabs.home_bar}
-                  saving={savingMode === "home_bar"}
-                  disabled={writesDisabled}
+                  saving={
+                    savingMode === "home_bar" ||
+                    (savingAll && dirtyTabs.home_bar)
+                  }
+                  disabled={orderControlsDisabled}
                   saveLabel="Salvar ordem da Home"
                   onSave={() => handleSaveOrder("home_bar")}
                   onDiscard={() => handleDiscardTabChanges("home_bar")}
                 />
 
                 <div className="space-y-2">
-                  {homeBarList.map((cat, idx) => (
+                  {homeBarList.map((cat, idx) => {
+                    const isPendingHomeBar =
+                      cat.kind === "product_category" && !cat.show_on_home_bar
+                    const needs3dIcon =
+                      !cat.icon_url || cat.icon_type === "lucide"
+
+                    return (
                     <div
                       key={cat.id}
-                      draggable={!writesDisabled}
+                      draggable={!orderControlsDisabled}
                       onDragStart={(e) => handleDragStart(e, cat.id)}
                       onDragOver={(e) => handleDragOver(e, cat.id)}
                       onDrop={(e) =>
@@ -1167,9 +1390,13 @@ export default function AdminCategoriasPage() {
                         draggedId === cat.id && "opacity-50 scale-[0.99]",
                         dragOverId === cat.id && draggedId !== cat.id
                           ? "border-[#E3A008] ring-2 ring-[#E3A008]/25 bg-[#FEF8EC]/50"
+                          : isPendingHomeBar
+                          ? "border-[#E3A008]/55 bg-[#FEF8EC]/25"
                           : "border-[#ECE7E0]",
                         (!cat.is_active || !cat.show_on_home_bar) &&
-                          "bg-[#FAF9F7] opacity-80"
+                          !isPendingHomeBar &&
+                          "bg-[#FAF9F7] opacity-80",
+                        !cat.is_active && isPendingHomeBar && "opacity-80"
                       )}
                     >
                       <div className="flex items-center gap-2 shrink-0">
@@ -1204,6 +1431,14 @@ export default function AdminCategoriasPage() {
                               Inativa
                             </span>
                           )}
+                          {isPendingHomeBar && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-[#FEF8EC] border border-[#E3A008]/50 px-2 py-0.5 text-[10px] font-semibold text-[#8A6100]">
+                              <Sparkles className="size-2.5 text-[#E3A008]" />
+                              {needs3dIcon
+                                ? "Aguardando ícone 3D / fora da Home"
+                                : "Fora da Home (Vitrine)"}
+                            </span>
+                          )}
                           {cat.badge_text && (
                             <span
                               style={{
@@ -1227,7 +1462,7 @@ export default function AdminCategoriasPage() {
                           <span className="hidden sm:inline">Exibir</span>
                           <Switch
                             checked={cat.show_on_home_bar}
-                            disabled={writesDisabled}
+                            disabled={orderControlsDisabled}
                             onCheckedChange={(checked) =>
                               updateCategoryInline("home_bar", cat.id, {
                                 show_on_home_bar: checked,
@@ -1241,7 +1476,7 @@ export default function AdminCategoriasPage() {
                         <ReorderArrowControls
                           index={idx}
                           total={homeBarList.length}
-                          disabled={writesDisabled}
+                          disabled={orderControlsDisabled}
                           itemName={cat.name}
                           onMoveUp={() =>
                             handleMoveStep("home_bar", homeBarList, idx, -1)
@@ -1252,7 +1487,8 @@ export default function AdminCategoriasPage() {
                         />
                       </div>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </TabsContent>
 
@@ -1262,8 +1498,11 @@ export default function AdminCategoriasPage() {
                   title="Destaques da Página Inicial"
                   subtitle="Escolha quais categorias de produto aparecem em destaque na Home, a ordem e o limite de itens (1 a 24)."
                   dirty={dirtyTabs.home_featured}
-                  saving={savingMode === "home_featured"}
-                  disabled={writesDisabled}
+                  saving={
+                    savingMode === "home_featured" ||
+                    (savingAll && dirtyTabs.home_featured)
+                  }
+                  disabled={orderControlsDisabled}
                   saveLabel="Salvar destaques"
                   onSave={() => handleSaveOrder("home_featured")}
                   onDiscard={() => handleDiscardTabChanges("home_featured")}
@@ -1279,7 +1518,7 @@ export default function AdminCategoriasPage() {
                     {homeFeaturedList.map((cat, idx) => (
                       <div
                         key={cat.id}
-                        draggable={!writesDisabled}
+                        draggable={!orderControlsDisabled}
                         onDragStart={(e) => handleDragStart(e, cat.id)}
                         onDragOver={(e) => handleDragOver(e, cat.id)}
                         onDrop={(e) =>
@@ -1352,7 +1591,8 @@ export default function AdminCategoriasPage() {
                               variant="ghost"
                               size="icon"
                               disabled={
-                                writesDisabled || cat.home_featured_limit <= 1
+                                orderControlsDisabled ||
+                                cat.home_featured_limit <= 1
                               }
                               onClick={() =>
                                 updateCategoryInline("home_featured", cat.id, {
@@ -1371,7 +1611,7 @@ export default function AdminCategoriasPage() {
                               type="number"
                               min={1}
                               max={24}
-                              disabled={writesDisabled}
+                              disabled={orderControlsDisabled}
                               value={cat.home_featured_limit}
                               onChange={(e) => {
                                 const parsed = parseInt(e.target.value, 10)
@@ -1396,7 +1636,8 @@ export default function AdminCategoriasPage() {
                               variant="ghost"
                               size="icon"
                               disabled={
-                                writesDisabled || cat.home_featured_limit >= 24
+                                orderControlsDisabled ||
+                                cat.home_featured_limit >= 24
                               }
                               onClick={() =>
                                 updateCategoryInline("home_featured", cat.id, {
@@ -1416,7 +1657,7 @@ export default function AdminCategoriasPage() {
                           <label className="inline-flex items-center gap-1.5 text-xs font-medium text-[#5C5248] cursor-pointer">
                             <Switch
                               checked={cat.show_on_home_featured}
-                              disabled={writesDisabled}
+                              disabled={orderControlsDisabled}
                               onCheckedChange={(checked) =>
                                 updateCategoryInline("home_featured", cat.id, {
                                   show_on_home_featured: checked,
@@ -1430,7 +1671,7 @@ export default function AdminCategoriasPage() {
                           <ReorderArrowControls
                             index={idx}
                             total={homeFeaturedList.length}
-                            disabled={writesDisabled}
+                            disabled={orderControlsDisabled}
                             itemName={cat.name}
                             onMoveUp={() =>
                               handleMoveStep(
@@ -1462,8 +1703,10 @@ export default function AdminCategoriasPage() {
                   title="Ordem e Colunas do Cardápio"
                   subtitle="Defina a sequência no cardápio e escolha quais categorias ficam na coluna Principal ou na Lateral Direita (sticky no desktop)."
                   dirty={dirtyTabs.menu}
-                  saving={savingMode === "menu"}
-                  disabled={writesDisabled}
+                  saving={
+                    savingMode === "menu" || (savingAll && dirtyTabs.menu)
+                  }
+                  disabled={orderControlsDisabled}
                   saveLabel="Salvar ordem do Cardápio"
                   onSave={() => handleSaveOrder("menu")}
                   onDiscard={() => handleDiscardTabChanges("menu")}
@@ -1478,7 +1721,7 @@ export default function AdminCategoriasPage() {
                     {menuList.map((cat, idx) => (
                       <div
                         key={cat.id}
-                        draggable={!writesDisabled}
+                        draggable={!orderControlsDisabled}
                         onDragStart={(e) => handleDragStart(e, cat.id)}
                         onDragOver={(e) => handleDragOver(e, cat.id)}
                         onDrop={(e) => handleDrop(e, "menu", menuList, cat.id)}
@@ -1558,7 +1801,7 @@ export default function AdminCategoriasPage() {
                                 <button
                                   key={zone}
                                   type="button"
-                                  disabled={writesDisabled}
+                                  disabled={orderControlsDisabled}
                                   onClick={() =>
                                     updateCategoryInline("menu", cat.id, {
                                       menu_layout_zone: zone,
@@ -1583,7 +1826,7 @@ export default function AdminCategoriasPage() {
 
                           <Switch
                             checked={cat.show_on_menu}
-                            disabled={writesDisabled}
+                            disabled={orderControlsDisabled}
                             onCheckedChange={(checked) =>
                               updateCategoryInline("menu", cat.id, {
                                 show_on_menu: checked,
@@ -1596,7 +1839,7 @@ export default function AdminCategoriasPage() {
                           <ReorderArrowControls
                             index={idx}
                             total={menuList.length}
-                            disabled={writesDisabled}
+                            disabled={orderControlsDisabled}
                             itemName={cat.name}
                             onMoveUp={() =>
                               handleMoveStep("menu", menuList, idx, -1)
@@ -1619,6 +1862,15 @@ export default function AdminCategoriasPage() {
             <CategoryLivePreview
               categories={categories}
               activeTab={activeTab}
+              hasUnsavedChanges={hasAnyUnsavedChanges}
+              savingChanges={isSavingOrder}
+              writesDisabled={writesDisabled}
+              onEditCategory={handlePreviewEditCategory}
+              onReorderHomeBar={handlePreviewReorderHomeBar}
+              onReorderHomeFeatured={handlePreviewReorderHomeFeatured}
+              onReorderMenu={handlePreviewReorderMenu}
+              onSaveChanges={handleSaveAllDirtyOrders}
+              onDiscardChanges={handleDiscardAllOrderChanges}
             />
           </aside>
         </div>

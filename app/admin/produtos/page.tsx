@@ -1,6 +1,7 @@
 "use client"
 
 import { appToast } from "@/lib/app-toast"
+import { toast } from "sonner"
 
 import type React from "react"
 import { useEffect, useState, useMemo } from "react"
@@ -29,6 +30,8 @@ import {
   Image as ImageIcon,
   LayoutGrid,
   ExternalLink,
+  FolderPlus,
+  WifiOff,
 } from "lucide-react"
 import Link from "next/link"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -51,6 +54,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import { PhotoBankPicker } from "@/components/photo-bank-picker"
+import { CategoryFormModal } from "@/components/admin/categories/category-form-modal"
 import { isAdmin as checkIsAdminRole } from "@/lib/supabase/admin"
 
 const DEFAULT_PRODUCT_CATEGORIES: Category[] = DEFAULT_CATEGORIES.filter(
@@ -90,6 +94,8 @@ export default function AdminProdutosPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isAdicionalDialogOpen, setIsAdicionalDialogOpen] = useState(false)
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false)
+  const [isOffline, setIsOffline] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<
     | { type: "product"; id: string }
     | { type: "adicional"; id: string }
@@ -201,6 +207,19 @@ export default function AdminProdutosPage() {
   }
 
   useEffect(() => {
+    const syncOnlineStatus = () => {
+      setIsOffline(typeof navigator !== "undefined" && !navigator.onLine)
+    }
+    syncOnlineStatus()
+    window.addEventListener("online", syncOnlineStatus)
+    window.addEventListener("offline", syncOnlineStatus)
+    return () => {
+      window.removeEventListener("online", syncOnlineStatus)
+      window.removeEventListener("offline", syncOnlineStatus)
+    }
+  }, [])
+
+  useEffect(() => {
     let active = true
     if (!loading) {
       if (!user) {
@@ -236,6 +255,32 @@ export default function AdminProdutosPage() {
     } catch {
       setCategories(DEFAULT_PRODUCT_CATEGORIES)
     }
+  }
+
+  const nextCategoryOrders = useMemo(
+    () => ({
+      homeBar: categories.length ? Math.max(...categories.map((c) => c.home_bar_order ?? 0)) + 1 : 0,
+      homeFeatured: categories.length ? Math.max(...categories.map((c) => c.home_featured_order ?? 0)) + 1 : 0,
+      menu: categories.length ? Math.max(...categories.map((c) => c.menu_order ?? 0)) + 1 : 0,
+    }),
+    [categories]
+  )
+
+  const handleCategoryCreated = async (saved: Category) => {
+    setCategories((prev) => {
+      const filtered = prev.filter((c) => c.id !== saved.id && c.slug !== saved.slug)
+      return [...filtered, saved].sort((a, b) => (a.menu_order ?? 0) - (b.menu_order ?? 0))
+    })
+    toast.success(`Categoria "${saved.name}" criada no Cardápio!`, {
+      description: saved.icon_url
+        ? "Ícone 3D salvo! Pronta para receber produtos e ativar na Home em Categorias & Vitrine."
+        : "Pronta para receber produtos. Envie o ícone 3D quando quiser ativá-la na Home.",
+      action: {
+        label: "Ir para Vitrine 3D",
+        onClick: () => router.push("/admin/categorias"),
+      },
+    })
+    await loadCategories()
   }
 
   const loadProducts = async () => {
@@ -622,6 +667,19 @@ export default function AdminProdutosPage() {
       <HeaderWrapper />
 
       <main className="container mx-auto px-4 py-6 max-w-6xl flex-1">
+        {isOffline && (
+          <div
+            role="status"
+            className="mb-4 flex items-center gap-2.5 rounded-xl border border-[#C1440E]/35 bg-[#FFF4EE] px-3.5 py-2.5 text-xs text-[#8F2E07]"
+          >
+            <WifiOff className="h-4 w-4 shrink-0 text-[#C1440E]" />
+            <span>
+              <strong className="font-bold">Sem conexão com a internet.</strong>{" "}
+              Algumas ações estão indisponíveis até a conexão retornar.
+            </span>
+          </div>
+        )}
+
         {/* Top Header Bar */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
@@ -643,7 +701,17 @@ export default function AdminProdutosPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              onClick={() => setIsCategoryModalOpen(true)}
+              disabled={isOffline}
+              title={isOffline ? "Sem conexão com a internet" : undefined}
+              variant="outline"
+              className="bg-[#FEF8EC] border-[#E3A008]/50 hover:bg-[#FCEFC7] text-[#8A6100] font-bold rounded-xl text-xs h-10 px-4 shadow-sm"
+            >
+              <FolderPlus className="h-4 w-4 mr-1.5 text-[#C1440E]" />
+              + Nova Categoria
+            </Button>
             <Button
               onClick={() => handleOpenAdicionalDialog()}
               variant="outline"
@@ -739,6 +807,17 @@ export default function AdminProdutosPage() {
                 >
                   {adicionais.length}
                 </span>
+              </button>
+
+              <button
+                type="button"
+                disabled={isOffline}
+                title={isOffline ? "Sem conexão com a internet" : undefined}
+                onClick={() => setIsCategoryModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border border-dashed border-[#E3A008] bg-[#FEF8EC] text-[#8A6100] hover:bg-[#FCEFC7] hover:border-[#C1440E] transition-colors shrink-0 whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Plus className="h-3.5 w-3.5 text-[#C1440E]" />
+                <span>Nova Categoria</span>
               </button>
             </div>
 
@@ -1477,6 +1556,15 @@ export default function AdminProdutosPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <CategoryFormModal
+        open={isCategoryModalOpen}
+        onOpenChange={setIsCategoryModalOpen}
+        initialCategory={null}
+        nextOrders={nextCategoryOrders}
+        quickMenuCreate
+        onSaved={handleCategoryCreated}
+      />
     </div>
   )
 }
