@@ -52,6 +52,7 @@ import {
   reorderCategoriesAction,
   saveHomeGridLayoutAction,
   toggleCategoryActiveAction,
+  toggleCategoryHomeBarAction,
   type ReorderItemInput,
 } from "./actions"
 import {
@@ -144,6 +145,9 @@ export default function AdminCategoriasPage() {
 
   // Row-level & batch pending states
   const [togglingIds, setTogglingIds] = useState<Record<string, boolean>>({})
+  const [enablingHomeBarIds, setEnablingHomeBarIds] = useState<
+    Record<string, boolean>
+  >({})
   const [duplicatingIds, setDuplicatingIds] = useState<Record<string, boolean>>(
     {}
   )
@@ -173,7 +177,9 @@ export default function AdminCategoriasPage() {
     dirtyTabs.menu ||
     isHomeGridLayoutDirty
   const isSavingOrder = savingAll || savingMode !== null
-  const orderControlsDisabled = writesDisabled || isSavingOrder
+  const isEnablingAnyHomeBar = Object.values(enablingHomeBarIds).some(Boolean)
+  const orderControlsDisabled =
+    writesDisabled || isSavingOrder || isEnablingAnyHomeBar
 
   // Online / offline listener
   useEffect(() => {
@@ -379,7 +385,8 @@ export default function AdminCategoriasPage() {
     category: CategoryWithCounts,
     nextValue: boolean
   ) {
-    if (writesDisabled) return
+    if (writesDisabled || isSavingOrder || Boolean(enablingHomeBarIds[category.id]))
+      return
     setTogglingIds((prev) => ({ ...prev, [category.id]: true }))
 
     // Optimistic update so Live Preview reflects immediately
@@ -417,6 +424,57 @@ export default function AdminCategoriasPage() {
       toast.error("Erro ao alterar status da categoria.")
     } finally {
       setTogglingIds((prev) => ({ ...prev, [category.id]: false }))
+    }
+  }
+
+  async function handleEnableHomeBar(category: CategoryWithCounts) {
+    if (
+      writesDisabled ||
+      isSavingOrder ||
+      enablingHomeBarIds[category.id] ||
+      category.show_on_home_bar
+    ) {
+      return
+    }
+    setEnablingHomeBarIds((prev) => ({ ...prev, [category.id]: true }))
+
+    // Optimistic update so Live Preview reflects immediately
+    setCategories((prev) =>
+      prev.map((c) =>
+        c.id === category.id ? { ...c, show_on_home_bar: true } : c
+      )
+    )
+
+    try {
+      const res = await toggleCategoryHomeBarAction(category.id, true)
+      if (!res.ok) {
+        setCategories((prev) =>
+          prev.map((c) =>
+            c.id === category.id ? { ...c, show_on_home_bar: false } : c
+          )
+        )
+        toast.error(res.error)
+        return
+      }
+      setSavedCategories((prev) =>
+        prev.map((c) =>
+          c.id === category.id ? { ...c, show_on_home_bar: true } : c
+        )
+      )
+      toast.success(
+        category.active_products > 0
+          ? `"${category.name}" colocada na Grade 3D da Home! Já visível na loja.`
+          : `"${category.name}" colocada na Grade 3D da Home! Entrará na loja automaticamente ao ter 1+ produto ativo.`
+      )
+    } catch {
+      setCategories((prev) =>
+        prev.map((c) =>
+          c.id === category.id ? { ...c, show_on_home_bar: false } : c
+        )
+      )
+      toast.error("Erro ao colocar categoria na Home.")
+    } finally {
+      setEnablingHomeBarIds((prev) => ({ ...prev, [category.id]: false }))
     }
   }
 
@@ -626,7 +684,7 @@ export default function AdminCategoriasPage() {
   }
 
   async function handleSaveOrder(mode: OrderMode) {
-    if (writesDisabled || savingMode || savingAll) return
+    if (writesDisabled || isSavingOrder || isEnablingAnyHomeBar) return
 
     const items = buildReorderPayload(mode)
 
@@ -733,7 +791,7 @@ export default function AdminCategoriasPage() {
   }
 
   async function handleSaveAllDirtyOrders() {
-    if (writesDisabled || savingAll || savingMode) return
+    if (writesDisabled || isSavingOrder || isEnablingAnyHomeBar) return
 
     const modesToSave: OrderMode[] = []
     if (dirtyTabs.home_bar) modesToSave.push("home_bar")
@@ -997,6 +1055,8 @@ export default function AdminCategoriasPage() {
                   onReorderMenu={handlePreviewReorderMenu}
                   onSaveChanges={handleSaveAllDirtyOrders}
                   onDiscardChanges={handleDiscardAllOrderChanges}
+                  enablingHomeBarIds={enablingHomeBarIds}
+                  onEnableHomeBar={handleEnableHomeBar}
                 />
               </SheetContent>
             </Sheet>
@@ -1269,8 +1329,13 @@ export default function AdminCategoriasPage() {
                     const isProductCat = cat.kind === "product_category"
                     const isToggling = Boolean(togglingIds[cat.id])
                     const isDuplicating = Boolean(duplicatingIds[cat.id])
+                    const isEnablingHomeBar = Boolean(
+                      enablingHomeBarIds[cat.id]
+                    )
                     const isPendingHomeBar =
                       isProductCat && !cat.show_on_home_bar
+                    const canQuickEnableHomeBar =
+                      cat.is_active && isPendingHomeBar
                     const needs3dIcon =
                       !cat.icon_url || cat.icon_type === "lucide"
 
@@ -1386,14 +1451,37 @@ export default function AdminCategoriasPage() {
                           </div>
 
                           {/* Switch + Actions */}
-                          <div className="flex items-center justify-between sm:justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-[#F2EDE6] shrink-0">
+                          <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-[#F2EDE6] shrink-0">
+                            {canQuickEnableHomeBar && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                aria-label={`Colocar ${cat.name} na Home`}
+                                disabled={orderControlsDisabled || isEnablingHomeBar}
+                                onClick={() => handleEnableHomeBar(cat)}
+                                className="h-8 px-2.5 text-xs font-semibold bg-[#FEF3C7] text-[#9A3412] border border-[#E3A008]/60 hover:bg-[#FDE68A] shadow-none"
+                              >
+                                {isEnablingHomeBar ? (
+                                  <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+                                ) : (
+                                  <Sparkles className="size-3.5 mr-1.5" />
+                                )}
+                                Colocar na Home
+                              </Button>
+                            )}
+
                             <div className="flex items-center gap-2 pr-1">
                               <span className="text-[11px] font-medium text-[#6E6258]">
                                 {cat.is_active ? "Ativa" : "Inativa"}
                               </span>
                               <Switch
                                 checked={cat.is_active}
-                                disabled={writesDisabled || isToggling}
+                                disabled={
+                                  writesDisabled ||
+                                  isSavingOrder ||
+                                  Boolean(enablingHomeBarIds[cat.id]) ||
+                                  isToggling
+                                }
                                 onCheckedChange={(checked) =>
                                   handleToggleActive(cat, checked)
                                 }
@@ -1474,6 +1562,11 @@ export default function AdminCategoriasPage() {
                   {homeBarList.map((cat, idx) => {
                     const isPendingHomeBar =
                       cat.kind === "product_category" && !cat.show_on_home_bar
+                    const canQuickEnableHomeBar =
+                      cat.is_active && isPendingHomeBar
+                    const isEnablingHomeBar = Boolean(
+                      enablingHomeBarIds[cat.id]
+                    )
                     const needs3dIcon =
                       !cat.icon_url || cat.icon_type === "lucide"
 
@@ -1559,7 +1652,25 @@ export default function AdminCategoriasPage() {
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-3 ml-auto shrink-0">
+                      <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 ml-auto shrink-0">
+                        {canQuickEnableHomeBar && !dirtyTabs.home_bar && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            aria-label={`Colocar ${cat.name} na Home`}
+                            disabled={orderControlsDisabled || isEnablingHomeBar}
+                            onClick={() => handleEnableHomeBar(cat)}
+                            className="h-8 px-2.5 text-xs font-semibold bg-[#FEF3C7] text-[#9A3412] border border-[#E3A008]/60 hover:bg-[#FDE68A] shadow-none"
+                          >
+                            {isEnablingHomeBar ? (
+                              <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+                            ) : (
+                              <Sparkles className="size-3.5 mr-1.5" />
+                            )}
+                            Colocar na Home
+                          </Button>
+                        )}
+
                         <label className="inline-flex items-center gap-2 text-xs font-medium text-[#5C5248] cursor-pointer">
                           <span className="hidden sm:inline">Exibir</span>
                           <Switch
@@ -1977,6 +2088,8 @@ export default function AdminCategoriasPage() {
               onReorderMenu={handlePreviewReorderMenu}
               onSaveChanges={handleSaveAllDirtyOrders}
               onDiscardChanges={handleDiscardAllOrderChanges}
+              enablingHomeBarIds={enablingHomeBarIds}
+              onEnableHomeBar={handleEnableHomeBar}
             />
           </aside>
         </div>

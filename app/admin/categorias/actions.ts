@@ -1,9 +1,9 @@
 "use server"
 
 import { revalidatePath, revalidateTag } from "next/cache"
-import { createClient } from "@supabase/supabase-js"
 import { z } from "zod"
 import { createServerClient } from "@/lib/supabase/server"
+import { createServiceRoleClient } from "@/lib/supabase/service"
 import { isAdminUser } from "@/lib/supabase/admin"
 import {
   DEFAULT_CATEGORIES,
@@ -219,17 +219,6 @@ const HomeGridLayoutSchema = z.object({
     .max(HOME_GRID_LAYOUT_LIMITS.app_card_radius.max),
 })
 
-function getServiceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) {
-    throw new Error("Configuração do servidor Supabase incompleta.")
-  }
-  return createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
-}
-
 async function assertAdmin() {
   const supabase = await createServerClient()
   const {
@@ -245,7 +234,7 @@ async function assertAdmin() {
     return { authorized: true as const, user }
   }
 
-  const service = getServiceClient()
+  const service = createServiceRoleClient()
   const { data: profile } = await service
     .from("profiles")
     .select("role")
@@ -335,7 +324,7 @@ export async function listCategoriesAdminAction(): Promise<
     const auth = await assertAdmin()
     if (!auth.authorized) return { ok: false, error: auth.error }
 
-    const service = getServiceClient()
+    const service = createServiceRoleClient()
     const [{ data: catRows, error: catError }, { data: prodRows, error: prodError }] = await Promise.all([
       service
         .from("categories")
@@ -452,7 +441,7 @@ export async function createCategoryAction(input: CategoryFormInput): Promise<Ac
       }
     }
 
-    const service = getServiceClient()
+    const service = createServiceRoleClient()
     const { data: existing } = await service
       .from("categories")
       .select("id")
@@ -531,7 +520,7 @@ export async function updateCategoryAction(
       }
     }
 
-    const service = getServiceClient()
+    const service = createServiceRoleClient()
 
     if (data.kind === "home_shortcut") {
       const { data: existing, error: existingErr } = await service
@@ -618,7 +607,7 @@ export async function duplicateCategoryAction(id: string): Promise<ActionResult<
       return { ok: false, error: "ID de categoria inválido." }
     }
 
-    const service = getServiceClient()
+    const service = createServiceRoleClient()
     const { data: source, error: srcErr } = await service
       .from("categories")
       .select("*")
@@ -703,15 +692,21 @@ export async function toggleCategoryActiveAction(
     const auth = await assertAdmin()
     if (!auth.authorized) return { ok: false, error: auth.error }
 
-    if (!z.string().uuid().safeParse(id).success) {
+    const parsedId = z.string().uuid().safeParse(id)
+    if (!parsedId.success) {
       return { ok: false, error: "ID inválido." }
     }
 
-    const service = getServiceClient()
+    const parsedActive = z.boolean().safeParse(isActive)
+    if (!parsedActive.success) {
+      return { ok: false, error: "Valor de status inválido." }
+    }
+
+    const service = createServiceRoleClient()
     const { data: updated, error } = await service
       .from("categories")
-      .update({ is_active: isActive })
-      .eq("id", id)
+      .update({ is_active: parsedActive.data })
+      .eq("id", parsedId.data)
       .select("*")
       .single()
 
@@ -723,6 +718,46 @@ export async function toggleCategoryActiveAction(
     return { ok: true, data: mapCategoryRow(updated) }
   } catch (err: any) {
     return { ok: false, error: err?.message || "Erro ao alterar status." }
+  }
+}
+
+export async function toggleCategoryHomeBarAction(
+  id: string,
+  showOnHomeBar: boolean
+): Promise<ActionResult<Category>> {
+  try {
+    const auth = await assertAdmin()
+    if (!auth.authorized) return { ok: false, error: auth.error }
+
+    const parsedId = z.string().uuid().safeParse(id)
+    if (!parsedId.success) {
+      return { ok: false, error: "ID inválido." }
+    }
+
+    const parsedShow = z.boolean().safeParse(showOnHomeBar)
+    if (!parsedShow.success) {
+      return { ok: false, error: "Valor inválido para visibilidade na Home." }
+    }
+
+    const service = createServiceRoleClient()
+    const { data: updated, error } = await service
+      .from("categories")
+      .update({ show_on_home_bar: parsedShow.data })
+      .eq("id", parsedId.data)
+      .select("*")
+      .single()
+
+    if (error || !updated) {
+      return {
+        ok: false,
+        error: error?.message || "Erro ao alterar visibilidade na Home.",
+      }
+    }
+
+    revalidateCatalogPages()
+    return { ok: true, data: mapCategoryRow(updated) }
+  } catch (err: any) {
+    return { ok: false, error: err?.message || "Erro ao alterar visibilidade na Home." }
   }
 }
 
@@ -739,7 +774,7 @@ export async function reorderCategoriesAction(
       return { ok: false, error: parsed.error.issues[0]?.message || "Lista de ordenação inválida." }
     }
 
-    const service = getServiceClient()
+    const service = createServiceRoleClient()
     await Promise.all(
       parsed.data.items.map(async (item) => {
         const patch: Record<string, any> = {}
@@ -792,7 +827,7 @@ export async function deleteCategorySafeAction(
       return { ok: false, error: "ID de categoria inválido." }
     }
 
-    const service = getServiceClient()
+    const service = createServiceRoleClient()
     const { data: cat, error: catErr } = await service
       .from("categories")
       .select("*")
@@ -952,9 +987,39 @@ export async function uploadCategoryIconAction(
           error: "SVG bloqueado por conter conteúdo potencialmente inseguro.",
         }
       }
+    } else {
+      const hasValidMagicBytes =
+        (file.type === "image/png" &&
+          fileBuffer.length >= 4 &&
+          fileBuffer[0] === 0x89 &&
+          fileBuffer[1] === 0x50 &&
+          fileBuffer[2] === 0x4e &&
+          fileBuffer[3] === 0x47) ||
+        (file.type === "image/jpeg" &&
+          fileBuffer.length >= 3 &&
+          fileBuffer[0] === 0xff &&
+          fileBuffer[1] === 0xd8 &&
+          fileBuffer[2] === 0xff) ||
+        (file.type === "image/webp" &&
+          fileBuffer.length >= 12 &&
+          fileBuffer[0] === 0x52 &&
+          fileBuffer[1] === 0x49 &&
+          fileBuffer[2] === 0x46 &&
+          fileBuffer[3] === 0x46 &&
+          fileBuffer[8] === 0x57 &&
+          fileBuffer[9] === 0x45 &&
+          fileBuffer[10] === 0x42 &&
+          fileBuffer[11] === 0x50)
+
+      if (!hasValidMagicBytes) {
+        return {
+          ok: false,
+          error: "Conteúdo do arquivo não corresponde a uma imagem válida.",
+        }
+      }
     }
 
-    const service = getServiceClient()
+    const service = createServiceRoleClient()
 
     const { error: uploadErr } = await service.storage
       .from("category-icons")
@@ -1006,7 +1071,7 @@ export async function listCategoryIconsAction(): Promise<
     const auth = await assertAdmin()
     if (!auth.authorized) return { ok: false, error: auth.error }
 
-    const service = getServiceClient()
+    const service = createServiceRoleClient()
     const pageSize = 100
     const maxPages = 5
     const allItems: Array<{ name: string; id: string | null; created_at?: string | null }> = []
@@ -1067,7 +1132,7 @@ export async function getHomeGridLayoutAdminAction(): Promise<
     const auth = await assertAdmin()
     if (!auth.authorized) return { ok: false, error: auth.error }
 
-    const service = getServiceClient()
+    const service = createServiceRoleClient()
     const { data, error } = await service
       .from("home_grid_layout")
       .select(HOME_GRID_LAYOUT_SELECT_COLUMNS)
@@ -1105,7 +1170,7 @@ export async function saveHomeGridLayoutAction(
       }
     }
 
-    const service = getServiceClient()
+    const service = createServiceRoleClient()
     const { data, error } = await service
       .from("home_grid_layout")
       .upsert({ id: "default", ...parsed.data }, { onConflict: "id" })

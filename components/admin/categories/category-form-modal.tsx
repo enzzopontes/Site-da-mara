@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, type FormEvent } from "react"
+import { useEffect, useRef, useState, type FormEvent } from "react"
 import {
   AlertCircle,
   Check,
@@ -164,9 +164,17 @@ export function CategoryFormModal({
   }, [])
 
   const fallbackIcon = initialCategory?.fallback_icon || "UtensilsCrossed"
+  const prevInitKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      prevInitKeyRef.current = null
+      return
+    }
+
+    const initKey = `${initialCategory?.id ?? "new"}:${isQuickMenuMode ? "quick" : "full"}`
+    if (prevInitKeyRef.current === initKey) return
+    prevInitKeyRef.current = initKey
 
     if (initialCategory) {
       setKind(initialCategory.kind)
@@ -213,7 +221,7 @@ export function CategoryFormModal({
       setBadgeColor("#C1440E")
 
       setIsActive(true)
-      setShowOnHomeBar(false)
+      setShowOnHomeBar(true)
       setShowOnHomeFeatured(false)
       setHomeFeaturedLimit(6)
       setShowOnMenu(true)
@@ -528,7 +536,7 @@ export function CategoryFormModal({
             badge_color: null,
             custom_href: null,
             is_active: true,
-            show_on_home_bar: false,
+            show_on_home_bar: showOnHomeBar,
             home_bar_order: nextOrders.homeBar,
             show_on_home_featured: false,
             home_featured_order: nextOrders.homeFeatured,
@@ -792,9 +800,9 @@ export function CategoryFormModal({
                 <div className="flex items-start gap-2.5 rounded-xl border border-[#E3A008]/45 bg-[#FEF8EC] px-3.5 py-2.5 text-xs text-[#6E4D00]">
                   <Info className="w-4 h-4 mt-0.5 shrink-0 text-[#B47B00]" />
                   <span>
-                    Importe o ícone 3D agora (ou selecione do banco abaixo). Esta categoria já
-                    entra ativa no Cardápio e fica pronta em Categorias &amp; Vitrine para você
-                    ativar na Home quando quiser.
+                    {showOnHomeBar
+                      ? "Importe o ícone 3D agora (ou selecione do banco abaixo). Esta categoria já aparece na Prévia ao Vivo do admin e entra automaticamente na Home pública assim que tiver pelo menos 1 produto ativo."
+                      : 'Importe o ícone 3D agora (ou selecione do banco abaixo). Esta categoria entra ativa no Cardápio e aparece marcada como "Fora da Home" na Prévia ao Vivo para você ativar quando quiser.'}
                   </span>
                 </div>
 
@@ -807,6 +815,7 @@ export function CategoryFormModal({
                     id="cat-name-quick"
                     value={name}
                     onChange={(e) => handleNameChange(e.target.value)}
+                    disabled={isOffline || saving}
                     maxLength={60}
                     placeholder="Ex.: Lasanhas, Bolos, Açaí, Porções..."
                     className="bg-white border-[#ECE7E0] focus-visible:border-[#E3A008] focus-visible:ring-[#E3A008]/25"
@@ -843,11 +852,12 @@ export function CategoryFormModal({
                         id="sw-quick-addons"
                         checked={allowsAddons}
                         onCheckedChange={setAllowsAddons}
+                        disabled={isOffline || saving}
                         className="data-[state=checked]:bg-[#E3A008]"
                       />
                     </div>
 
-                    <div className="flex items-center justify-between gap-4 py-2.5 last:pb-0">
+                    <div className="flex items-center justify-between gap-4 py-2.5">
                       <div>
                         <Label
                           htmlFor="sw-quick-notes"
@@ -863,6 +873,29 @@ export function CategoryFormModal({
                         id="sw-quick-notes"
                         checked={allowsNotes}
                         onCheckedChange={setAllowsNotes}
+                        disabled={isOffline || saving}
+                        className="data-[state=checked]:bg-[#E3A008]"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between gap-4 py-2.5 last:pb-0">
+                      <div>
+                        <Label
+                          htmlFor="sw-quick-home-bar"
+                          className="text-sm font-medium text-[#1F1B16] cursor-pointer"
+                        >
+                          Mostrar na Grade 3D da Home quando houver produtos ativos
+                        </Label>
+                        <p className="text-xs text-[#1F1B16]/60">
+                          Aparece na Prévia do admin e permanece oculta na loja pública enquanto
+                          tiver 0 produtos ativos.
+                        </p>
+                      </div>
+                      <Switch
+                        id="sw-quick-home-bar"
+                        checked={showOnHomeBar}
+                        onCheckedChange={setShowOnHomeBar}
+                        disabled={isOffline || saving}
                         className="data-[state=checked]:bg-[#E3A008]"
                       />
                     </div>

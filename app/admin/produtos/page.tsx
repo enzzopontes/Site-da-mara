@@ -32,6 +32,7 @@ import {
   ExternalLink,
   FolderPlus,
   WifiOff,
+  X,
 } from "lucide-react"
 import Link from "next/link"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -271,10 +272,12 @@ export default function AdminProdutosPage() {
       const filtered = prev.filter((c) => c.id !== saved.id && c.slug !== saved.slug)
       return [...filtered, saved].sort((a, b) => (a.menu_order ?? 0) - (b.menu_order ?? 0))
     })
-    toast.success(`Categoria "${saved.name}" criada no Cardápio!`, {
-      description: saved.icon_url
-        ? "Ícone 3D salvo! Pronta para receber produtos e ativar na Home em Categorias & Vitrine."
-        : "Pronta para receber produtos. Envie o ícone 3D quando quiser ativá-la na Home.",
+    toast.success(`Categoria "${saved.name}" criada!`, {
+      description: saved.show_on_home_bar
+        ? saved.icon_url
+          ? "Ícone 3D salvo! Já aparece na Prévia ao Vivo e entra automaticamente na Home assim que tiver 1+ produto ativo."
+          : "Já aparece na Prévia ao Vivo e entra na Home assim que tiver 1+ produto ativo. Adicione um ícone 3D em Categorias & Vitrine."
+        : "Criada no Cardápio (fora da Home). Você pode colocá-la na Grade 3D em Categorias & Vitrine quando quiser.",
       action: {
         label: "Ir para Vitrine 3D",
         onClick: () => router.push("/admin/categorias"),
@@ -731,141 +734,128 @@ export default function AdminProdutosPage() {
         </div>
 
         {/* Sticky iFood Category Pills Bar */}
-        <div className="sticky top-0 z-20 bg-[#F7F7F8]/95 backdrop-blur-md pt-2 pb-4 -mx-4 px-4 border-b border-gray-200/80 mb-6 space-y-3">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-            {/* Category Pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
-              <button
-                type="button"
-                onClick={() => setActiveTab("todos")}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shadow-sm border ${
-                  activeTab === "todos"
-                    ? "bg-gray-900 text-white border-gray-900 shadow-gray-200"
-                    : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-gray-900"
+        <div className="sticky top-16 z-20 bg-[#F7F7F8]/95 backdrop-blur-md pt-2.5 pb-3.5 -mx-4 px-4 border-b border-gray-200/80 mb-6 space-y-2.5">
+          {/* Row 1: Search Bar */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="relative w-full md:max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+              <Input
+                placeholder="Buscar item..."
+                aria-label="Buscar produtos ou adicionais"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 pr-9 h-9 bg-white border-gray-200 focus:border-[#C1440E] rounded-xl text-sm"
+              />
+              {searchQuery.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  aria-label="Limpar busca"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex items-center justify-center h-7 w-7 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C1440E]"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Row 2: Category Pills */}
+          <div className="min-w-0 w-full flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none md:flex-wrap md:overflow-visible md:pb-0">
+            <button
+              type="button"
+              aria-pressed={activeTab === "todos"}
+              onClick={() => setActiveTab("todos")}
+              className={`shrink-0 flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shadow-sm border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] focus-visible:ring-offset-1 ${
+                activeTab === "todos"
+                  ? "bg-gray-900 text-white border-gray-900 shadow-gray-200"
+                  : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-gray-900"
+              }`}
+            >
+              <LayoutGrid className={`h-3.5 w-3.5 shrink-0 ${activeTab === "todos" ? "text-amber-400" : "text-gray-400"}`} />
+              <span>Todos</span>
+              <span
+                className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                  activeTab === "todos" ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600"
                 }`}
               >
-                <LayoutGrid className={`h-3.5 w-3.5 ${activeTab === "todos" ? "text-amber-400" : "text-gray-400"}`} />
-                <span>Todos</span>
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                    activeTab === "todos" ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600"
+                {products.length}
+              </span>
+            </button>
+
+            {categories.map((cat) => {
+              const isActive = activeTab === cat.slug
+              const count = categoryCounts[cat.slug] || 0
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  aria-pressed={isActive}
+                  onClick={() => setActiveTab(cat.slug)}
+                  className={`shrink-0 flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shadow-sm border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] focus-visible:ring-offset-1 ${
+                    isActive
+                      ? "bg-gray-900 text-white border-gray-900 shadow-gray-200"
+                      : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-gray-900"
                   }`}
                 >
-                  {products.length}
-                </span>
-              </button>
-
-              {categories.map((cat) => {
-                const isActive = activeTab === cat.slug
-                const count = categoryCounts[cat.slug] || 0
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => setActiveTab(cat.slug)}
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shadow-sm border ${
+                  <span
+                    className={
                       isActive
-                        ? "bg-gray-900 text-white border-gray-900 shadow-gray-200"
-                        : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-gray-900"
-                    }`}
+                        ? "inline-flex items-center justify-center rounded-md bg-white/95 p-0.5 shrink-0"
+                        : "inline-flex items-center justify-center shrink-0"
+                    }
                   >
                     <CategoryIcon
                       iconUrl={cat.icon_url}
                       iconType={cat.icon_type}
                       fallbackIcon={cat.fallback_icon}
                       accentColor={cat.accent_color}
-                      sizeClassName="w-4 h-4"
+                      sizeClassName="w-4 h-4 shrink-0"
                       iconClassName="w-3 h-3"
                     />
-                    <span>{cat.name}</span>
-                    <span
-                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                        isActive ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600"
-                      }`}
-                    >
-                      {count}
-                    </span>
-                  </button>
-                )
-              })}
+                  </span>
+                  <span>{cat.name}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                      isActive ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              )
+            })}
 
-              <button
-                type="button"
-                onClick={() => setActiveTab("adicionais")}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shadow-sm border ${
-                  activeTab === "adicionais"
-                    ? "bg-gray-900 text-white border-gray-900 shadow-gray-200"
-                    : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-gray-900"
+            <button
+              type="button"
+              aria-pressed={activeTab === "adicionais"}
+              onClick={() => setActiveTab("adicionais")}
+              className={`shrink-0 flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shadow-sm border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] focus-visible:ring-offset-1 ${
+                activeTab === "adicionais"
+                  ? "bg-gray-900 text-white border-gray-900 shadow-gray-200"
+                  : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-gray-900"
+              }`}
+            >
+              <Layers className={`h-3.5 w-3.5 shrink-0 ${activeTab === "adicionais" ? "text-amber-400" : "text-gray-400"}`} />
+              <span>Adicionais</span>
+              <span
+                className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                  activeTab === "adicionais" ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600"
                 }`}
               >
-                <Layers className={`h-3.5 w-3.5 ${activeTab === "adicionais" ? "text-amber-400" : "text-gray-400"}`} />
-                <span>Adicionais</span>
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                    activeTab === "adicionais" ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600"
-                  }`}
-                >
-                  {adicionais.length}
-                </span>
-              </button>
+                {adicionais.length}
+              </span>
+            </button>
 
-              <button
-                type="button"
-                disabled={isOffline}
-                title={isOffline ? "Sem conexão com a internet" : undefined}
-                onClick={() => setIsCategoryModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border border-dashed border-[#E3A008] bg-[#FEF8EC] text-[#8A6100] hover:bg-[#FCEFC7] hover:border-[#C1440E] transition-colors shrink-0 whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Plus className="h-3.5 w-3.5 text-[#C1440E]" />
-                <span>Nova Categoria</span>
-              </button>
-            </div>
-
-            {/* Category Dropdown Filter + Live Search Input */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
-              {activeTab !== "adicionais" && (
-                <Select value={activeTab} onValueChange={setActiveTab}>
-                  <SelectTrigger className="h-9 w-full sm:w-48 text-xs font-bold bg-white border-gray-200 rounded-xl shadow-sm">
-                    <SelectValue placeholder="Filtrar categoria" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">
-                      <span className="flex items-center gap-2">
-                        <LayoutGrid className="h-3.5 w-3.5 text-amber-600" />
-                        <span>Todas ({products.length})</span>
-                      </span>
-                    </SelectItem>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat.id} value={cat.slug}>
-                        <span className="flex items-center gap-2">
-                          <CategoryIcon
-                            iconUrl={cat.icon_url}
-                            iconType={cat.icon_type}
-                            fallbackIcon={cat.fallback_icon}
-                            accentColor={cat.accent_color}
-                            sizeClassName="w-4 h-4"
-                            iconClassName="w-2.5 h-2.5"
-                          />
-                          <span>
-                            {cat.name} ({categoryCounts[cat.slug] || 0})
-                          </span>
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-
-              <div className="relative w-full sm:w-60">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Buscar item..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 pr-3 py-1.5 h-9 text-xs bg-white border-gray-200 rounded-xl focus:border-amber-500 shadow-sm"
-                />
-              </div>
-            </div>
+            <button
+              type="button"
+              disabled={isOffline}
+              title={isOffline ? "Sem conexão com a internet" : undefined}
+              onClick={() => setIsCategoryModalOpen(true)}
+              className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-dashed border-[#E3A008] bg-[#FEF8EC] text-[#8A6100] hover:bg-[#FCEFC7] hover:border-[#C1440E] transition-colors whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Plus className="h-3.5 w-3.5 text-[#C1440E]" />
+              <span>Nova Categoria</span>
+            </button>
           </div>
         </div>
 

@@ -12,6 +12,7 @@ import {
   LayoutGrid,
   Loader2,
   Monitor,
+  Plus,
   RotateCcw,
   SlidersHorizontal,
   Smartphone,
@@ -44,6 +45,15 @@ import {
   type HomeGridProfileValues,
 } from "@/lib/home-grid-layout"
 import { CategoryIcon } from "@/components/category-icon"
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
   Collapsible,
@@ -72,6 +82,8 @@ export interface CategoryLivePreviewProps {
   ) => void
   onSaveChanges?: () => void
   onDiscardChanges?: () => void
+  enablingHomeBarIds?: Record<string, boolean>
+  onEnableHomeBar?: (category: CategoryWithCounts) => void
 }
 
 type PreviewViewport = HomeGridProfile
@@ -89,6 +101,7 @@ interface SimulatedPreviewItem {
 
 type HomeBarRenderItem =
   | { kind: "real"; category: CategoryWithCounts }
+  | { kind: "off_home"; category: CategoryWithCounts }
   | { kind: "simulated"; demo: SimulatedPreviewItem }
 
 const PROFILE_LABELS: Record<HomeGridProfile, string> = {
@@ -201,11 +214,14 @@ export function CategoryLivePreview({
   onReorderMenu,
   onSaveChanges,
   onDiscardChanges,
+  enablingHomeBarIds,
+  onEnableHomeBar,
 }: CategoryLivePreviewProps) {
   const [viewport, setViewport] = useState<PreviewViewport>("mobile")
   const [simulateStoreAutoHide, setSimulateStoreAutoHide] = useState(false)
   const [layoutEditorOpen, setLayoutEditorOpen] = useState(false)
   const [fineTuningOpen, setFineTuningOpen] = useState(false)
+  const [resetDialogOpen, setResetDialogOpen] = useState(false)
   const [simCount, setSimCount] = useState<PreviewSimCount>("real")
   const [scaleOverride, setScaleOverride] = useState<
     Partial<Record<HomeGridProfile, number>>
@@ -349,14 +365,24 @@ export function CategoryLivePreview({
     )
   }
 
-  const defaultActiveValues = getProfileValues(DEFAULT_HOME_GRID_LAYOUT, viewport)
-  const isActiveViewportDefault =
-    activeCols === defaultActiveValues.columns &&
-    activePad === defaultActiveValues.card_padding &&
-    activeGap === defaultActiveValues.card_gap &&
-    activeIcon === defaultActiveValues.icon_size &&
-    activeLabel === defaultActiveValues.label_size &&
-    activeRadius === defaultActiveValues.card_radius
+  function isProfileDefault(profile: HomeGridProfile): boolean {
+    const current = getProfileValues(homeGridLayout, profile)
+    const defaults = getProfileValues(DEFAULT_HOME_GRID_LAYOUT, profile)
+    return (
+      current.columns === defaults.columns &&
+      current.card_padding === defaults.card_padding &&
+      current.card_gap === defaults.card_gap &&
+      current.icon_size === defaults.icon_size &&
+      current.label_size === defaults.label_size &&
+      current.card_radius === defaults.card_radius
+    )
+  }
+
+  const isActiveViewportDefault = isProfileDefault(viewport)
+  const areAllProfilesDefault =
+    isProfileDefault("mobile") &&
+    isProfileDefault("desktop") &&
+    isProfileDefault("app")
 
   const mobileValues = getProfileValues(homeGridLayout, "mobile")
   const appValues = getProfileValues(homeGridLayout, "app")
@@ -374,18 +400,30 @@ export function CategoryLivePreview({
     onChangeHomeGridLayout(copyMobileToAppProfile(homeGridLayout))
   }
 
-  function resetActiveViewportLayout() {
+  function resetProfileLayout(profile: HomeGridProfile) {
     if (
       isLayoutDisabled ||
       !onChangeHomeGridLayout ||
-      isActiveViewportDefault
+      isProfileDefault(profile)
     ) {
       return
     }
-    clearProfileScaleOverride(viewport)
+    clearProfileScaleOverride(profile)
     onChangeHomeGridLayout(
-      applyProfileValues(homeGridLayout, viewport, defaultActiveValues)
+      applyProfileValues(
+        homeGridLayout,
+        profile,
+        getProfileValues(DEFAULT_HOME_GRID_LAYOUT, profile)
+      )
     )
+  }
+
+  function resetAllProfilesLayout() {
+    if (isLayoutDisabled || !onChangeHomeGridLayout || areAllProfilesDefault) {
+      return
+    }
+    setScaleOverride({})
+    onChangeHomeGridLayout({ ...DEFAULT_HOME_GRID_LAYOUT })
   }
 
   const categoryById = useMemo(
@@ -412,29 +450,56 @@ export function CategoryLivePreview({
       .filter((cat): cat is CategoryWithCounts => Boolean(cat))
   }, [categories, previewCountsBySlug, categoryById])
 
+  const offHomeProductCategories = useMemo(() => {
+    return categories
+      .filter(
+        (cat) =>
+          cat.is_active &&
+          cat.kind === "product_category" &&
+          !cat.show_on_home_bar
+      )
+      .sort((a, b) => {
+        if (a.home_bar_order !== b.home_bar_order) {
+          return a.home_bar_order - b.home_bar_order
+        }
+        return a.name.localeCompare(b.name, "pt-BR")
+      })
+  }, [categories])
+
   const displayedHomeBarItems = useMemo<HomeBarRenderItem[]>(() => {
     const realItems: HomeBarRenderItem[] = homeBarItems.map((category) => ({
       kind: "real",
       category,
     }))
-    if (simCount === "real" || realItems.length >= simCount) {
-      return realItems
+    const offHomeItems: HomeBarRenderItem[] = offHomeProductCategories.map(
+      (category) => ({
+        kind: "off_home",
+        category,
+      })
+    )
+    const baseItems = [...realItems, ...offHomeItems]
+    if (simCount === "real" || baseItems.length >= simCount) {
+      return baseItems
     }
     const existingNames = new Set(
-      homeBarItems.map((c) => c.name.trim().toLowerCase())
+      [...homeBarItems, ...offHomeProductCategories].map((c) =>
+        c.name.trim().toLowerCase()
+      )
     )
-    const needed = simCount - realItems.length
+    const needed = simCount - baseItems.length
     const demoPool = SIMULATED_DEMO_CATEGORIES.filter(
       (d) => !existingNames.has(d.name.trim().toLowerCase())
     )
     const simulatedItems: HomeBarRenderItem[] = demoPool
       .slice(0, needed)
       .map((demo) => ({ kind: "simulated", demo }))
-    return [...realItems, ...simulatedItems]
-  }, [homeBarItems, simCount])
+    return [...baseItems, ...simulatedItems]
+  }, [homeBarItems, offHomeProductCategories, simCount])
 
   const simulatedSlotsCount =
-    displayedHomeBarItems.length - homeBarItems.length
+    displayedHomeBarItems.length -
+    homeBarItems.length -
+    offHomeProductCategories.length
 
   const homeFeaturedItems = useMemo(() => {
     return getHomeFeaturedCategories(categories, previewCountsBySlug)
@@ -680,19 +745,37 @@ export function CategoryLivePreview({
     <div className="flex flex-col rounded-2xl border border-[#ECE7E0] bg-[#F7F5F0] shadow-sm overflow-hidden">
       {/* Preview Header */}
       <div className="border-b border-[#ECE7E0] bg-[#FEF8EC] px-4 py-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="inline-block size-2 rounded-full bg-[#E3A008] animate-pulse" />
-            <h3 className="text-sm font-bold tracking-tight text-[#1F1A17] truncate">
-              Prévia ao Vivo da Loja
-            </h3>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="inline-block size-2 rounded-full bg-[#E3A008] animate-pulse" />
+              <h3 className="text-sm font-bold tracking-tight text-[#1F1A17] truncate">
+                Prévia ao Vivo da Loja
+              </h3>
+            </div>
+            <p className="text-[11px] text-[#6E6258]">
+              {!writesDisabled &&
+              (onReorderHomeBar || onReorderHomeFeatured || onReorderMenu)
+                ? "Arraste para reordenar · Clique para editar"
+                : "Atualiza em tempo real conforme você organiza"}
+            </p>
           </div>
-          <p className="text-[11px] text-[#6E6258]">
-            {!writesDisabled &&
-            (onReorderHomeBar || onReorderHomeFeatured || onReorderMenu)
-              ? "Arraste para reordenar · Clique para editar"
-              : "Atualiza em tempo real conforme você organiza"}
-          </p>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={isLayoutDisabled || areAllProfilesDefault}
+            onClick={() => setResetDialogOpen(true)}
+            title={
+              areAllProfilesDefault
+                ? "Todos os 3 perfis já estão no padrão"
+                : "Resetar layout da Grade 3D para os padrões"
+            }
+            className="h-7 shrink-0 px-2 text-[11px] font-semibold border-[#ECE7E0] bg-[#FAF8F5] text-[#C1440E] hover:border-[#E3A008] hover:bg-[#FEF3C7]/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] disabled:opacity-45"
+          >
+            <RotateCcw className="size-3 mr-1" />
+            Resetar padrão
+          </Button>
         </div>
 
         <div
@@ -777,7 +860,7 @@ export function CategoryLivePreview({
       </div>
 
       {/* Preview Sections */}
-      <div className="flex-1 min-h-0 space-y-3.5 p-3.5 max-h-[calc(100vh-14rem)] overflow-y-auto">
+      <div className="flex-1 min-h-0 space-y-3.5 p-3.5 xl:max-h-[calc(100vh-14rem)] xl:overflow-y-auto">
         {/* Section A: Grade 3D da Home */}
         <section
           aria-label="Prévia da Grade 3D da Home"
@@ -1186,7 +1269,7 @@ export function CategoryLivePreview({
                   size="sm"
                   variant="ghost"
                   disabled={isLayoutDisabled || isActiveViewportDefault}
-                  onClick={resetActiveViewportLayout}
+                  onClick={() => resetProfileLayout(viewport)}
                   className="h-7 px-2 text-[11px] font-semibold text-[#6E6258] hover:bg-white hover:text-[#1F1A17]"
                 >
                   <RotateCcw className="size-3 mr-1" />
@@ -1195,6 +1278,56 @@ export function CategoryLivePreview({
               </div>
             </CollapsibleContent>
           </Collapsible>
+
+          {offHomeProductCategories.length > 0 && (
+            <div className="mb-2.5 space-y-1.5 rounded-lg border border-dashed border-amber-400 bg-amber-50/70 px-2.5 py-2 text-[10.5px] leading-snug text-[#92400E]">
+              <div className="flex items-start gap-1.5">
+                <AlertCircle className="size-3.5 shrink-0 mt-0.5 text-amber-600" />
+                <span>
+                  <strong>
+                    {offHomeProductCategories.length}{" "}
+                    {offHomeProductCategories.length === 1
+                      ? "categoria ativa fora da Home"
+                      : "categorias ativas fora da Home"}
+                  </strong>{" "}
+                  em prévia de teste. Clique em{" "}
+                  <strong>Colocar na Home</strong> para adicionar à barra com 1
+                  clique.
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {offHomeProductCategories.map((cat) => {
+                  const isEnabling = Boolean(enablingHomeBarIds?.[cat.id])
+                  const isChipDisabled =
+                    writesDisabled ||
+                    savingChanges ||
+                    isEnabling ||
+                    !onEnableHomeBar
+
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      disabled={isChipDisabled}
+                      onClick={() => {
+                        onEnableHomeBar?.(cat)
+                      }}
+                      aria-label={`Colocar ${cat.name} na Home`}
+                      title={`Colocar "${cat.name}" na Home`}
+                      className="inline-flex min-h-6 items-center gap-1 rounded-md border border-amber-400 bg-white px-2 py-0.5 text-[10.5px] font-bold text-[#92400E] shadow-2xs transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isEnabling ? (
+                        <Loader2 className="size-3 shrink-0 animate-spin" />
+                      ) : (
+                        <Plus className="size-3 shrink-0" />
+                      )}
+                      <span>Colocar &ldquo;{cat.name}&rdquo; na Home</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {displayedHomeBarItems.length === 0 ? (
             <div className="rounded-lg border border-dashed border-[#ECE7E0] bg-[#F7F5F0]/70 px-3 py-5 text-center text-[11px] text-[#7A6E63]">
@@ -1273,6 +1406,93 @@ export function CategoryLivePreview({
                           >
                             {demo.name}
                           </span>
+                        </div>
+                      )
+                    }
+
+                    if (entry.kind === "off_home") {
+                      const { category: cat } = entry
+                      const isEnabling = Boolean(enablingHomeBarIds?.[cat.id])
+                      const isEnableDisabled =
+                        writesDisabled ||
+                        savingChanges ||
+                        isEnabling ||
+                        !onEnableHomeBar
+
+                      return (
+                        <div
+                          key={cat.id}
+                          title={`${cat.name} (fora da Home — prévia de teste)`}
+                          className="group min-w-0 flex flex-col items-center transition-all select-none"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleCardClick(cat)}
+                            disabled={!onEditCategory}
+                            title={`Clique para editar ${cat.name}`}
+                            className="flex flex-col items-center w-full text-center cursor-pointer disabled:cursor-default focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] rounded-lg"
+                          >
+                            <div
+                              style={{
+                                borderRadius: appCardRadius,
+                                paddingTop: appPadY,
+                                paddingBottom: appPadY,
+                                paddingLeft: appPadX,
+                                paddingRight: appPadX,
+                                marginBottom: 8,
+                              }}
+                              className="relative w-full flex items-center justify-center border border-dashed border-amber-400 bg-amber-50/60 transition-all group-hover:bg-amber-50"
+                            >
+                              <span className="absolute -top-[5px] -right-[3px] z-10 max-w-full truncate rounded-full bg-amber-700 px-1.5 py-[2px] text-[8px] font-extrabold uppercase tracking-[0.02em] text-white leading-none">
+                                Fora da Home
+                              </span>
+
+                              <div
+                                style={{ width: appIconSize }}
+                                className="aspect-square max-w-full flex items-center justify-center pointer-events-none"
+                              >
+                                <CategoryIcon
+                                  iconUrl={cat.icon_url}
+                                  iconType={cat.icon_type}
+                                  fallbackIcon={cat.fallback_icon}
+                                  accentColor={cat.accent_color}
+                                  alt={cat.name}
+                                  sizeClassName="w-full h-full"
+                                  iconClassName="w-[54%] h-[54%]"
+                                  className="pointer-events-none"
+                                />
+                              </div>
+                            </div>
+
+                            <span
+                              style={{
+                                fontSize: appLabelSize,
+                                lineHeight: `${appLabelLineHeight}px`,
+                              }}
+                              className="w-full truncate text-center font-bold text-[#1F1B16]"
+                            >
+                              {cat.name}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isEnableDisabled}
+                            onClick={() => {
+                              onEnableHomeBar?.(cat)
+                            }}
+                            aria-label={`Colocar ${cat.name} na Home`}
+                            title={`Colocar "${cat.name}" na Home`}
+                            className="mt-1 inline-flex min-h-6 max-w-full items-center justify-center gap-0.5 rounded-md border border-amber-400 bg-white px-1.5 py-0.5 text-[8.5px] font-bold leading-tight text-[#92400E] shadow-2xs transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {isEnabling ? (
+                              <Loader2 className="w-3 h-3 shrink-0 animate-spin" />
+                            ) : activeCols < 4 ? (
+                              <Plus className="w-2.5 h-2.5 shrink-0" />
+                            ) : null}
+                            <span className="truncate">
+                              {activeCols >= 4 ? "+ Home" : "Colocar na Home"}
+                            </span>
+                          </button>
                         </div>
                       )
                     }
@@ -1484,6 +1704,84 @@ export function CategoryLivePreview({
                       >
                         {demo.name}
                       </span>
+                    </div>
+                  )
+                }
+
+                if (entry.kind === "off_home") {
+                  const { category: cat } = entry
+                  const isEnabling = Boolean(enablingHomeBarIds?.[cat.id])
+                  const isEnableDisabled =
+                    writesDisabled ||
+                    savingChanges ||
+                    isEnabling ||
+                    !onEnableHomeBar
+
+                  return (
+                    <div
+                      key={cat.id}
+                      title={`${cat.name} (fora da Home — prévia de teste)`}
+                      style={{
+                        paddingTop: previewPadY,
+                        paddingBottom: previewPadY,
+                        paddingLeft: previewPadX,
+                        paddingRight: previewPadX,
+                        borderRadius: previewRadius,
+                      }}
+                      className="group relative min-w-0 flex flex-col items-center border border-dashed border-amber-400 bg-amber-50/60 text-center transition-all select-none hover:bg-amber-50"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleCardClick(cat)}
+                        disabled={!onEditCategory}
+                        title={`Clique para editar ${cat.name}`}
+                        className="flex flex-col items-center w-full text-center cursor-pointer disabled:cursor-default focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] rounded-lg"
+                      >
+                        <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 z-10 max-w-[95%] truncate rounded-full bg-amber-700 px-1.5 py-[1px] text-[7.5px] font-extrabold uppercase tracking-wide text-white shadow-xs">
+                          Fora da Home
+                        </span>
+
+                        <div
+                          style={{ width: previewIcon }}
+                          className="mt-0.5 aspect-square max-w-full flex items-center justify-center pointer-events-none"
+                        >
+                          <CategoryIcon
+                            iconUrl={cat.icon_url}
+                            iconType={cat.icon_type}
+                            fallbackIcon={cat.fallback_icon}
+                            accentColor={cat.accent_color}
+                            alt={cat.name}
+                            sizeClassName="w-full h-full"
+                            iconClassName="w-[54%] h-[54%]"
+                            className="pointer-events-none"
+                          />
+                        </div>
+                        <span
+                          style={{ fontSize: previewLabel, lineHeight: 1.25 }}
+                          className="mt-1 w-full truncate font-semibold text-[#1F1A17]"
+                        >
+                          {cat.name}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isEnableDisabled}
+                        onClick={() => {
+                          onEnableHomeBar?.(cat)
+                        }}
+                        aria-label={`Colocar ${cat.name} na Home`}
+                        title={`Colocar "${cat.name}" na Home`}
+                        className="mt-1 inline-flex min-h-6 max-w-full items-center justify-center gap-0.5 rounded border border-amber-400 bg-white px-1 py-0.5 text-[8px] font-bold leading-tight text-[#92400E] transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {isEnabling ? (
+                          <Loader2 className="w-3 h-3 shrink-0 animate-spin" />
+                        ) : activeCols < 5 ? (
+                          <Plus className="w-2.5 h-2.5 shrink-0" />
+                        ) : null}
+                        <span className="truncate">
+                          {activeCols >= 5 ? "+ Home" : "Colocar na Home"}
+                        </span>
+                      </button>
                     </div>
                   )
                 }
@@ -2049,6 +2347,56 @@ export function CategoryLivePreview({
           </div>
         </div>
       )}
+
+      <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+        <AlertDialogContent className="border-[#ECE7E0] bg-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-[#1F1A17]">
+              Resetar configurações padrões da Grade 3D
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-[#6E6258]">
+              Os valores padrões serão aplicados em modo rascunho na prévia ao
+              vivo para você revisar antes de clicar em{" "}
+              <strong>Salvar</strong> ou <strong>Descartar</strong> na barra
+              de alterações não salvas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-col">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isLayoutDisabled || isActiveViewportDefault}
+              onClick={() => {
+                resetProfileLayout(viewport)
+                setResetDialogOpen(false)
+              }}
+              className="w-full h-auto min-h-9 py-2 whitespace-normal text-center border-[#ECE7E0] bg-[#FAF8F5] font-semibold text-[#1F1A17] hover:border-[#E3A008] hover:bg-[#FEF8EC]"
+            >
+              <RotateCcw className="size-3.5 mr-1.5 text-[#E3A008]" />
+              Resetar apenas {activeProfileLabel}
+              {isActiveViewportDefault ? " (já está no padrão)" : ""}
+            </Button>
+            <Button
+              type="button"
+              disabled={isLayoutDisabled || areAllProfilesDefault}
+              onClick={() => {
+                resetAllProfilesLayout()
+                setResetDialogOpen(false)
+              }}
+              className="w-full h-auto min-h-9 py-2 whitespace-normal text-center bg-[#C1440E] font-semibold text-white hover:bg-[#a6390b]"
+            >
+              <RotateCcw className="size-3.5 mr-1.5" />
+              Resetar todos os 3 perfis
+              <span className="ml-1 text-[11px] font-normal opacity-90">
+                (Site Mobile, Site Desktop e App)
+              </span>
+            </Button>
+            <AlertDialogCancel className="w-full mt-0 border-[#ECE7E0] text-[#5C5248] hover:bg-[#F7F5F0]">
+              Cancelar
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
