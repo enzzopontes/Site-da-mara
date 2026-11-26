@@ -12,23 +12,25 @@ export function CardapioSkeleton() {
     >
       {/* Bloco Sticky Flush: Busca + Categorias */}
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#ECE7E0] shadow-xs">
-        <div className="max-w-5xl mx-auto px-3 sm:px-6 pt-2 pb-2.5 flex flex-col items-center">
+        <div className="w-full pt-2 pb-2.5 flex flex-col items-center">
           {/* Busca Skeleton (visível no mobile, oculta no desktop no topo) */}
-          <div className="w-full max-w-2xl mb-2 md:hidden">
+          <div className="w-full max-w-2xl px-3 sm:px-6 mb-2 md:hidden">
             <Skeleton className="h-11 w-full rounded-xl" />
           </div>
 
           {/* Abas de Categorias Skeleton (Centralizadas no Desktop) */}
-          <div className="flex items-center md:justify-center gap-2 sm:gap-2.5 overflow-x-auto no-scrollbar py-0.5 w-full">
-            {[...Array(4)].map((_, i) => (
-              <div
-                key={i}
-                className="h-9.5 md:h-10 px-3.5 md:px-4 rounded-full border border-[#ECE7E0] bg-[#FDFBF7] flex items-center gap-2 shrink-0"
-              >
-                <Skeleton className="w-5 h-5 rounded-full" />
-                <Skeleton className="w-14 h-3.5 rounded" />
-              </div>
-            ))}
+          <div className="w-full overflow-x-auto no-scrollbar py-0.5">
+            <div className="flex items-center gap-2 sm:gap-2.5 w-max md:mx-auto px-3 sm:px-6">
+              {[...Array(4)].map((_, i) => (
+                <div
+                  key={i}
+                  className="h-9.5 md:h-10 px-3.5 md:px-4 rounded-full border border-[#ECE7E0] bg-[#FDFBF7] flex items-center gap-2 shrink-0"
+                >
+                  <Skeleton className="w-5 h-5 rounded-full" />
+                  <Skeleton className="w-14 h-3.5 rounded" />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
