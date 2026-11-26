@@ -4,6 +4,7 @@ import { isSafeCategoryHref, normalizeLegacyCategorySlug } from "@/lib/category-
 export type CategoryKind = "product_category" | "home_shortcut"
 export type CategoryIconType = "upload" | "preset_3d" | "lucide"
 export type MenuLayoutZone = "main" | "sidebar_right"
+export type HomeBarProfile = "mobile" | "desktop" | "app"
 
 export interface Category {
   id: string
@@ -20,6 +21,9 @@ export interface Category {
   custom_href: string | null
   is_active: boolean
   show_on_home_bar: boolean
+  show_on_home_bar_mobile: boolean
+  show_on_home_bar_desktop: boolean
+  show_on_home_bar_app: boolean
   home_bar_order: number
   show_on_home_featured: boolean
   home_featured_order: number
@@ -55,6 +59,9 @@ export const DEFAULT_CATEGORIES: Category[] = [
     custom_href: "/cardapio",
     is_active: true,
     show_on_home_bar: true,
+    show_on_home_bar_mobile: true,
+    show_on_home_bar_desktop: true,
+    show_on_home_bar_app: true,
     home_bar_order: 0,
     show_on_home_featured: false,
     home_featured_order: 10,
@@ -81,6 +88,9 @@ export const DEFAULT_CATEGORIES: Category[] = [
     custom_href: null,
     is_active: true,
     show_on_home_bar: true,
+    show_on_home_bar_mobile: true,
+    show_on_home_bar_desktop: true,
+    show_on_home_bar_app: true,
     home_bar_order: 1,
     show_on_home_featured: true,
     home_featured_order: 0,
@@ -107,6 +117,9 @@ export const DEFAULT_CATEGORIES: Category[] = [
     custom_href: null,
     is_active: true,
     show_on_home_bar: true,
+    show_on_home_bar_mobile: true,
+    show_on_home_bar_desktop: true,
+    show_on_home_bar_app: true,
     home_bar_order: 2,
     show_on_home_featured: true,
     home_featured_order: 1,
@@ -133,6 +146,9 @@ export const DEFAULT_CATEGORIES: Category[] = [
     custom_href: null,
     is_active: true,
     show_on_home_bar: true,
+    show_on_home_bar_mobile: true,
+    show_on_home_bar_desktop: true,
+    show_on_home_bar_app: true,
     home_bar_order: 3,
     show_on_home_featured: false,
     home_featured_order: 2,
@@ -159,6 +175,9 @@ export const DEFAULT_CATEGORIES: Category[] = [
     custom_href: "/cupons",
     is_active: true,
     show_on_home_bar: true,
+    show_on_home_bar_mobile: true,
+    show_on_home_bar_desktop: true,
+    show_on_home_bar_app: true,
     home_bar_order: 4,
     show_on_home_featured: false,
     home_featured_order: 11,
@@ -185,6 +204,9 @@ export const DEFAULT_CATEGORIES: Category[] = [
     custom_href: "/cardapio",
     is_active: true,
     show_on_home_bar: true,
+    show_on_home_bar_mobile: true,
+    show_on_home_bar_desktop: true,
+    show_on_home_bar_app: true,
     home_bar_order: 5,
     show_on_home_featured: false,
     home_featured_order: 12,
@@ -199,6 +221,20 @@ export const DEFAULT_CATEGORIES: Category[] = [
 ]
 
 export function mapCategoryRow(row: Record<string, any>): Category {
+  const legacyShowOnHomeBar = row.show_on_home_bar !== false
+  const showOnHomeBarMobile =
+    typeof row.show_on_home_bar_mobile === "boolean"
+      ? row.show_on_home_bar_mobile
+      : legacyShowOnHomeBar
+  const showOnHomeBarDesktop =
+    typeof row.show_on_home_bar_desktop === "boolean"
+      ? row.show_on_home_bar_desktop
+      : legacyShowOnHomeBar
+  const showOnHomeBarApp =
+    typeof row.show_on_home_bar_app === "boolean"
+      ? row.show_on_home_bar_app
+      : legacyShowOnHomeBar
+
   return {
     id: String(row.id),
     slug: String(row.slug),
@@ -216,7 +252,10 @@ export function mapCategoryRow(row: Record<string, any>): Category {
     badge_color: row.badge_color || "#C1440E",
     custom_href: row.custom_href ?? null,
     is_active: row.is_active !== false,
-    show_on_home_bar: row.show_on_home_bar !== false,
+    show_on_home_bar: showOnHomeBarMobile || showOnHomeBarDesktop || showOnHomeBarApp,
+    show_on_home_bar_mobile: showOnHomeBarMobile,
+    show_on_home_bar_desktop: showOnHomeBarDesktop,
+    show_on_home_bar_app: showOnHomeBarApp,
     home_bar_order: Number.isFinite(Number(row.home_bar_order)) ? Number(row.home_bar_order) : 0,
     show_on_home_featured: Boolean(row.show_on_home_featured),
     home_featured_order: Number.isFinite(Number(row.home_featured_order)) ? Number(row.home_featured_order) : 0,
@@ -292,12 +331,29 @@ export function findCategoryForProduct(
   return categories.find((cat) => cat.kind === "product_category" && matchProductToCategory(product, cat))
 }
 
+export function getCategoryShowOnHomeBarForProfile(
+  category: Pick<
+    Category,
+    "show_on_home_bar" | "show_on_home_bar_mobile" | "show_on_home_bar_desktop" | "show_on_home_bar_app"
+  >,
+  profile: HomeBarProfile
+): boolean {
+  if (profile === "mobile") return category.show_on_home_bar_mobile
+  if (profile === "desktop") return category.show_on_home_bar_desktop
+  return category.show_on_home_bar_app
+}
+
 export function getHomeBarCategories(
   categories: Category[],
-  _activeProductCountsBySlug?: Record<string, number>
+  _activeProductCountsBySlug?: Record<string, number>,
+  profile?: HomeBarProfile
 ): Category[] {
   return categories
-    .filter((cat) => cat.is_active && cat.show_on_home_bar)
+    .filter((cat) => {
+      if (!cat.is_active) return false
+      if (profile) return getCategoryShowOnHomeBarForProfile(cat, profile)
+      return cat.show_on_home_bar_mobile || cat.show_on_home_bar_desktop
+    })
     .sort((a, b) => a.home_bar_order - b.home_bar_order || a.name.localeCompare(b.name))
 }
 

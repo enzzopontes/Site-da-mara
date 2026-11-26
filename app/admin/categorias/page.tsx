@@ -23,6 +23,7 @@ import {
   Loader2,
   MessageSquare,
   Minus,
+  Monitor,
   Package,
   PanelRight,
   Pencil,
@@ -32,7 +33,9 @@ import {
   RotateCcw,
   Save,
   Search,
+  Smartphone,
   Sparkles,
+  TabletSmartphone,
   Trash2,
   Trophy,
   UtensilsCrossed,
@@ -40,10 +43,12 @@ import {
   X,
 } from "lucide-react"
 import { toast } from "sonner"
-import type {
-  Category,
-  CategoryWithCounts,
-  MenuLayoutZone,
+import {
+  getCategoryShowOnHomeBarForProfile,
+  type Category,
+  type CategoryWithCounts,
+  type HomeBarProfile,
+  type MenuLayoutZone,
 } from "@/lib/categories-db"
 import {
   deleteCategorySafeAction,
@@ -60,6 +65,7 @@ import {
   DEFAULT_HOME_GRID_LAYOUT,
   isSameHomeGridLayout,
   type HomeGridLayout,
+  type HomeGridProfile,
 } from "@/lib/home-grid-layout"
 import { CategoryFormModal } from "@/components/admin/categories/category-form-modal"
 import { CategoryDeleteModal } from "@/components/admin/categories/category-delete-modal"
@@ -94,6 +100,21 @@ import { cn } from "@/lib/utils"
 type TabKey = "todas" | "home_bar" | "home_featured" | "menu"
 type KindFilter = "all" | "product_category" | "home_shortcut"
 type OrderMode = "home_bar" | "home_featured" | "menu"
+
+const HOME_BAR_PROFILE_OPTIONS: Array<{
+  value: HomeBarProfile
+  label: string
+  shortLabel: string
+}> = [
+  { value: "mobile", label: "Site Mobile", shortLabel: "Mobile" },
+  { value: "desktop", label: "Site Desktop", shortLabel: "Desktop" },
+  { value: "app", label: "App", shortLabel: "App" },
+]
+const HOME_BAR_PROFILE_LABELS: Record<HomeBarProfile, string> = {
+  mobile: "Site Mobile",
+  desktop: "Site Desktop",
+  app: "App",
+}
 
 function moveArrayItem<T>(list: T[], fromIndex: number, toIndex: number): T[] {
   if (
@@ -130,6 +151,8 @@ export default function AdminCategoriasPage() {
 
   // Navigation, search & filters
   const [activeTab, setActiveTab] = useState<TabKey>("todas")
+  const [previewViewport, setPreviewViewport] =
+    useState<HomeGridProfile>("mobile")
   const [searchQuery, setSearchQuery] = useState("")
   const [kindFilter, setKindFilter] = useState<KindFilter>("all")
   const [previewSheetOpen, setPreviewSheetOpen] = useState(false)
@@ -149,6 +172,7 @@ export default function AdminCategoriasPage() {
   const [togglingHomeBarIds, setTogglingHomeBarIds] = useState<
     Record<string, boolean>
   >({})
+  const inFlightHomeBarRef = useRef<Set<string>>(new Set())
   const [duplicatingIds, setDuplicatingIds] = useState<Record<string, boolean>>(
     {}
   )
@@ -179,6 +203,12 @@ export default function AdminCategoriasPage() {
     isHomeGridLayoutDirty
   const isSavingOrder = savingAll || savingMode !== null
   const isTogglingAnyHomeBar = Object.values(togglingHomeBarIds).some(Boolean)
+  const isCategoryTogglingHomeBar = (catId: string) =>
+    Boolean(
+      togglingHomeBarIds[`${catId}:mobile`] ||
+        togglingHomeBarIds[`${catId}:desktop`] ||
+        togglingHomeBarIds[`${catId}:app`]
+    )
   const orderControlsDisabled =
     writesDisabled || isSavingOrder || isTogglingAnyHomeBar
 
@@ -254,10 +284,11 @@ export default function AdminCategoriasPage() {
     ).length
     const shortcuts = categories.filter((c) => c.kind === "home_shortcut").length
     const onHomeBar = categories.filter(
-      (c) => c.is_active && c.show_on_home_bar
+      (c) =>
+        c.is_active && getCategoryShowOnHomeBarForProfile(c, previewViewport)
     ).length
     return { total, active, products, shortcuts, onHomeBar }
-  }, [categories])
+  }, [categories, previewViewport])
 
   // Next default orders for new categories
   const nextOrders = useMemo(() => {
@@ -328,6 +359,7 @@ export default function AdminCategoriasPage() {
 
   // Modal helpers
   function openCreateModal() {
+    if (isTogglingAnyHomeBar) return
     if (writesDisabled) {
       toast.error(
         migrationPending
@@ -347,6 +379,7 @@ export default function AdminCategoriasPage() {
   }
 
   function openEditModal(category: CategoryWithCounts) {
+    if (isTogglingAnyHomeBar) return
     if (writesDisabled) {
       toast.error(
         migrationPending
@@ -386,7 +419,7 @@ export default function AdminCategoriasPage() {
     category: CategoryWithCounts,
     nextValue: boolean
   ) {
-    if (writesDisabled || isSavingOrder || Boolean(togglingHomeBarIds[category.id]))
+    if (writesDisabled || isSavingOrder || isCategoryTogglingHomeBar(category.id))
       return
     setTogglingIds((prev) => ({ ...prev, [category.id]: true }))
 
@@ -430,62 +463,100 @@ export default function AdminCategoriasPage() {
 
   async function handleToggleHomeBar(
     category: CategoryWithCounts,
+    profile: HomeBarProfile,
     nextValue: boolean
   ) {
+    const toggleKey = `${category.id}:${profile}`
+    const currentValue = getCategoryShowOnHomeBarForProfile(category, profile)
     if (
       writesDisabled ||
       isSavingOrder ||
+      inFlightHomeBarRef.current.has(category.id) ||
+      isCategoryTogglingHomeBar(category.id) ||
+      togglingHomeBarIds[toggleKey] ||
       Boolean(togglingIds[category.id]) ||
       !category.is_active ||
-      togglingHomeBarIds[category.id] ||
-      category.show_on_home_bar === nextValue
+      currentValue === nextValue
     ) {
       return
     }
-    setTogglingHomeBarIds((prev) => ({ ...prev, [category.id]: true }))
+
+    const patchProfile = (
+      cat: CategoryWithCounts,
+      val: boolean
+    ): CategoryWithCounts => {
+      const nextMobile =
+        profile === "mobile" ? val : cat.show_on_home_bar_mobile
+      const nextDesktop =
+        profile === "desktop" ? val : cat.show_on_home_bar_desktop
+      const nextApp = profile === "app" ? val : cat.show_on_home_bar_app
+      return {
+        ...cat,
+        show_on_home_bar_mobile: nextMobile,
+        show_on_home_bar_desktop: nextDesktop,
+        show_on_home_bar_app: nextApp,
+        show_on_home_bar: nextMobile || nextDesktop || nextApp,
+      }
+    }
+
+    inFlightHomeBarRef.current.add(category.id)
+    setTogglingHomeBarIds((prev) => ({ ...prev, [toggleKey]: true }))
 
     // Optimistic update so Live Preview reflects immediately
     setCategories((prev) =>
-      prev.map((c) =>
-        c.id === category.id ? { ...c, show_on_home_bar: nextValue } : c
-      )
+      prev.map((c) => (c.id === category.id ? patchProfile(c, nextValue) : c))
     )
 
     try {
-      const res = await toggleCategoryHomeBarAction(category.id, nextValue)
+      const res = await toggleCategoryHomeBarAction(
+        category.id,
+        nextValue,
+        profile
+      )
       if (!res.ok) {
         setCategories((prev) =>
           prev.map((c) =>
-            c.id === category.id ? { ...c, show_on_home_bar: !nextValue } : c
+            c.id === category.id ? patchProfile(c, currentValue) : c
           )
         )
         toast.error(res.error)
         return
       }
+      const applyServerHomeBar = (
+        cat: CategoryWithCounts
+      ): CategoryWithCounts => ({
+        ...cat,
+        show_on_home_bar: res.data.show_on_home_bar,
+        show_on_home_bar_mobile: res.data.show_on_home_bar_mobile,
+        show_on_home_bar_desktop: res.data.show_on_home_bar_desktop,
+        show_on_home_bar_app: res.data.show_on_home_bar_app,
+      })
+      setCategories((prev) =>
+        prev.map((c) => (c.id === category.id ? applyServerHomeBar(c) : c))
+      )
       setSavedCategories((prev) =>
-        prev.map((c) =>
-          c.id === category.id ? { ...c, show_on_home_bar: nextValue } : c
-        )
+        prev.map((c) => (c.id === category.id ? applyServerHomeBar(c) : c))
       )
       toast.success(
         nextValue
-          ? `"${category.name}" ativada na Home!`
-          : `"${category.name}" removida da Home.`
+          ? `"${category.name}" ativada no ${HOME_BAR_PROFILE_LABELS[profile]}!`
+          : `"${category.name}" removida do ${HOME_BAR_PROFILE_LABELS[profile]}.`
       )
     } catch {
       setCategories((prev) =>
         prev.map((c) =>
-          c.id === category.id ? { ...c, show_on_home_bar: !nextValue } : c
+          c.id === category.id ? patchProfile(c, currentValue) : c
         )
       )
       toast.error("Erro ao alterar exibição da categoria na Home.")
     } finally {
-      setTogglingHomeBarIds((prev) => ({ ...prev, [category.id]: false }))
+      inFlightHomeBarRef.current.delete(category.id)
+      setTogglingHomeBarIds((prev) => ({ ...prev, [toggleKey]: false }))
     }
   }
 
   async function handleDuplicate(category: CategoryWithCounts) {
-    if (writesDisabled) return
+    if (writesDisabled || isTogglingAnyHomeBar) return
     if (hasAnyUnsavedChanges) {
       toast.warning(
         "Salve ou descarte as alterações de ordem ou layout da grade antes de continuar."
@@ -509,7 +580,7 @@ export default function AdminCategoriasPage() {
   }
 
   function handleRequestDelete(category: CategoryWithCounts) {
-    if (writesDisabled) return
+    if (writesDisabled || isTogglingAnyHomeBar) return
     if (hasAnyUnsavedChanges) {
       toast.warning(
         "Salve ou descarte as alterações de ordem ou layout da grade antes de continuar."
@@ -644,6 +715,9 @@ export default function AdminCategoriasPage() {
             ...cat,
             home_bar_order: saved.home_bar_order,
             show_on_home_bar: saved.show_on_home_bar,
+            show_on_home_bar_mobile: saved.show_on_home_bar_mobile,
+            show_on_home_bar_desktop: saved.show_on_home_bar_desktop,
+            show_on_home_bar_app: saved.show_on_home_bar_app,
           }
         }
         if (mode === "home_featured") {
@@ -672,6 +746,9 @@ export default function AdminCategoriasPage() {
         id: cat.id,
         order: idx,
         show_on_home_bar: cat.show_on_home_bar,
+        show_on_home_bar_mobile: cat.show_on_home_bar_mobile,
+        show_on_home_bar_desktop: cat.show_on_home_bar_desktop,
+        show_on_home_bar_app: cat.show_on_home_bar_app,
       }))
     }
     if (mode === "home_featured") {
@@ -722,6 +799,9 @@ export default function AdminCategoriasPage() {
               ...saved,
               home_bar_order: current.home_bar_order,
               show_on_home_bar: current.show_on_home_bar,
+              show_on_home_bar_mobile: current.show_on_home_bar_mobile,
+              show_on_home_bar_desktop: current.show_on_home_bar_desktop,
+              show_on_home_bar_app: current.show_on_home_bar_app,
             }
           }
           if (mode === "home_featured") {
@@ -877,6 +957,9 @@ export default function AdminCategoriasPage() {
                 ? {
                     home_bar_order: current.home_bar_order,
                     show_on_home_bar: current.show_on_home_bar,
+                    show_on_home_bar_mobile: current.show_on_home_bar_mobile,
+                    show_on_home_bar_desktop: current.show_on_home_bar_desktop,
+                    show_on_home_bar_app: current.show_on_home_bar_app,
                   }
                 : {}),
               ...(savedSet.has("home_featured")
@@ -1052,7 +1135,7 @@ export default function AdminCategoriasPage() {
                   activeTab={activeTab}
                   hasUnsavedChanges={hasAnyUnsavedChanges}
                   savingChanges={isSavingOrder}
-                  writesDisabled={writesDisabled}
+                  writesDisabled={writesDisabled || isTogglingAnyHomeBar}
                   layoutWritesDisabled={writesDisabled || layoutMigrationPending}
                   layoutMigrationPending={layoutMigrationPending}
                   homeGridLayout={homeGridLayout}
@@ -1063,8 +1146,8 @@ export default function AdminCategoriasPage() {
                   onReorderMenu={handlePreviewReorderMenu}
                   onSaveChanges={handleSaveAllDirtyOrders}
                   onDiscardChanges={handleDiscardAllOrderChanges}
-                  togglingHomeBarIds={togglingHomeBarIds}
-                  onToggleHomeBar={handleToggleHomeBar}
+                  viewport={previewViewport}
+                  onViewportChange={setPreviewViewport}
                 />
               </SheetContent>
             </Sheet>
@@ -1113,7 +1196,7 @@ export default function AdminCategoriasPage() {
               </span>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-[#E3A008]/55 bg-[#FEF8EC] px-3 py-1 text-xs font-semibold text-[#8A6100]">
                 <Check className="size-3.5 text-[#E3A008]" />
-                Na Home
+                Na Home ({HOME_BAR_PROFILE_LABELS[previewViewport]})
                 <strong className="font-bold">{kpis.onHomeBar}</strong>
               </span>
             </div>
@@ -1335,10 +1418,6 @@ export default function AdminCategoriasPage() {
                     const isProductCat = cat.kind === "product_category"
                     const isToggling = Boolean(togglingIds[cat.id])
                     const isDuplicating = Boolean(duplicatingIds[cat.id])
-                    const isTogglingHomeBar = Boolean(
-                      togglingHomeBarIds[cat.id]
-                    )
-                    const isOnHome = cat.is_active && cat.show_on_home_bar
 
                     return (
                       <article
@@ -1443,48 +1522,95 @@ export default function AdminCategoriasPage() {
 
                           {/* Switch + Actions */}
                           <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-[#F2EDE6] shrink-0">
-                            <Button
-                              type="button"
-                              size="sm"
-                              role="switch"
-                              aria-checked={isOnHome}
-                              aria-label={
-                                isOnHome
-                                  ? `Desativar ${cat.name} na Home`
-                                  : `Ativar ${cat.name} na Home`
-                              }
-                              title={
-                                !cat.is_active
-                                  ? "Ative a categoria para exibir na Home"
-                                  : isOnHome
-                                  ? "Ativada na Home — clique para remover"
-                                  : "Fora da Home — clique para destacar na Home"
-                              }
-                              disabled={
-                                orderControlsDisabled ||
-                                isToggling ||
-                                isTogglingHomeBar ||
-                                !cat.is_active
-                              }
-                              onClick={() =>
-                                handleToggleHomeBar(cat, !cat.show_on_home_bar)
-                              }
-                              className={cn(
-                                "h-8 px-2.5 text-xs font-semibold shadow-none",
-                                isOnHome
-                                  ? "bg-[#E3A008] text-white hover:bg-[#C98D06] border border-[#E3A008]"
-                                  : "bg-white text-[#6E6258] border border-[#DFD7CC] hover:border-[#E3A008] hover:bg-[#FEF8EC] hover:text-[#8A6100]"
-                              )}
+                            <div
+                              role="group"
+                              aria-label={`Visibilidade de ${cat.name} na Home por plataforma`}
+                              className="inline-flex items-center gap-0.5 rounded-lg border border-[#ECE7E0] bg-[#F7F5F0] p-0.5"
                             >
-                              {isTogglingHomeBar ? (
-                                <Loader2 className="size-3.5 mr-1.5 animate-spin" />
-                              ) : isOnHome ? (
-                                <Check className="size-3.5 mr-1.5" />
-                              ) : (
-                                <span className="size-2.5 mr-1.5 rounded-full border border-current" />
-                              )}
-                              {isOnHome ? "Na Home" : "Fora da Home"}
-                            </Button>
+                              <span className="hidden sm:inline px-1.5 text-[10px] font-bold uppercase tracking-wide text-[#7A6E63]">
+                                Na Home
+                              </span>
+                              {HOME_BAR_PROFILE_OPTIONS.map((opt) => {
+                                const isOn =
+                                  cat.is_active &&
+                                  getCategoryShowOnHomeBarForProfile(
+                                    cat,
+                                    opt.value
+                                  )
+                                const isProfileToggling = Boolean(
+                                  togglingHomeBarIds[`${cat.id}:${opt.value}`]
+                                )
+                                const isSelectedViewport =
+                                  previewViewport === opt.value
+                                const Icon =
+                                  opt.value === "mobile"
+                                    ? Smartphone
+                                    : opt.value === "desktop"
+                                    ? Monitor
+                                    : TabletSmartphone
+                                const activeBg =
+                                  opt.value === "app"
+                                    ? "bg-[#C1440E] text-white border-[#C1440E] hover:bg-[#A6380A]"
+                                    : "bg-[#E3A008] text-white border-[#E3A008] hover:bg-[#C98D06]"
+
+                                return (
+                                  <button
+                                    key={opt.value}
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={isOn}
+                                    disabled={
+                                      orderControlsDisabled ||
+                                      isCategoryTogglingHomeBar(cat.id) ||
+                                      isProfileToggling ||
+                                      isToggling ||
+                                      !cat.is_active
+                                    }
+                                    onClick={() =>
+                                      handleToggleHomeBar(
+                                        cat,
+                                        opt.value,
+                                        !getCategoryShowOnHomeBarForProfile(
+                                          cat,
+                                          opt.value
+                                        )
+                                      )
+                                    }
+                                    aria-label={
+                                      isOn
+                                        ? `Desativar ${cat.name} na Home do ${opt.label}`
+                                        : `Ativar ${cat.name} na Home do ${opt.label}`
+                                    }
+                                    title={
+                                      !cat.is_active
+                                        ? "Ative a categoria para exibir na Home"
+                                        : isOn
+                                        ? `Ativo no ${opt.label} — clique para remover`
+                                        : `Fora do ${opt.label} — clique para ativar`
+                                    }
+                                    className={cn(
+                                      "inline-flex h-7 items-center gap-1 rounded-md border px-2 text-[11px] font-semibold transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-45",
+                                      isOn
+                                        ? activeBg
+                                        : "border-transparent bg-transparent text-[#6E6258] hover:bg-white hover:text-[#1F1A17]",
+                                      isSelectedViewport &&
+                                        !isOn &&
+                                        "bg-white/90 border-[#E3A008]/45 text-[#1F1A17]",
+                                      isSelectedViewport &&
+                                        isOn &&
+                                        "ring-2 ring-[#E3A008]/35"
+                                    )}
+                                  >
+                                    {isProfileToggling ? (
+                                      <Loader2 className="size-3 animate-spin" />
+                                    ) : (
+                                      <Icon className="size-3 shrink-0" />
+                                    )}
+                                    <span>{opt.shortLabel}</span>
+                                  </button>
+                                )
+                              })}
+                            </div>
 
                             <div className="flex items-center gap-2 pr-1">
                               <span className="text-[11px] font-medium text-[#6E6258]">
@@ -1495,7 +1621,7 @@ export default function AdminCategoriasPage() {
                                 disabled={
                                   writesDisabled ||
                                   isSavingOrder ||
-                                  Boolean(togglingHomeBarIds[cat.id]) ||
+                                  isCategoryTogglingHomeBar(cat.id) ||
                                   isToggling
                                 }
                                 onCheckedChange={(checked) =>
@@ -1574,11 +1700,61 @@ export default function AdminCategoriasPage() {
                   onDiscard={() => handleDiscardTabChanges("home_bar")}
                 />
 
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#ECE7E0] bg-[#FAF8F5] px-3 py-2">
+                  <span className="text-xs font-semibold text-[#5C5248]">
+                    Configurando ícones da Home para:
+                  </span>
+                  <div
+                    role="group"
+                    aria-label="Selecionar plataforma da barra da Home"
+                    className="inline-flex items-center rounded-lg border border-[#ECE7E0] bg-white p-0.5 gap-0.5"
+                  >
+                    {HOME_BAR_PROFILE_OPTIONS.map((opt) => {
+                      const Icon =
+                        opt.value === "mobile"
+                          ? Smartphone
+                          : opt.value === "desktop"
+                          ? Monitor
+                          : TabletSmartphone
+                      const selected = previewViewport === opt.value
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setPreviewViewport(opt.value)}
+                          aria-pressed={selected}
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer",
+                            selected
+                              ? opt.value === "app"
+                                ? "bg-[#C1440E] text-white shadow-xs"
+                                : "bg-[#E3A008] text-white shadow-xs"
+                              : "text-[#6E6258] hover:text-[#1F1A17]"
+                          )}
+                        >
+                          <Icon className="size-3.5 shrink-0" />
+                          <span>{opt.label}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   {homeBarList.map((cat, idx) => {
-                    const isTogglingHomeBar = Boolean(
-                      togglingHomeBarIds[cat.id]
+                    const isOnActiveProfile =
+                      cat.is_active &&
+                      getCategoryShowOnHomeBarForProfile(cat, previewViewport)
+                    const activeProfileShortLabel =
+                      HOME_BAR_PROFILE_OPTIONS.find(
+                        (o) => o.value === previewViewport
+                      )?.shortLabel ?? "Mobile"
+                    const enabledProfiles = HOME_BAR_PROFILE_OPTIONS.filter(
+                      (opt) => getCategoryShowOnHomeBarForProfile(cat, opt.value)
                     )
+                    const hasProfileDifference =
+                      enabledProfiles.length > 0 &&
+                      enabledProfiles.length < HOME_BAR_PROFILE_OPTIONS.length
 
                     return (
                     <div
@@ -1596,7 +1772,7 @@ export default function AdminCategoriasPage() {
                         dragOverId === cat.id && draggedId !== cat.id
                           ? "border-[#E3A008] ring-2 ring-[#E3A008]/25 bg-[#FEF8EC]/50"
                           : "border-[#ECE7E0]",
-                        (!cat.is_active || !cat.show_on_home_bar) &&
+                        (!cat.is_active || !isOnActiveProfile) &&
                           "bg-[#FAF9F7] opacity-80"
                       )}
                     >
@@ -1648,24 +1824,50 @@ export default function AdminCategoriasPage() {
                             ? `Atalho para ${cat.custom_href || "/cardapio"}`
                             : `${cat.active_products} produto(s) ativo(s)`}
                         </p>
+                        {hasProfileDifference && (
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            {enabledProfiles.map((opt) => (
+                              <span
+                                key={opt.value}
+                                className={cn(
+                                  "inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9.5px] font-semibold",
+                                  opt.value === "app"
+                                    ? "border-[#C1440E]/25 bg-[#FFF5F0] text-[#C1440E]"
+                                    : "border-[#E3A008]/35 bg-[#FEF8EC] text-[#8A6100]"
+                                )}
+                              >
+                                {opt.shortLabel}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 ml-auto shrink-0">
                         <label className="inline-flex items-center gap-2 text-xs font-medium text-[#5C5248] cursor-pointer">
-                          <span className="hidden sm:inline">Na Home</span>
+                          <span className="hidden sm:inline">
+                            Na Home ({activeProfileShortLabel})
+                          </span>
                           <Switch
-                            checked={cat.show_on_home_bar}
+                            checked={getCategoryShowOnHomeBarForProfile(
+                              cat,
+                              previewViewport
+                            )}
                             disabled={
                               orderControlsDisabled ||
+                              isCategoryTogglingHomeBar(cat.id) ||
                               Boolean(togglingIds[cat.id]) ||
-                              isTogglingHomeBar ||
                               !cat.is_active
                             }
                             onCheckedChange={(checked) =>
-                              handleToggleHomeBar(cat, checked)
+                              handleToggleHomeBar(cat, previewViewport, checked)
                             }
-                            aria-label={`Exibir ${cat.name} na barra da Home`}
-                            className="data-[state=checked]:bg-[#E3A008]"
+                            aria-label={`Exibir ${cat.name} na barra da Home (${HOME_BAR_PROFILE_LABELS[previewViewport]})`}
+                            className={cn(
+                              previewViewport === "app"
+                                ? "data-[state=checked]:bg-[#C1440E]"
+                                : "data-[state=checked]:bg-[#E3A008]"
+                            )}
                           />
                         </label>
 
@@ -2060,7 +2262,7 @@ export default function AdminCategoriasPage() {
               activeTab={activeTab}
               hasUnsavedChanges={hasAnyUnsavedChanges}
               savingChanges={isSavingOrder}
-              writesDisabled={writesDisabled}
+              writesDisabled={writesDisabled || isTogglingAnyHomeBar}
               layoutWritesDisabled={writesDisabled || layoutMigrationPending}
               layoutMigrationPending={layoutMigrationPending}
               homeGridLayout={homeGridLayout}
@@ -2071,8 +2273,8 @@ export default function AdminCategoriasPage() {
               onReorderMenu={handlePreviewReorderMenu}
               onSaveChanges={handleSaveAllDirtyOrders}
               onDiscardChanges={handleDiscardAllOrderChanges}
-              togglingHomeBarIds={togglingHomeBarIds}
-              onToggleHomeBar={handleToggleHomeBar}
+              viewport={previewViewport}
+              onViewportChange={setPreviewViewport}
             />
           </aside>
         </div>

@@ -12,6 +12,7 @@ import {
   type CategoryIconType,
   type CategoryKind,
   type CategoryWithCounts,
+  type HomeBarProfile,
   type MenuLayoutZone,
 } from "@/lib/categories-db"
 import {
@@ -49,6 +50,9 @@ export interface CategoryFormInput {
   custom_href?: string | null
   is_active: boolean
   show_on_home_bar: boolean
+  show_on_home_bar_mobile?: boolean
+  show_on_home_bar_desktop?: boolean
+  show_on_home_bar_app?: boolean
   home_bar_order: number
   show_on_home_featured: boolean
   home_featured_order: number
@@ -65,6 +69,9 @@ export interface ReorderItemInput {
   id: string
   order: number
   show_on_home_bar?: boolean
+  show_on_home_bar_mobile?: boolean
+  show_on_home_bar_desktop?: boolean
+  show_on_home_bar_app?: boolean
   show_on_home_featured?: boolean
   home_featured_limit?: number
   show_on_menu?: boolean
@@ -97,6 +104,9 @@ const CategoryFormSchema = z.object({
   custom_href: z.string().trim().max(300).nullable().optional(),
   is_active: z.boolean().default(true),
   show_on_home_bar: z.boolean().default(true),
+  show_on_home_bar_mobile: z.boolean().optional(),
+  show_on_home_bar_desktop: z.boolean().optional(),
+  show_on_home_bar_app: z.boolean().optional(),
   home_bar_order: z.number().int().min(0).max(999).default(0),
   show_on_home_featured: z.boolean().default(false),
   home_featured_order: z.number().int().min(0).max(999).default(0),
@@ -117,6 +127,9 @@ const ReorderPayloadSchema = z.object({
         id: z.string().uuid(),
         order: z.number().int().min(0).max(999),
         show_on_home_bar: z.boolean().optional(),
+        show_on_home_bar_mobile: z.boolean().optional(),
+        show_on_home_bar_desktop: z.boolean().optional(),
+        show_on_home_bar_app: z.boolean().optional(),
         show_on_home_featured: z.boolean().optional(),
         home_featured_limit: z.number().int().min(1).max(24).optional(),
         show_on_menu: z.boolean().optional(),
@@ -317,6 +330,19 @@ function isMissingTableError(error: any): boolean {
   )
 }
 
+const PROFILE_MIGRATION_PENDING_ERROR =
+  "Execute a migração scripts/033_category_home_bar_profiles.sql no Supabase para habilitar visibilidade por plataforma."
+
+function isMissingProfileColumnError(error: unknown): boolean {
+  const msg = String((error as { message?: string } | null)?.message || "")
+  const code = String((error as { code?: string } | null)?.code || "")
+  return (
+    code === "42703" ||
+    code === "PGRST204" ||
+    /show_on_home_bar_(mobile|desktop|app)/i.test(msg)
+  )
+}
+
 export async function listCategoriesAdminAction(): Promise<
   ActionResult<{ categories: CategoryWithCounts[]; migrationPending?: boolean }>
 > {
@@ -452,6 +478,11 @@ export async function createCategoryAction(input: CategoryFormInput): Promise<Ac
       return { ok: false, error: `Já existe uma categoria com o slug "${slug}".` }
     }
 
+    const showMobile = data.show_on_home_bar_mobile ?? data.show_on_home_bar
+    const showDesktop = data.show_on_home_bar_desktop ?? data.show_on_home_bar
+    const showApp = data.show_on_home_bar_app ?? data.show_on_home_bar
+    const showAny = showMobile || showDesktop || showApp
+
     const payload = {
       slug,
       name: data.name,
@@ -465,7 +496,10 @@ export async function createCategoryAction(input: CategoryFormInput): Promise<Ac
       badge_color: data.badge_color || "#C1440E",
       custom_href: data.kind === "home_shortcut" ? data.custom_href?.trim() || "/cardapio" : null,
       is_active: data.is_active,
-      show_on_home_bar: data.show_on_home_bar,
+      show_on_home_bar: showAny,
+      show_on_home_bar_mobile: showMobile,
+      show_on_home_bar_desktop: showDesktop,
+      show_on_home_bar_app: showApp,
       home_bar_order: data.home_bar_order,
       show_on_home_featured: data.kind === "product_category" ? data.show_on_home_featured : false,
       home_featured_order: data.home_featured_order,
@@ -483,6 +517,14 @@ export async function createCategoryAction(input: CategoryFormInput): Promise<Ac
       .insert(payload)
       .select("*")
       .single()
+
+    if (error && isMissingProfileColumnError(error)) {
+      return {
+        ok: false,
+        code: "MIGRATION_PENDING",
+        error: PROFILE_MIGRATION_PENDING_ERROR,
+      }
+    }
 
     if (error || !inserted) {
       return { ok: false, error: error?.message || "Não foi possível criar a categoria." }
@@ -555,6 +597,11 @@ export async function updateCategoryAction(
     }
 
     // Slug is intentionally NOT updated on edit to prevent breaking links & legacy products
+    const showMobile = data.show_on_home_bar_mobile ?? data.show_on_home_bar
+    const showDesktop = data.show_on_home_bar_desktop ?? data.show_on_home_bar
+    const showApp = data.show_on_home_bar_app ?? data.show_on_home_bar
+    const showAny = showMobile || showDesktop || showApp
+
     const payload = {
       name: data.name,
       description: data.description?.trim() || null,
@@ -567,7 +614,10 @@ export async function updateCategoryAction(
       badge_color: data.badge_color || "#C1440E",
       custom_href: data.kind === "home_shortcut" ? data.custom_href?.trim() || "/cardapio" : null,
       is_active: data.is_active,
-      show_on_home_bar: data.show_on_home_bar,
+      show_on_home_bar: showAny,
+      show_on_home_bar_mobile: showMobile,
+      show_on_home_bar_desktop: showDesktop,
+      show_on_home_bar_app: showApp,
       home_bar_order: data.home_bar_order,
       show_on_home_featured: data.kind === "product_category" ? data.show_on_home_featured : false,
       home_featured_order: data.home_featured_order,
@@ -586,6 +636,14 @@ export async function updateCategoryAction(
       .eq("id", id)
       .select("*")
       .single()
+
+    if (error && isMissingProfileColumnError(error)) {
+      return {
+        ok: false,
+        code: "MIGRATION_PENDING",
+        error: PROFILE_MIGRATION_PENDING_ERROR,
+      }
+    }
 
     if (error || !updated) {
       return { ok: false, error: error?.message || "Não foi possível atualizar a categoria." }
@@ -643,6 +701,10 @@ export async function duplicateCategoryAction(id: string): Promise<ActionResult<
       return { ok: false, error: "Limite máximo de cópias atingido para esta categoria." }
     }
 
+    const dupShowMobile = Boolean(source.show_on_home_bar_mobile ?? source.show_on_home_bar)
+    const dupShowDesktop = Boolean(source.show_on_home_bar_desktop ?? source.show_on_home_bar)
+    const dupShowApp = Boolean(source.show_on_home_bar_app ?? source.show_on_home_bar)
+
     const { data: inserted, error } = await service
       .from("categories")
       .insert({
@@ -658,7 +720,10 @@ export async function duplicateCategoryAction(id: string): Promise<ActionResult<
         badge_color: source.badge_color,
         custom_href: source.custom_href,
         is_active: false,
-        show_on_home_bar: source.show_on_home_bar,
+        show_on_home_bar: dupShowMobile || dupShowDesktop || dupShowApp,
+        show_on_home_bar_mobile: dupShowMobile,
+        show_on_home_bar_desktop: dupShowDesktop,
+        show_on_home_bar_app: dupShowApp,
         home_bar_order: Number(source.home_bar_order || 0) + 1,
         show_on_home_featured: source.show_on_home_featured,
         home_featured_order: Number(source.home_featured_order || 0) + 1,
@@ -672,6 +737,14 @@ export async function duplicateCategoryAction(id: string): Promise<ActionResult<
       })
       .select("*")
       .single()
+
+    if (error && isMissingProfileColumnError(error)) {
+      return {
+        ok: false,
+        code: "MIGRATION_PENDING",
+        error: PROFILE_MIGRATION_PENDING_ERROR,
+      }
+    }
 
     if (error || !inserted) {
       return { ok: false, error: error?.message || "Erro ao duplicar categoria." }
@@ -723,7 +796,8 @@ export async function toggleCategoryActiveAction(
 
 export async function toggleCategoryHomeBarAction(
   id: string,
-  showOnHomeBar: boolean
+  showOnHomeBar: boolean,
+  profile?: HomeBarProfile
 ): Promise<ActionResult<Category>> {
   try {
     const auth = await assertAdmin()
@@ -739,13 +813,44 @@ export async function toggleCategoryHomeBarAction(
       return { ok: false, error: "Valor inválido para visibilidade na Home." }
     }
 
+    const parsedProfile = z.enum(["mobile", "desktop", "app"]).optional().safeParse(profile)
+    if (!parsedProfile.success) {
+      return { ok: false, error: "Perfil de visibilidade inválido." }
+    }
+
     const service = createServiceRoleClient()
+    const patch: Partial<{
+      show_on_home_bar: boolean
+      show_on_home_bar_mobile: boolean
+      show_on_home_bar_desktop: boolean
+      show_on_home_bar_app: boolean
+    }> = parsedProfile.data
+      ? parsedProfile.data === "mobile"
+        ? { show_on_home_bar_mobile: parsedShow.data }
+        : parsedProfile.data === "desktop"
+          ? { show_on_home_bar_desktop: parsedShow.data }
+          : { show_on_home_bar_app: parsedShow.data }
+      : {
+          show_on_home_bar: parsedShow.data,
+          show_on_home_bar_mobile: parsedShow.data,
+          show_on_home_bar_desktop: parsedShow.data,
+          show_on_home_bar_app: parsedShow.data,
+        }
+
     const { data: updated, error } = await service
       .from("categories")
-      .update({ show_on_home_bar: parsedShow.data })
+      .update(patch)
       .eq("id", parsedId.data)
       .select("*")
       .single()
+
+    if (error && isMissingProfileColumnError(error)) {
+      return {
+        ok: false,
+        code: "MIGRATION_PENDING",
+        error: PROFILE_MIGRATION_PENDING_ERROR,
+      }
+    }
 
     if (error || !updated) {
       return {
@@ -775,12 +880,28 @@ export async function reorderCategoriesAction(
     }
 
     const service = createServiceRoleClient()
-    await Promise.all(
+    const results = await Promise.all(
       parsed.data.items.map(async (item) => {
         const patch: Record<string, any> = {}
         if (mode === "home_bar") {
           patch.home_bar_order = item.order
-          if (typeof item.show_on_home_bar === "boolean") {
+          const hasMobile = typeof item.show_on_home_bar_mobile === "boolean"
+          const hasDesktop = typeof item.show_on_home_bar_desktop === "boolean"
+          const hasApp = typeof item.show_on_home_bar_app === "boolean"
+          if (hasMobile) {
+            patch.show_on_home_bar_mobile = item.show_on_home_bar_mobile
+          }
+          if (hasDesktop) {
+            patch.show_on_home_bar_desktop = item.show_on_home_bar_desktop
+          }
+          if (hasApp) {
+            patch.show_on_home_bar_app = item.show_on_home_bar_app
+          }
+          if (hasMobile && hasDesktop && hasApp) {
+            patch.show_on_home_bar = Boolean(
+              item.show_on_home_bar_mobile || item.show_on_home_bar_desktop || item.show_on_home_bar_app
+            )
+          } else if (typeof item.show_on_home_bar === "boolean") {
             patch.show_on_home_bar = item.show_on_home_bar
           }
         } else if (mode === "home_featured") {
@@ -802,11 +923,21 @@ export async function reorderCategoriesAction(
         }
 
         const { error } = await service.from("categories").update(patch).eq("id", item.id)
-        if (error) {
-          throw new Error(error.message)
-        }
+        return error
       })
     )
+
+    const firstError = results.find(Boolean)
+    if (firstError) {
+      if (isMissingProfileColumnError(firstError)) {
+        return {
+          ok: false,
+          code: "MIGRATION_PENDING",
+          error: PROFILE_MIGRATION_PENDING_ERROR,
+        }
+      }
+      return { ok: false, error: firstError.message || "Erro ao salvar nova ordenação." }
+    }
 
     revalidateCatalogPages()
     return { ok: true, data: null }

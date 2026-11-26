@@ -80,6 +80,14 @@ export default async function Home() {
   }
 
   const homeBarItems = getHomeBarCategories(categories, activeCountsBySlug)
+  const hasMobileHomeBar = homeBarItems.some((c) => c.show_on_home_bar_mobile)
+  const hasDesktopHomeBar = homeBarItems.some((c) => c.show_on_home_bar_desktop)
+  const homeBarWrapperVisibility =
+    hasMobileHomeBar && !hasDesktopHomeBar
+      ? "sm:hidden"
+      : !hasMobileHomeBar && hasDesktopHomeBar
+        ? "hidden sm:block"
+        : ""
   const featuredCategories = getHomeFeaturedCategories(categories, activeCountsBySlug)
 
   const rankIndexMap = new Map(rankingNames.map((n, i) => [n.toLowerCase().trim(), i]))
@@ -146,8 +154,11 @@ export default async function Home() {
         </ScrollReveal>
 
         {/* Barra de Categorias Rápidas (Chips estilo iFood com espaço reservado CLS = 0) */}
-        {homeBarItems.length > 0 && (
-          <section aria-label="Navegação por categorias" className="w-full min-h-[60px] bg-white">
+        {(hasMobileHomeBar || hasDesktopHomeBar) && (
+          <section
+            aria-label="Navegação por categorias"
+            className={`w-full min-h-[60px] bg-white ${homeBarWrapperVisibility}`.trim()}
+          >
             <CategoryBar items={homeBarItems} layout={homeGridLayout} />
           </section>
         )}

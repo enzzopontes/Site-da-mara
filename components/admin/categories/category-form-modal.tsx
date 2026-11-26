@@ -9,8 +9,11 @@ import {
   Link2,
   Loader2,
   Lock,
+  Monitor,
   Package,
   SlidersHorizontal,
+  Smartphone,
+  TabletSmartphone,
   Tag,
   WifiOff,
   X,
@@ -135,7 +138,16 @@ export function CategoryFormModal({
   const [badgeColor, setBadgeColor] = useState("#C1440E")
 
   const [isActive, setIsActive] = useState(true)
-  const [showOnHomeBar, setShowOnHomeBar] = useState(true)
+  const [showOnHomeBarMobile, setShowOnHomeBarMobile] = useState(true)
+  const [showOnHomeBarDesktop, setShowOnHomeBarDesktop] = useState(true)
+  const [showOnHomeBarApp, setShowOnHomeBarApp] = useState(true)
+  const showOnHomeBar =
+    showOnHomeBarMobile || showOnHomeBarDesktop || showOnHomeBarApp
+  const setAllHomeBarProfiles = (checked: boolean) => {
+    setShowOnHomeBarMobile(checked)
+    setShowOnHomeBarDesktop(checked)
+    setShowOnHomeBarApp(checked)
+  }
   const [showOnHomeFeatured, setShowOnHomeFeatured] = useState(false)
   const [homeFeaturedLimit, setHomeFeaturedLimit] = useState(6)
   const [showOnMenu, setShowOnMenu] = useState(true)
@@ -195,7 +207,15 @@ export function CategoryFormModal({
       setBadgeColor(initialCategory.badge_color || "#C1440E")
 
       setIsActive(initialCategory.is_active)
-      setShowOnHomeBar(initialCategory.show_on_home_bar)
+      setShowOnHomeBarMobile(
+        initialCategory.show_on_home_bar_mobile ?? initialCategory.show_on_home_bar
+      )
+      setShowOnHomeBarDesktop(
+        initialCategory.show_on_home_bar_desktop ?? initialCategory.show_on_home_bar
+      )
+      setShowOnHomeBarApp(
+        initialCategory.show_on_home_bar_app ?? initialCategory.show_on_home_bar
+      )
       setShowOnHomeFeatured(initialCategory.show_on_home_featured)
       setHomeFeaturedLimit(initialCategory.home_featured_limit || 6)
       setShowOnMenu(initialCategory.show_on_menu)
@@ -221,7 +241,9 @@ export function CategoryFormModal({
       setBadgeColor("#C1440E")
 
       setIsActive(true)
-      setShowOnHomeBar(true)
+      setShowOnHomeBarMobile(true)
+      setShowOnHomeBarDesktop(true)
+      setShowOnHomeBarApp(true)
       setShowOnHomeFeatured(false)
       setHomeFeaturedLimit(6)
       setShowOnMenu(true)
@@ -247,7 +269,9 @@ export function CategoryFormModal({
       setBadgeColor("#C1440E")
 
       setIsActive(true)
-      setShowOnHomeBar(true)
+      setShowOnHomeBarMobile(true)
+      setShowOnHomeBarDesktop(true)
+      setShowOnHomeBarApp(true)
       setShowOnHomeFeatured(false)
       setHomeFeaturedLimit(6)
       setShowOnMenu(true)
@@ -537,6 +561,9 @@ export function CategoryFormModal({
             custom_href: null,
             is_active: true,
             show_on_home_bar: showOnHomeBar,
+            show_on_home_bar_mobile: showOnHomeBarMobile,
+            show_on_home_bar_desktop: showOnHomeBarDesktop,
+            show_on_home_bar_app: showOnHomeBarApp,
             home_bar_order: nextOrders.homeBar,
             show_on_home_featured: false,
             home_featured_order: nextOrders.homeFeatured,
@@ -562,6 +589,9 @@ export function CategoryFormModal({
             custom_href: kind === "home_shortcut" ? customHref.trim() || "/cardapio" : null,
             is_active: isActive,
             show_on_home_bar: showOnHomeBar,
+            show_on_home_bar_mobile: showOnHomeBarMobile,
+            show_on_home_bar_desktop: showOnHomeBarDesktop,
+            show_on_home_bar_app: showOnHomeBarApp,
             home_bar_order: initialCategory
               ? initialCategory.home_bar_order
               : nextOrders.homeBar,
@@ -802,7 +832,7 @@ export function CategoryFormModal({
                   <span>
                     {showOnHomeBar
                       ? "Importe o ícone 3D agora (ou selecione do banco abaixo). Com a opção ativada, esta categoria já aparece na Grade 3D da Home e na Prévia ao Vivo."
-                      : 'Importe o ícone 3D agora (ou selecione do banco abaixo). Com a opção desativada, esta categoria fica fora da Home (visível apenas no Cardápio) e aparece marcada como "Fora da Home" na Prévia ao Vivo para você ativar quando quiser.'}
+                      : "Importe o ícone 3D agora (ou selecione do banco abaixo). Com a opção desativada, esta categoria fica fora da Home (visível apenas no Cardápio). Você pode ativar ou desativar por plataforma (Site Mobile, Site Desktop, App) na lista de categorias em Categorias & Vitrine."}
                   </span>
                 </div>
 
@@ -893,7 +923,7 @@ export function CategoryFormModal({
                       <Switch
                         id="sw-quick-home-bar"
                         checked={showOnHomeBar}
-                        onCheckedChange={setShowOnHomeBar}
+                        onCheckedChange={setAllHomeBarProfiles}
                         disabled={isOffline || saving}
                         className="data-[state=checked]:bg-[#E3A008]"
                       />
@@ -1231,24 +1261,71 @@ export function CategoryFormModal({
                       />
                     </div>
 
-                    <div className="flex items-center justify-between gap-4 rounded-xl bg-white border border-[#ECE7E0] px-3.5 py-2.5">
-                      <div>
-                        <Label
-                          htmlFor="sw-home-bar"
-                          className="text-sm font-medium text-[#1F1B16] cursor-pointer"
-                        >
-                          Exibir na barra 3D da Home
-                        </Label>
-                        <p className="text-xs text-[#1F1B16]/60">
-                          Mostra o atalho visual na faixa superior de categorias da página inicial.
-                        </p>
+                    <div className="rounded-xl bg-white border border-[#ECE7E0] px-3.5 py-2.5 space-y-2.5">
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <Label
+                            htmlFor="sw-home-bar"
+                            className="text-sm font-medium text-[#1F1B16] cursor-pointer"
+                          >
+                            Exibir na barra 3D da Home
+                          </Label>
+                          <p className="text-xs text-[#1F1B16]/60">
+                            Mostra o atalho visual na faixa superior de categorias da página inicial.
+                          </p>
+                        </div>
+                        <Switch
+                          id="sw-home-bar"
+                          checked={showOnHomeBar}
+                          onCheckedChange={setAllHomeBarProfiles}
+                          className="data-[state=checked]:bg-[#E3A008]"
+                        />
                       </div>
-                      <Switch
-                        id="sw-home-bar"
-                        checked={showOnHomeBar}
-                        onCheckedChange={setShowOnHomeBar}
-                        className="data-[state=checked]:bg-[#E3A008]"
-                      />
+
+                      <div className="pt-2 border-t border-[#ECE7E0] flex flex-wrap items-center gap-1.5">
+                        <span className="text-[11px] font-medium text-[#1F1B16]/65 mr-1">
+                          Perfis ativos:
+                        </span>
+                        <button
+                          type="button"
+                          aria-pressed={showOnHomeBarMobile}
+                          onClick={() => setShowOnHomeBarMobile((v) => !v)}
+                          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+                            showOnHomeBarMobile
+                              ? "border-[#E3A008] bg-[#FEF8EC] text-[#8A6100]"
+                              : "border-[#ECE7E0] bg-[#FAF8F5] text-[#1F1B16]/55 hover:border-[#D5CBC0] hover:text-[#1F1B16]"
+                          }`}
+                        >
+                          <Smartphone className="w-3 h-3" />
+                          Site Mobile
+                        </button>
+                        <button
+                          type="button"
+                          aria-pressed={showOnHomeBarDesktop}
+                          onClick={() => setShowOnHomeBarDesktop((v) => !v)}
+                          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+                            showOnHomeBarDesktop
+                              ? "border-[#E3A008] bg-[#FEF8EC] text-[#8A6100]"
+                              : "border-[#ECE7E0] bg-[#FAF8F5] text-[#1F1B16]/55 hover:border-[#D5CBC0] hover:text-[#1F1B16]"
+                          }`}
+                        >
+                          <Monitor className="w-3 h-3" />
+                          Site Desktop
+                        </button>
+                        <button
+                          type="button"
+                          aria-pressed={showOnHomeBarApp}
+                          onClick={() => setShowOnHomeBarApp((v) => !v)}
+                          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+                            showOnHomeBarApp
+                              ? "border-[#C1440E] bg-[#FFF4EE] text-[#C1440E]"
+                              : "border-[#ECE7E0] bg-[#FAF8F5] text-[#1F1B16]/55 hover:border-[#D5CBC0] hover:text-[#1F1B16]"
+                          }`}
+                        >
+                          <TabletSmartphone className="w-3 h-3" />
+                          App
+                        </button>
+                      </div>
                     </div>
 
                     {kind === "product_category" && (

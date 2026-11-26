@@ -13,7 +13,7 @@ import {
 import { CategoryIcon } from "@/components/category-icon"
 
 const DEFAULT_HOME_BAR_ITEMS = DEFAULT_CATEGORIES.filter(
-  (c) => c.is_active && c.show_on_home_bar,
+  (c) => c.is_active && (c.show_on_home_bar_mobile || c.show_on_home_bar_desktop),
 )
 
 export interface CategoryBarProps {
@@ -28,11 +28,16 @@ export function CategoryBar({
   const gridRef = useRef<HTMLDivElement>(null)
   const [isFloating, setIsFloating] = useState(false)
   const isFloatingRef = useRef(false)
-  const [activeId, setActiveId] = useState<string>(() => items[0]?.id ?? "")
+  const visibleItems = items.filter(
+    (c) => c.show_on_home_bar_mobile || c.show_on_home_bar_desktop,
+  )
+  const hasMobileItems = visibleItems.some((c) => c.show_on_home_bar_mobile)
+  const hasDesktopItems = visibleItems.some((c) => c.show_on_home_bar_desktop)
+  const [activeId, setActiveId] = useState<string>(() => visibleItems[0]?.id ?? "")
   const gridLayout = useMemo(() => normalizeHomeGridLayout(layout), [layout])
 
   useEffect(() => {
-    if (items.length === 0) {
+    if (visibleItems.length === 0) {
       if (isFloatingRef.current) {
         isFloatingRef.current = false
         setIsFloating(false)
@@ -53,7 +58,9 @@ export function CategoryBar({
 
       // Quando o topo da grade de categorias alcança o topo da tela (<= 64px, altura do header)
       // O header sobe suavemente e a barra de categorias desce
-      if (!currentFloating && rect.top <= 64) {
+      if (rect.width === 0 && rect.height === 0) {
+        shouldFloat = false
+      } else if (!currentFloating && rect.top <= 64) {
         shouldFloat = true
       } else if (currentFloating && (rect.top >= 80 || window.scrollY <= 40)) {
         shouldFloat = false
@@ -85,17 +92,29 @@ export function CategoryBar({
       window.removeEventListener("resize", onScroll)
       if (rafId !== null) window.cancelAnimationFrame(rafId)
     }
-  }, [items.length])
+  }, [visibleItems.length])
 
-  if (items.length === 0) return null
+  if (visibleItems.length === 0) return null
 
-  const orderedItems = [...items].sort(
+  const orderedItems = [...visibleItems].sort(
     (a, b) => a.home_bar_order - b.home_bar_order || a.name.localeCompare(b.name),
   )
   const todosItem = orderedItems.find((c) => c.slug === "todos")
   const floatingItems = todosItem
     ? [todosItem, ...orderedItems.filter((c) => c.id !== todosItem.id)]
     : orderedItems
+  const sectionVisibilityClass =
+    hasMobileItems && !hasDesktopItems
+      ? "sm:hidden"
+      : !hasMobileItems && hasDesktopItems
+        ? "hidden sm:block"
+        : ""
+  const floatingNavVisibilityClass =
+    hasMobileItems && !hasDesktopItems
+      ? "flex sm:hidden"
+      : !hasMobileItems && hasDesktopItems
+        ? "hidden sm:flex"
+        : "flex"
 
   const gridVars = {
     "--cat-cols-m": String(gridLayout.mobile_columns),
@@ -118,7 +137,7 @@ export function CategoryBar({
       <section
         ref={gridRef}
         aria-label="Categorias"
-        className="py-4 px-4 bg-white border-b border-[#ECE7E0]"
+        className={`py-4 px-4 bg-white border-b border-[#ECE7E0] ${sectionVisibilityClass}`.trim()}
       >
         <div className="container mx-auto max-w-5xl">
           <div
@@ -128,8 +147,16 @@ export function CategoryBar({
             {orderedItems.map((cat) => {
               const isActive = activeId === cat.id
               const href = getCategoryHref(cat)
+              const showMobile = cat.show_on_home_bar_mobile
+              const showDesktop = cat.show_on_home_bar_desktop
+              const itemGridVisibility =
+                showMobile && !showDesktop
+                  ? "grid sm:hidden min-w-0"
+                  : !showMobile && showDesktop
+                    ? "hidden sm:grid min-w-0"
+                    : "grid min-w-0"
               return (
-                <ScrollReveal key={cat.id} className="grid min-w-0">
+                <ScrollReveal key={cat.id} className={itemGridVisibility}>
                   <Link
                     href={href}
                     onClick={() => setActiveId(cat.id)}
@@ -177,7 +204,7 @@ export function CategoryBar({
       {/* 2. Barra Flutuante de Categorias Fixa no topo com transição suave */}
       <nav
         aria-label="Categorias fixas no topo"
-        className={`fixed top-0 left-0 right-0 z-40 h-[60px] bg-white/95 backdrop-blur-md shadow-sm border-b border-[#ECE7E0] flex items-center transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        className={`fixed top-0 left-0 right-0 z-40 h-[60px] bg-white/95 backdrop-blur-md shadow-sm border-b border-[#ECE7E0] ${floatingNavVisibilityClass} items-center transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
           isFloating
             ? "translate-y-0 opacity-100 pointer-events-auto"
             : "-translate-y-full opacity-0 pointer-events-none"
@@ -191,6 +218,12 @@ export function CategoryBar({
             {floatingItems.map((cat) => {
               const isActive = activeId === cat.id
               const href = getCategoryHref(cat)
+              const itemFloatVisibility =
+                cat.show_on_home_bar_mobile && !cat.show_on_home_bar_desktop
+                  ? "flex sm:hidden"
+                  : !cat.show_on_home_bar_mobile && cat.show_on_home_bar_desktop
+                    ? "hidden sm:flex"
+                    : "flex"
               if (cat.slug === "todos") {
                 return (
                   <Link
@@ -198,7 +231,7 @@ export function CategoryBar({
                     href={href}
                     aria-label={cat.name || "Ver mais"}
                     onClick={() => setActiveId(cat.id)}
-                    className={`group flex items-center justify-center shrink-0 w-10 h-10 rounded-full border transition-all active:scale-[0.98] ${
+                    className={`group ${itemFloatVisibility} items-center justify-center shrink-0 w-10 h-10 rounded-full border transition-all active:scale-[0.98] ${
                       isActive
                         ? "bg-[#FEF8EC] border-[#E3A008]"
                         : "bg-[#F3F0EB] md:bg-white border-[#ECE7E0] hover:border-[#E3A008]/50"
@@ -222,7 +255,7 @@ export function CategoryBar({
                   key={cat.id}
                   href={href}
                   onClick={() => setActiveId(cat.id)}
-                  className="group relative flex items-center shrink-0 py-1 active:scale-[0.98] transition-transform"
+                  className={`group relative ${itemFloatVisibility} items-center shrink-0 py-1 active:scale-[0.98] transition-transform`}
                 >
                   <span
                     className={`h-9 pl-11 pr-3.5 rounded-full flex items-center gap-1.5 text-xs font-bold leading-none transition-colors border ${

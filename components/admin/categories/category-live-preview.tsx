@@ -4,7 +4,6 @@ import { useMemo, useRef, useState, type DragEvent } from "react"
 import {
   AlertCircle,
   ArrowLeftRight,
-  Check,
   ChevronDown,
   Copy,
   Eye,
@@ -22,6 +21,7 @@ import {
   UtensilsCrossed,
 } from "lucide-react"
 import {
+  getHomeBarCategories,
   getHomeFeaturedCategories,
   getMenuCategories,
   type CategoryWithCounts,
@@ -81,8 +81,8 @@ export interface CategoryLivePreviewProps {
   ) => void
   onSaveChanges?: () => void
   onDiscardChanges?: () => void
-  togglingHomeBarIds?: Record<string, boolean>
-  onToggleHomeBar?: (category: CategoryWithCounts, nextValue: boolean) => void
+  viewport?: HomeGridProfile
+  onViewportChange?: (next: HomeGridProfile) => void
 }
 
 type PreviewViewport = HomeGridProfile
@@ -212,10 +212,16 @@ export function CategoryLivePreview({
   onReorderMenu,
   onSaveChanges,
   onDiscardChanges,
-  togglingHomeBarIds,
-  onToggleHomeBar,
+  viewport: controlledViewport,
+  onViewportChange,
 }: CategoryLivePreviewProps) {
-  const [viewport, setViewport] = useState<PreviewViewport>("mobile")
+  const [internalViewport, setInternalViewport] =
+    useState<PreviewViewport>("mobile")
+  const viewport = controlledViewport ?? internalViewport
+  const setViewport = (next: PreviewViewport) => {
+    if (onViewportChange) onViewportChange(next)
+    else setInternalViewport(next)
+  }
   const [simulateStoreAutoHide, setSimulateStoreAutoHide] = useState(false)
   const [layoutEditorOpen, setLayoutEditorOpen] = useState(false)
   const [fineTuningOpen, setFineTuningOpen] = useState(false)
@@ -232,14 +238,8 @@ export function CategoryLivePreview({
   const lastDragEndAtRef = useRef(0)
   const isDraggingRef = useRef(false)
 
-  const isTogglingAnyHomeBar = Object.values(togglingHomeBarIds ?? {}).some(
-    Boolean
-  )
   const canDragHomeBar =
-    !writesDisabled &&
-    !savingChanges &&
-    !isTogglingAnyHomeBar &&
-    Boolean(onReorderHomeBar)
+    !writesDisabled && !savingChanges && Boolean(onReorderHomeBar)
   const canDragHomeFeatured =
     !writesDisabled && !savingChanges && Boolean(onReorderHomeFeatured)
   const canDragMenu =
@@ -446,15 +446,13 @@ export function CategoryLivePreview({
     return preview
   }, [categories, simulateStoreAutoHide])
 
-  const previewHomeBarCategories = useMemo(() => {
-    return categories
-      .filter((cat) => cat.is_active)
-      .sort(
-        (a, b) =>
-          a.home_bar_order - b.home_bar_order ||
-          a.name.localeCompare(b.name, "pt-BR")
-      )
-  }, [categories])
+  const previewHomeBarCategories = useMemo(
+    () =>
+      getHomeBarCategories(categories, previewCountsBySlug, viewport)
+        .map((cat) => categoryById.get(cat.id))
+        .filter((cat): cat is CategoryWithCounts => Boolean(cat)),
+    [categories, previewCountsBySlug, viewport, categoryById]
+  )
 
   const displayedHomeBarItems = useMemo<HomeBarRenderItem[]>(() => {
     const realItems: HomeBarRenderItem[] = previewHomeBarCategories.map(
@@ -494,11 +492,7 @@ export function CategoryLivePreview({
       .filter((cat): cat is CategoryWithCounts => Boolean(cat))
   }, [categories, previewCountsBySlug, categoryById])
 
-  const storeVisibleHomeBarCount = useMemo(
-    () =>
-      categories.filter((cat) => cat.is_active && cat.show_on_home_bar).length,
-    [categories]
-  )
+  const storeVisibleHomeBarCount = previewHomeBarCategories.length
 
   const emptyHiddenCount = useMemo(() => {
     return categories.filter(
@@ -738,7 +732,7 @@ export function CategoryLivePreview({
             <p className="text-[11px] text-[#6E6258]">
               {!writesDisabled &&
               (onReorderHomeBar || onReorderHomeFeatured || onReorderMenu)
-                ? "Arraste para reordenar · Clique no botão para ativar na Home"
+                ? "Arraste para reordenar · Clique no ícone para editar"
                 : "Atualiza em tempo real conforme você organiza"}
             </p>
           </div>
@@ -836,7 +830,7 @@ export function CategoryLivePreview({
               Destaques e Cardápio ocultam categorias com{" "}
               <strong>0 ativos</strong> automaticamente ({emptyHiddenCount}{" "}
               {emptyHiddenCount === 1 ? "vazia" : "vazias"}). Na Grade 3D, vale
-              o botão de cada ícone.
+              a seleção de cada perfil à esquerda.
             </span>
           </p>
         )}
@@ -862,7 +856,7 @@ export function CategoryLivePreview({
               </h4>
             </div>
             <span className="shrink-0 rounded-full bg-[#FEF8EC] px-2 py-0.5 text-[10px] font-semibold text-[#8A6100] border border-[#E3A008]/30">
-              {storeVisibleHomeBarCount} na loja
+              {storeVisibleHomeBarCount} no {activeProfileLabel}
             </span>
           </div>
 
@@ -1264,7 +1258,8 @@ export function CategoryLivePreview({
 
           {displayedHomeBarItems.length === 0 ? (
             <div className="rounded-lg border border-dashed border-[#ECE7E0] bg-[#F7F5F0]/70 px-3 py-5 text-center text-[11px] text-[#7A6E63]">
-              Nenhuma categoria ativa para exibir na Grade 3D.
+              Nenhuma categoria ativa no {activeProfileLabel}. Ative pela lista
+              à esquerda.
             </div>
           ) : isApp ? (
             /* Moldura Fiel do App Batata Top (~390px) */
@@ -1344,14 +1339,6 @@ export function CategoryLivePreview({
                     }
 
                     const { category: cat } = entry
-                    const isOnHome = cat.show_on_home_bar
-                    const isTogglingHome = Boolean(togglingHomeBarIds?.[cat.id])
-                    const isToggleDisabled =
-                      writesDisabled ||
-                      savingChanges ||
-                      isTogglingHome ||
-                      !onToggleHomeBar
-                    const compactToggleLabel = isDesktop && activeCols >= 7
                     const isDragging =
                       dragState?.section === "home_bar" &&
                       dragState.id === cat.id
@@ -1424,8 +1411,6 @@ export function CategoryLivePreview({
                             "relative w-full flex items-center justify-center transition-all",
                             isDropTarget
                               ? "bg-[#FEF8EC] ring-2 ring-[#E3A008]"
-                              : !isOnHome
-                              ? "bg-[#F7F5F0]/60 outline-1 outline-dashed outline-[#D8CEC1] opacity-65"
                               : "bg-[#F7F4EF] group-hover:bg-[#F3ECE0]"
                           )}
                         >
@@ -1449,10 +1434,7 @@ export function CategoryLivePreview({
 
                           <div
                             style={{ width: appIconSize }}
-                            className={cn(
-                              "aspect-square max-w-full flex items-center justify-center pointer-events-none",
-                              !isOnHome && "grayscale-[35%]"
-                            )}
+                            className="aspect-square max-w-full flex items-center justify-center pointer-events-none"
                           >
                             <CategoryIcon
                               iconUrl={cat.icon_url}
@@ -1476,63 +1458,6 @@ export function CategoryLivePreview({
                         >
                           {cat.name}
                         </span>
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={isOnHome}
-                          draggable
-                          onDragStart={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                          }}
-                          disabled={isToggleDisabled}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.stopPropagation()
-                            }
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onToggleHomeBar?.(cat, !isOnHome)
-                          }}
-                          aria-label={
-                            isOnHome
-                              ? `Desativar ${cat.name} na Home`
-                              : `Ativar ${cat.name} na Home`
-                          }
-                          title={
-                            isOnHome
-                              ? `Ativado na Home — clique para tirar da Home`
-                              : `Desativado na Home — clique para ativar na Home`
-                          }
-                          className={cn(
-                            "mt-1.5 inline-flex min-h-6 w-full max-w-[92px] items-center justify-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] disabled:cursor-not-allowed disabled:opacity-50",
-                            isOnHome
-                              ? "bg-[#E3A008] text-white shadow-2xs hover:bg-[#C98D06]"
-                              : "border border-[#D5CBC0] bg-white text-[#6E6258] hover:border-[#E3A008] hover:bg-[#FEF8EC] hover:text-[#8A6100]"
-                          )}
-                        >
-                          {isTogglingHome ? (
-                            <Loader2 className="size-2.5 shrink-0 animate-spin" />
-                          ) : isOnHome ? (
-                            <Check className="size-2.5 shrink-0 stroke-[3]" />
-                          ) : (
-                            <span
-                              aria-hidden="true"
-                              className="size-2 rounded-full border border-current shrink-0"
-                            />
-                          )}
-                          <span className="truncate">
-                            {isOnHome
-                              ? compactToggleLabel
-                                ? "Home"
-                                : "Na Home"
-                              : compactToggleLabel
-                              ? "Off"
-                              : "Fora"}
-                          </span>
-                        </button>
                       </div>
                     )
                   })}
@@ -1603,14 +1528,6 @@ export function CategoryLivePreview({
                 }
 
                 const { category: cat } = entry
-                const isOnHome = cat.show_on_home_bar
-                const isTogglingHome = Boolean(togglingHomeBarIds?.[cat.id])
-                const isToggleDisabled =
-                  writesDisabled ||
-                  savingChanges ||
-                  isTogglingHome ||
-                  !onToggleHomeBar
-                const compactToggleLabel = isDesktop && activeCols >= 7
                 const isDragging =
                   dragState?.section === "home_bar" && dragState.id === cat.id
                 const isDropTarget =
@@ -1670,9 +1587,7 @@ export function CategoryLivePreview({
                       isDragging && "opacity-45 scale-[0.97]",
                       isDropTarget
                         ? "border-[#E3A008] ring-2 ring-[#E3A008]/40 bg-[#FEF8EC]"
-                        : !isOnHome
-                        ? "border-dashed border-[#D8CEC1] bg-[#FAF9F7] opacity-65 hover:opacity-90 hover:border-[#E3A008]/60"
-                        : "border-[#E3A008]/45 bg-[#FEF8EC]/30 hover:border-[#E3A008] hover:bg-[#FEF8EC]/50"
+                        : "border-[#ECE7E0] bg-[#F7F5F0]/60 hover:border-[#E3A008]/70 hover:bg-[#FEF8EC]/30"
                     )}
                   >
                     {canDragHomeBar && (
@@ -1701,10 +1616,7 @@ export function CategoryLivePreview({
 
                     <div
                       style={{ width: previewIcon }}
-                      className={cn(
-                        "mt-0.5 aspect-square max-w-full flex items-center justify-center pointer-events-none",
-                        !isOnHome && "grayscale-[35%]"
-                      )}
+                      className="mt-0.5 aspect-square max-w-full flex items-center justify-center pointer-events-none"
                     >
                       <CategoryIcon
                         iconUrl={cat.icon_url}
@@ -1723,63 +1635,6 @@ export function CategoryLivePreview({
                     >
                       {cat.name}
                     </span>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={isOnHome}
-                      draggable
-                      onDragStart={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                      }}
-                      disabled={isToggleDisabled}
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.stopPropagation()
-                        }
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onToggleHomeBar?.(cat, !isOnHome)
-                      }}
-                      aria-label={
-                        isOnHome
-                          ? `Desativar ${cat.name} na Home`
-                          : `Ativar ${cat.name} na Home`
-                      }
-                      title={
-                        isOnHome
-                          ? `Ativado na Home — clique para tirar da Home`
-                          : `Desativado na Home — clique para ativar na Home`
-                      }
-                      className={cn(
-                        "mt-1.5 inline-flex min-h-6 w-full max-w-[92px] items-center justify-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] disabled:cursor-not-allowed disabled:opacity-50",
-                        isOnHome
-                          ? "bg-[#E3A008] text-white shadow-2xs hover:bg-[#C98D06]"
-                          : "border border-[#D5CBC0] bg-white text-[#6E6258] hover:border-[#E3A008] hover:bg-[#FEF8EC] hover:text-[#8A6100]"
-                      )}
-                    >
-                      {isTogglingHome ? (
-                        <Loader2 className="size-2.5 shrink-0 animate-spin" />
-                      ) : isOnHome ? (
-                        <Check className="size-2.5 shrink-0 stroke-[3]" />
-                      ) : (
-                        <span
-                          aria-hidden="true"
-                          className="size-2 rounded-full border border-current shrink-0"
-                        />
-                      )}
-                      <span className="truncate">
-                        {isOnHome
-                          ? compactToggleLabel
-                            ? "Home"
-                            : "Na Home"
-                          : compactToggleLabel
-                          ? "Off"
-                          : "Fora"}
-                      </span>
-                    </button>
                   </div>
                 )
               })}
@@ -2187,7 +2042,7 @@ export function CategoryLivePreview({
                 setScaleOverride({})
                 onDiscardChanges?.()
               }}
-              disabled={savingChanges || isTogglingAnyHomeBar}
+              disabled={savingChanges || writesDisabled}
               className="h-7 px-2.5 text-xs border-[#ECE7E0] bg-white text-[#5C5248] hover:bg-[#F7F5F0]"
             >
               Descartar
@@ -2196,7 +2051,7 @@ export function CategoryLivePreview({
               type="button"
               size="sm"
               onClick={onSaveChanges}
-              disabled={savingChanges || writesDisabled || isTogglingAnyHomeBar}
+              disabled={savingChanges || writesDisabled}
               className="h-7 px-2.5 text-xs bg-[#E3A008] hover:bg-[#c88c06] text-white font-bold"
             >
               {savingChanges ? (
