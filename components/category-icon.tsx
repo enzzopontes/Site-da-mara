@@ -158,7 +158,8 @@ export function CategoryIcon({
   }
 
   const IconComp = getLucideIconComponent(fallbackIcon)
-  const color = accentColor || "#E3A008"
+  const rawColor = (accentColor || "").trim()
+  const color = /^#[0-9a-fA-F]{6}$/.test(rawColor) ? rawColor : "#E3A008"
   const bgStyle: CSSProperties = {
     backgroundColor: `${color}1A`,
     color,
