@@ -13,8 +13,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { HeaderWrapper } from "@/components/header-wrapper"
-import { Footer } from "@/components/footer"
 import {
   ArrowLeft,
   Edit,
@@ -667,8 +665,6 @@ export default function AdminProdutosPage() {
 
   return (
     <div className="min-h-screen bg-[#F7F7F8] flex flex-col">
-      <HeaderWrapper />
-
       <main className="container mx-auto px-4 py-6 max-w-6xl flex-1">
         {isOffline && (
           <div
@@ -1092,8 +1088,6 @@ export default function AdminProdutosPage() {
           </div>
         )}
       </main>
-
-      <Footer />
 
       {/* Dialog para Produtos */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

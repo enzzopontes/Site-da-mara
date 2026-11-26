@@ -3,8 +3,6 @@
 import { appToast } from "@/lib/app-toast"
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react"
-import { HeaderWrapper } from "@/components/header-wrapper"
-import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -309,8 +307,6 @@ export default function AdminCaixaPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F8FAFC]">
-      <HeaderWrapper />
-      
       <main className="flex-1 py-8 px-4 md:px-8">
         <div className="max-w-6xl mx-auto space-y-8">
           
@@ -815,8 +811,6 @@ export default function AdminCaixaPage() {
           </div>
         </DialogContent>
       </Dialog>
-
-      <Footer />
     </div>
   )
 }

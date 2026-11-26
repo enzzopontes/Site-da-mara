@@ -223,7 +223,7 @@ export function Header({ variant = "default" }: HeaderProps) {
     return false
   }
 
-  if (pathname === "/checkout" || pathname?.startsWith("/checkout")) return null
+  if (pathname === "/checkout" || pathname?.startsWith("/checkout") || pathname?.startsWith("/admin")) return null
 
   if (variant === "simple") {
     return (

@@ -36,6 +36,11 @@ function HeaderFallback({ variant = "default" }: HeaderProps) {
 }
 
 export function HeaderWrapper(props: HeaderProps) {
+  const pathname = usePathname()
+
+  if (pathname?.startsWith("/admin")) {
+    return null
+  }
 
   return (
     <Suspense fallback={<HeaderFallback {...props} />}>

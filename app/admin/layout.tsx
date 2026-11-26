@@ -630,7 +630,7 @@ export default function AdminLayout({
         </header>
 
         {/* Canvas de Conteúdo com Scroll Próprio */}
-        <main className="flex-1 overflow-y-auto bg-stone-50/70 [&>div>header]:hidden [&_footer]:hidden">
+        <main className="flex-1 overflow-y-auto bg-stone-50/70">
           {children}
         </main>
       </div>

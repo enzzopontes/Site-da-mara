@@ -3,8 +3,6 @@
 import { appToast } from "@/lib/app-toast"
 
 import { useEffect, useState, useRef } from "react"
-import { HeaderWrapper } from "@/components/header-wrapper"
-import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -452,8 +450,6 @@ export default function AdminImagensPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F8F9FA] text-[#1A1A1A]">
-      <HeaderWrapper />
-
       <main className="flex-1 py-8 px-4 md:px-8">
         <div className="container mx-auto max-w-7xl">
           {/* Header Bar */}
@@ -982,8 +978,6 @@ export default function AdminImagensPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <Footer />
     </div>
   )
 }

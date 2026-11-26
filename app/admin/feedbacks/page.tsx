@@ -3,8 +3,6 @@
 import { appToast } from "@/lib/app-toast"
 
 import { useEffect, useState, useMemo } from "react"
-import { HeaderWrapper } from "@/components/header-wrapper"
-import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { useAuth } from "@/lib/auth-context"
@@ -193,8 +191,6 @@ export default function AdminFeedbacksPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F7F8]">
-      <HeaderWrapper />
-
       <main className="flex-1 py-6 md:py-10 px-4 md:px-8">
         <div className="container mx-auto max-w-5xl">
           {/* Top Bar */}
@@ -518,8 +514,6 @@ export default function AdminFeedbacksPage() {
           </div>
         </div>
       </main>
-
-      <Footer />
     </div>
   )
 }

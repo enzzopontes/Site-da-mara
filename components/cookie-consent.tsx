@@ -79,7 +79,7 @@ export function CookieConsent() {
     saveConsent("custom", analyticsAllowed, marketingAllowed)
   }
 
-  if (!mounted) return null
+  if (!mounted || pathname?.startsWith("/admin")) return null
 
   return (
     <>

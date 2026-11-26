@@ -3,8 +3,6 @@
 import { appToast } from "@/lib/app-toast"
 
 import { useEffect, useState, useMemo } from "react"
-import { HeaderWrapper } from "@/components/header-wrapper"
-import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -432,8 +430,6 @@ export default function AdminPromocoesPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F7F7] text-gray-900 antialiased">
-      <HeaderWrapper />
-
       <main className="flex-1 py-8 px-4 md:px-8">
         <div className="container mx-auto max-w-6xl">
           
@@ -1260,8 +1256,6 @@ export default function AdminPromocoesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <Footer />
     </div>
   )
 }

@@ -3,8 +3,6 @@
 import { appToast } from "@/lib/app-toast"
 
 import { useEffect, useState, useRef } from "react"
-import { HeaderWrapper } from "@/components/header-wrapper"
-import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -348,8 +346,6 @@ export default function AdminPedidosPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F6F7F9]">
-      <HeaderWrapper />
-
       {/* Comanda Térmica invisível na tela, visível apenas na impressão */}
       {receiptOrder && (
         <div id="thermal-receipt" className="hidden print:block print:w-[80mm] print:p-2 text-black font-mono text-xs leading-tight bg-white">
@@ -1078,8 +1074,6 @@ export default function AdminPedidosPage() {
           )}
         </div>
       </main>
-
-      <Footer />
 
       <AlertDialog
         open={Boolean(pendingConfirm)}

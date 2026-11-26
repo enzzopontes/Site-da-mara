@@ -3,8 +3,6 @@
 import { appToast } from "@/lib/app-toast"
 
 import { useEffect, useState, useCallback, useMemo } from "react"
-import { HeaderWrapper } from "@/components/header-wrapper"
-import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -227,7 +225,6 @@ export default function AdminAdministradoresPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F8F9FA]">
-      <HeaderWrapper />
       <main className="flex-1 py-8 px-4 md:px-6">
         <div className="container mx-auto max-w-5xl">
           {/* Top Bar Navigation */}
@@ -521,7 +518,6 @@ export default function AdminAdministradoresPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <Footer />
     </div>
   )
 }
