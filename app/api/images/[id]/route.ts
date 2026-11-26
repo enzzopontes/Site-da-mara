@@ -15,7 +15,9 @@ export async function GET(
       )
     }
 
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+    const isLegacyUploadId = /^[0-9]{10,16}-[a-z0-9]{6,16}$/i.test(id)
+    if (!isUuid && !isLegacyUploadId) {
       return NextResponse.json(
         { error: "Invalid image ID" },
         { status: 400 }
@@ -31,7 +33,7 @@ export async function GET(
       .eq("id", id)
       .single()
 
-    if (error || !data) {
+    if (error || !data || typeof data.data !== "string" || data.data.length === 0) {
       return NextResponse.json(
         { error: "Image not found" },
         { status: 404 }
@@ -40,12 +42,34 @@ export async function GET(
 
     // Converte base64 para Buffer
     const buffer = Buffer.from(data.data, "base64")
+    if (buffer.length === 0) {
+      return NextResponse.json(
+        { error: "Image not found" },
+        { status: 404 }
+      )
+    }
 
-    // Whitelist segura de MIME types (bloqueia SVG executável)
+    // Detecta assinatura binária real (magic bytes) para não confiar cegamente no mime_type do banco
+    const detectMagicMime = (buf: Buffer): string | null => {
+      if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg"
+      if (buf.length >= 4 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return "image/png"
+      if (buf.length >= 4 && buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38) return "image/gif"
+      if (
+        buf.length >= 12 &&
+        buf.subarray(0, 4).toString("ascii") === "RIFF" &&
+        buf.subarray(8, 12).toString("ascii") === "WEBP"
+      ) {
+        return "image/webp"
+      }
+      return null
+    }
+
+    // Whitelist segura de MIME types (bloqueia SVG executável e valida magic bytes)
     const rawMime = (data.mime_type || "image/jpeg").toLowerCase().trim()
     const safeMimes = ["image/jpeg", "image/png", "image/webp", "image/gif"]
-    const isSafeMime = safeMimes.includes(rawMime)
-    const contentType = isSafeMime ? rawMime : "application/octet-stream"
+    const magicMime = detectMagicMime(buffer)
+    const isSafeMime = safeMimes.includes(rawMime) && magicMime !== null
+    const contentType = isSafeMime ? magicMime : "application/octet-stream"
 
     // Retorna a imagem com cabeçalhos rígidos de isolamento
     const responseHeaders: Record<string, string> = {
