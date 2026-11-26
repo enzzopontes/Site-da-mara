@@ -30,11 +30,11 @@ import {
   Mail,
   AlertCircle,
   RefreshCw,
-  Search,
   KeyRound,
   Users,
   CheckCircle2,
 } from "lucide-react"
+import { useAdminHeaderSearch } from "@/components/admin/admin-header-search-context"
 import { isAdmin as checkIsAdmin } from "@/lib/supabase/admin"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import Link from "next/link"
@@ -78,7 +78,10 @@ export default function AdminAdministradoresPage() {
 
   const [admins, setAdmins] = useState<AdminItem[]>([])
   const [loadingAdmins, setLoadingAdmins] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
+  const { query: searchTerm } = useAdminHeaderSearch({
+    placeholder: "Filtrar por e-mail...",
+    ariaLabel: "Filtrar administradores por e-mail",
+  })
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
@@ -355,16 +358,6 @@ export default function AdminAdministradoresPage() {
               </div>
 
               <div className="flex items-center gap-2.5">
-                <div className="relative w-full sm:w-64">
-                  <Search className="h-4 w-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <Input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Filtrar por e-mail..."
-                    className="pl-9 h-9 text-xs border-gray-200 rounded-lg"
-                  />
-                </div>
                 <Button
                   variant="outline"
                   size="sm"

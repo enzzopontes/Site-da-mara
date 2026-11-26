@@ -32,7 +32,6 @@ import {
   RefreshCw,
   RotateCcw,
   Save,
-  Search,
   Smartphone,
   Sparkles,
   TabletSmartphone,
@@ -40,8 +39,8 @@ import {
   Trophy,
   UtensilsCrossed,
   WifiOff,
-  X,
 } from "lucide-react"
+import { useAdminHeaderSearch } from "@/components/admin/admin-header-search-context"
 import { toast } from "sonner"
 import {
   getCategoryShowOnHomeBarForProfile,
@@ -153,7 +152,10 @@ export default function AdminCategoriasPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("todas")
   const [previewViewport, setPreviewViewport] =
     useState<HomeGridProfile>("mobile")
-  const [searchQuery, setSearchQuery] = useState("")
+  const { query: searchQuery, setQuery: setSearchQuery } = useAdminHeaderSearch({
+    placeholder: "Buscar nome ou slug...",
+    ariaLabel: "Buscar categorias",
+  })
   const [kindFilter, setKindFilter] = useState<KindFilter>("all")
   const [previewSheetOpen, setPreviewSheetOpen] = useState(false)
 
@@ -1202,29 +1204,8 @@ export default function AdminCategoriasPage() {
             </div>
           )}
 
-          {/* Search & Kind Filter */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-            <div className="relative flex-1 sm:w-56">
-              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#8B7E72]" />
-              <Input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar nome ou slug..."
-                aria-label="Buscar categorias"
-                className="pl-9 pr-8 h-9 border-[#ECE7E0] bg-[#F7F5F0]/70 focus-visible:ring-[#E3A008]/40"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery("")}
-                  aria-label="Limpar busca"
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8B7E72] hover:text-[#1F1A17]"
-                >
-                  <X className="size-3.5" />
-                </button>
-              )}
-            </div>
-
+          {/* Kind Filter */}
+          <div className="flex items-center">
             <div
               role="group"
               aria-label="Filtrar por tipo de categoria"

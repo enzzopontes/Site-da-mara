@@ -19,7 +19,6 @@ import {
   Plus,
   Trash2,
   Package,
-  Search,
   AlertCircle,
   Sparkles,
   Flame,
@@ -30,8 +29,8 @@ import {
   ExternalLink,
   FolderPlus,
   WifiOff,
-  X,
 } from "lucide-react"
+import { useAdminHeaderSearch } from "@/components/admin/admin-header-search-context"
 import Link from "next/link"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
@@ -101,7 +100,10 @@ export default function AdminProdutosPage() {
     | null
   >(null)
   const [activeTab, setActiveTab] = useState<string>("todos")
-  const [searchQuery, setSearchQuery] = useState("")
+  const { query: searchQuery } = useAdminHeaderSearch({
+    placeholder: "Buscar item...",
+    ariaLabel: "Buscar produtos ou adicionais",
+  })
 
   // Form states for products
   const [formName, setFormName] = useState("")
@@ -730,32 +732,8 @@ export default function AdminProdutosPage() {
         </div>
 
         {/* Sticky iFood Category Pills Bar */}
-        <div className="sticky top-0 z-20 bg-[#F7F7F8]/95 backdrop-blur-md pt-2.5 pb-3.5 -mx-4 px-4 border-b border-gray-200/80 mb-6 space-y-2.5">
-          {/* Row 1: Search Bar */}
-          <div className="flex items-center justify-center">
-            <div className="relative w-full max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-              <Input
-                placeholder="Buscar item..."
-                aria-label="Buscar produtos ou adicionais"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 pr-9 h-9 bg-white border-gray-200 focus:border-[#C1440E] rounded-xl text-sm"
-              />
-              {searchQuery.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery("")}
-                  aria-label="Limpar busca"
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex items-center justify-center h-7 w-7 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C1440E]"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Row 2: Category Pills */}
+        <div className="sticky top-0 z-20 bg-[#F7F7F8]/95 backdrop-blur-md py-3 -mx-4 px-4 border-b border-gray-200/80 mb-6">
+          {/* Category Pills */}
           <div className="min-w-0 w-full flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none md:flex-wrap md:overflow-visible md:pb-0">
             <button
               type="button"
@@ -1299,6 +1277,7 @@ export default function AdminProdutosPage() {
                     onSelect={setFormImage}
                     enabled={isDialogOpen}
                     usedUrls={usedImageUrls}
+                    preferredName={formName}
                   />
                   <div className="space-y-1 pt-0.5">
                     <Label htmlFor="product-image-url" className="text-[11px] font-medium text-gray-500">

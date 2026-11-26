@@ -25,10 +25,9 @@ import {
   RefreshCw,
   AlertTriangle,
   ExternalLink,
-  Search,
-  X,
   Sparkles,
 } from "lucide-react"
+import { useAdminHeaderSearch } from "@/components/admin/admin-header-search-context"
 import {
   imageUploadManager,
   UploadedImage,
@@ -115,7 +114,10 @@ export default function AdminImagensPage() {
   const [loadingImages, setLoadingImages] = useState(true)
   const [selectedCategory, setSelectedCategory] = useState<"all" | ImageCategory>("all")
   const [uploadCategory, setUploadCategory] = useState<ImageCategory>("product")
-  const [searchQuery, setSearchQuery] = useState("")
+  const { query: searchQuery } = useAdminHeaderSearch({
+    placeholder: "Buscar imagem por nome...",
+    ariaLabel: "Buscar imagem por nome",
+  })
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [dimensions, setDimensions] = useState<Record<string, string>>({})
   const [updatingCategoryIds, setUpdatingCategoryIds] = useState<Record<string, boolean>>({})
@@ -599,8 +601,8 @@ export default function AdminImagensPage() {
 
           {/* Library Section */}
           <div className="space-y-4">
-            {/* Filter & Search Bar */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-stone-200/80 shadow-sm">
+            {/* Filter Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-stone-200/80 shadow-sm">
               {/* Category Pills */}
               <div className="flex flex-wrap items-center gap-1.5">
                 {CATEGORIES.map(cat => (
@@ -624,28 +626,6 @@ export default function AdminImagensPage() {
                     </span>
                   </button>
                 ))}
-              </div>
-
-              {/* Search Field */}
-              <div className="relative w-full md:w-auto md:min-w-[240px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
-                <input
-                  type="text"
-                  placeholder="Buscar imagem por nome..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-9 py-2 text-base sm:text-xs font-medium bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-all"
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    aria-label="Limpar busca"
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 text-stone-400 hover:text-stone-600"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
               </div>
             </div>
 

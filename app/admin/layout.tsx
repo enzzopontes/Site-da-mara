@@ -12,6 +12,10 @@ import { storeStatusManager, StoreStatus } from "@/lib/store-status-manager"
 import { BusinessHours } from "@/components/business-hours"
 import { AdminLayoutSkeleton } from "@/components/skeletons/admin-skeleton"
 import {
+  AdminHeaderSearchProvider,
+  useAdminHeaderSearchState,
+} from "@/components/admin/admin-header-search-context"
+import {
   LayoutDashboard,
   ShoppingBag,
   Package,
@@ -31,6 +35,7 @@ import {
   ChevronRight,
   Flame,
   Bell,
+  Search,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -61,9 +66,26 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode
 }) {
+  return (
+    <AdminHeaderSearchProvider>
+      <AdminLayoutContent>{children}</AdminLayoutContent>
+    </AdminHeaderSearchProvider>
+  )
+}
+
+function AdminLayoutContent({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   const { user, loading, signOut } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
+  const {
+    config: searchConfig,
+    query: searchQuery,
+    setQuery: setSearchQuery,
+  } = useAdminHeaderSearchState()
 
   const [isAdmin, setIsAdmin] = useState(false)
   const [checkingAuth, setCheckingAuth] = useState(true)
@@ -528,105 +550,163 @@ export default function AdminLayout({
       {/* ÁREA PRINCIPAL: TOPBAR + CANVAS SCROLLÁVEL */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Topbar iFood Partner Style */}
-        <header className="h-16 bg-white border-b border-stone-200 px-4 md:px-6 flex items-center justify-between shrink-0 z-20 shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setMobileMenuOpen(true)}
-              className="p-2 -ml-2 text-stone-700 hover:text-black rounded-lg hover:bg-stone-100 lg:hidden"
-              aria-label="Abrir menu lateral"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-            <div>
-              <h2 className="text-base font-bold text-stone-900 tracking-tight">
-                {currentRouteName}
-              </h2>
-              <p className="text-[11px] text-stone-500 hidden sm:block">
-                Painel de Operações • Batata Top Gourmet
-              </p>
-            </div>
-          </div>
+        <header className="bg-white border-b border-stone-200 shrink-0 z-20 shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
+          <div className="h-16 px-4 md:px-6 flex items-center justify-between gap-3 md:gap-4">
+            <div className="flex items-center gap-3 md:gap-4 min-w-0 flex-1">
+              <div className="flex items-center gap-3 shrink-0">
+                <button
+                  onClick={() => setMobileMenuOpen(true)}
+                  className="p-2 -ml-2 text-stone-700 hover:text-black rounded-lg hover:bg-stone-100 lg:hidden"
+                  aria-label="Abrir menu lateral"
+                >
+                  <Menu className="h-5 w-5" />
+                </button>
+                <div className="min-w-0">
+                  <h2 className="text-base font-bold text-stone-900 tracking-tight truncate">
+                    {currentRouteName}
+                  </h2>
+                  <p className="text-[11px] text-stone-500 hidden sm:block truncate">
+                    Painel de Operações • Batata Top Gourmet
+                  </p>
+                </div>
+              </div>
 
-          <div className="flex items-center gap-2.5 sm:gap-3">
-            {/* Botão de Retorno à Loja / Home (Destacado e Claro) */}
-            <Link href="/">
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-2 h-9 px-3.5 rounded-xl border-[#E3A008]/40 bg-[#FEF8EC] text-[#8A6100] hover:bg-[#E3A008] hover:text-white font-bold text-xs shadow-2xs transition-all"
-                title="Voltar para a página inicial da loja"
-              >
-                <Store className="h-4 w-4" />
-                <span className="hidden xs:inline">Ir para a Loja</span>
-                <ExternalLink className="h-3 w-3 opacity-70" />
-              </Button>
-            </Link>
-
-            {/* Live Store Status Badge */}
-            <div
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
-                isStoreOpen
-                  ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                  : "bg-rose-50 text-rose-800 border-rose-200"
-              }`}
-            >
-              <span className="relative flex h-2 w-2">
-                <span
-                  className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                    isStoreOpen ? "bg-emerald-500" : "bg-rose-500"
-                  }`}
-                />
-                <span
-                  className={`relative inline-flex rounded-full h-2 w-2 ${
-                    isStoreOpen ? "bg-emerald-600" : "bg-rose-600"
-                  }`}
-                />
-              </span>
-              <span>{isStoreOpen ? "Loja Aberta" : "Loja Fechada"}</span>
+              {/* Barra de busca contextual na frente do título da página (Desktop/Tablet) */}
+              {searchConfig && (
+                <div className="hidden md:flex items-center flex-1 max-w-sm lg:max-w-md ml-1 lg:ml-2">
+                  <div className="relative w-full">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder={searchConfig.placeholder}
+                      aria-label={searchConfig.ariaLabel || searchConfig.placeholder}
+                      className="w-full h-9 pl-9 pr-8 rounded-xl border border-stone-200 bg-stone-50/80 text-sm text-stone-900 placeholder:text-stone-400 focus:bg-white focus:outline-none focus:border-[#E3A008] focus:ring-2 focus:ring-[#E3A008]/25 transition-all"
+                    />
+                    {searchQuery.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery("")}
+                        aria-label="Limpar busca"
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex items-center justify-center h-6 w-6 rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008]"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Quick Action: Horários de Funcionamento Modal */}
-            <Dialog open={isHoursModalOpen} onOpenChange={setIsHoursModalOpen}>
-              <DialogTrigger asChild>
+            <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+              {/* Botão de Retorno à Loja / Home (Destacado e Claro) */}
+              <Link href="/">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="hidden sm:inline-flex items-center gap-1.5 h-9 rounded-xl border-stone-300 font-semibold text-stone-700 hover:bg-stone-50 hover:text-stone-900"
+                  className="flex items-center gap-2 h-9 px-3.5 rounded-xl border-[#E3A008]/40 bg-[#FEF8EC] text-[#8A6100] hover:bg-[#E3A008] hover:text-white font-bold text-xs shadow-2xs transition-all"
+                  title="Voltar para a página inicial da loja"
                 >
-                  <Clock className="h-3.5 w-3.5 text-[#E3A008]" />
-                  <span>Horários</span>
+                  <Store className="h-4 w-4" />
+                  <span className="hidden xs:inline">Ir para a Loja</span>
+                  <ExternalLink className="h-3 w-3 opacity-70" />
                 </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle className="text-xl font-bold text-stone-900">
-                    Configuração de Horários & Entrega
-                  </DialogTitle>
-                </DialogHeader>
-                <div className="py-2">
-                  <BusinessHours showToggle={true} />
-                </div>
-              </DialogContent>
-            </Dialog>
+              </Link>
 
-            {/* Admin Profile Pill */}
-            <div className="flex items-center gap-2 pl-2 border-l border-stone-200">
-              <div className="h-8 w-8 rounded-full bg-[#E3A008]/20 text-[#C1440E] border border-[#E3A008]/40 font-black text-xs flex items-center justify-center">
-                {userInitial}
+              {/* Live Store Status Badge */}
+              <div
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
+                  isStoreOpen
+                    ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                    : "bg-rose-50 text-rose-800 border-rose-200"
+                }`}
+              >
+                <span className="relative flex h-2 w-2">
+                  <span
+                    className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                      isStoreOpen ? "bg-emerald-500" : "bg-rose-500"
+                    }`}
+                  />
+                  <span
+                    className={`relative inline-flex rounded-full h-2 w-2 ${
+                      isStoreOpen ? "bg-emerald-600" : "bg-rose-600"
+                    }`}
+                  />
+                </span>
+                <span>{isStoreOpen ? "Loja Aberta" : "Loja Fechada"}</span>
               </div>
-              <div className="hidden md:block text-left text-xs leading-tight">
-                <p className="font-bold text-stone-800 truncate max-w-[130px]">
-                  {user?.email?.split("@")[0]}
-                </p>
-                <Badge
-                  variant="outline"
-                  className="text-[9px] py-0 px-1 font-bold bg-amber-50 text-[#C1440E] border-amber-200"
-                >
-                  Admin
-                </Badge>
+
+              {/* Quick Action: Horários de Funcionamento Modal */}
+              <Dialog open={isHoursModalOpen} onOpenChange={setIsHoursModalOpen}>
+                <DialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="hidden sm:inline-flex items-center gap-1.5 h-9 rounded-xl border-stone-300 font-semibold text-stone-700 hover:bg-stone-50 hover:text-stone-900"
+                  >
+                    <Clock className="h-3.5 w-3.5 text-[#E3A008]" />
+                    <span>Horários</span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle className="text-xl font-bold text-stone-900">
+                      Configuração de Horários & Entrega
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="py-2">
+                    <BusinessHours showToggle={true} />
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              {/* Admin Profile Pill */}
+              <div className="flex items-center gap-2 pl-2 border-l border-stone-200">
+                <div className="h-8 w-8 rounded-full bg-[#E3A008]/20 text-[#C1440E] border border-[#E3A008]/40 font-black text-xs flex items-center justify-center">
+                  {userInitial}
+                </div>
+                <div className="hidden md:block text-left text-xs leading-tight">
+                  <p className="font-bold text-stone-800 truncate max-w-[130px]">
+                    {user?.email?.split("@")[0]}
+                  </p>
+                  <Badge
+                    variant="outline"
+                    className="text-[9px] py-0 px-1 font-bold bg-amber-50 text-[#C1440E] border-amber-200"
+                  >
+                    Admin
+                  </Badge>
+                </div>
               </div>
             </div>
           </div>
+
+          {/* Barra de busca contextual no header mobile */}
+          {searchConfig && (
+            <div className="md:hidden px-4 pb-2.5 pt-0.5">
+              <div className="relative w-full">
+                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={searchConfig.placeholder}
+                  aria-label={searchConfig.ariaLabel || searchConfig.placeholder}
+                  className="w-full h-9 pl-9 pr-8 rounded-xl border border-stone-200 bg-stone-50/80 text-sm text-stone-900 placeholder:text-stone-400 focus:bg-white focus:outline-none focus:border-[#E3A008] focus:ring-2 focus:ring-[#E3A008]/25 transition-all"
+                />
+                {searchQuery.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    aria-label="Limpar busca"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex items-center justify-center h-6 w-6 rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008]"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </header>
 
         {/* Canvas de Conteúdo com Scroll Próprio */}
