@@ -1,8 +1,9 @@
 "use client"
 
 import Link from "next/link"
-import { Phone, Instagram, MapPin, Clock, Heart, ShieldCheck, Mail } from "lucide-react"
+import { Phone, Instagram, MapPin, Clock, Heart, ShieldCheck, Mail, Cookie } from "lucide-react"
 import Image from "next/image"
+import { openCookiePreferences } from "@/components/cookie-consent"
 
 export function Footer() {
   return (
@@ -78,6 +79,17 @@ export function Footer() {
                 <Link href="/contato" className="text-gray-600 hover:text-amber-700 transition-colors text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 rounded px-1">
                   Fale Conosco
                 </Link>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  onClick={openCookiePreferences}
+                  aria-haspopup="dialog"
+                  className="inline-flex items-center gap-1.5 text-gray-600 hover:text-amber-700 transition-colors text-sm font-bold cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 rounded px-1"
+                >
+                  <Cookie className="w-4 h-4 text-amber-600 shrink-0" aria-hidden="true" />
+                  Preferências de Cookies
+                </button>
               </li>
             </ul>
           </div>
@@ -193,6 +205,15 @@ export function Footer() {
               <Link href="/privacidade" className="text-xs text-gray-700 hover:text-gray-950 font-bold transition-colors uppercase tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 rounded px-1">
                 Privacidade
               </Link>
+              <button
+                type="button"
+                onClick={openCookiePreferences}
+                aria-haspopup="dialog"
+                aria-label="Preferências de cookies"
+                className="text-xs text-gray-700 hover:text-gray-950 font-bold transition-colors uppercase tracking-tight cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 rounded px-1"
+              >
+                Cookies
+              </button>
               <Link href="/reembolso" className="text-xs text-gray-700 hover:text-gray-950 font-bold transition-colors uppercase tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 rounded px-1">
                 Reembolso &amp; CDC
               </Link>
