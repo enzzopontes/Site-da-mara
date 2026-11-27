@@ -226,6 +226,7 @@ export function FeaturedProducts({
                       <CategoryIcon
                         iconUrl={section3dIconUrl}
                         iconType="preset_3d"
+                        iconScale={cat.icon_scale}
                         fallbackIcon={cat.fallback_icon}
                         accentColor={cat.accent_color}
                         sizeClassName="w-7 h-7 sm:w-8 sm:h-8"

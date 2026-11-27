@@ -783,6 +783,7 @@ export default function AdminProdutosPage() {
                       iconType={cat.icon_type}
                       fallbackIcon={cat.fallback_icon}
                       accentColor={cat.accent_color}
+                      iconScale={cat.icon_scale}
                       sizeClassName="w-4 h-4 shrink-0"
                       iconClassName="w-3 h-3"
                     />
@@ -989,6 +990,7 @@ export default function AdminProdutosPage() {
                                       iconType={productCategory.icon_type}
                                       fallbackIcon={productCategory.fallback_icon}
                                       accentColor={productCategory.accent_color}
+                                      iconScale={productCategory.icon_scale}
                                       sizeClassName="w-3.5 h-3.5"
                                       iconClassName="w-2.5 h-2.5"
                                     />
@@ -1105,6 +1107,7 @@ export default function AdminProdutosPage() {
                               iconType={cat.icon_type}
                               fallbackIcon={cat.fallback_icon}
                               accentColor={cat.accent_color}
+                              iconScale={cat.icon_scale}
                               sizeClassName="w-4 h-4"
                               iconClassName="w-3 h-3"
                             />

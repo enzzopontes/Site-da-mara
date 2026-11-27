@@ -281,6 +281,7 @@ export function CardapioContent({
         id: sec.category.slug,
         label: sec.category.name,
         iconSrc: sec.category.icon_url || "",
+        iconScale: sec.category.icon_scale,
         category: sec.category,
         count: sec.products.length,
       })),
@@ -427,6 +428,7 @@ export function CardapioContent({
               <CategoryIcon
                 iconUrl={category.icon_url}
                 iconType={category.icon_type}
+                iconScale={category.icon_scale}
                 fallbackIcon={category.fallback_icon}
                 accentColor={category.accent_color}
                 sizeClassName="w-7 h-7"
@@ -467,6 +469,7 @@ export function CardapioContent({
             <CategoryIcon
               iconUrl={category.icon_url}
               iconType={category.icon_type}
+              iconScale={category.icon_scale}
               fallbackIcon={category.fallback_icon}
               accentColor={category.accent_color}
               sizeClassName="w-8 h-8 sm:w-9 sm:h-9"

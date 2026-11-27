@@ -178,6 +178,7 @@ export function CategoryBar({
                       <CategoryIcon
                         iconUrl={cat.icon_url}
                         iconType={cat.icon_type}
+                        iconScale={cat.icon_scale}
                         fallbackIcon={cat.fallback_icon}
                         accentColor={cat.accent_color}
                         alt={cat.name}
@@ -240,6 +241,7 @@ export function CategoryBar({
                     <CategoryIcon
                       iconUrl={cat.icon_url}
                       iconType={cat.icon_type}
+                      iconScale={cat.icon_scale}
                       fallbackIcon={cat.fallback_icon}
                       accentColor={cat.accent_color}
                       alt=""
@@ -281,6 +283,7 @@ export function CategoryBar({
                     <CategoryIcon
                       iconUrl={cat.icon_url}
                       iconType={cat.icon_type}
+                      iconScale={cat.icon_scale}
                       fallbackIcon={cat.fallback_icon}
                       accentColor={cat.accent_color}
                       alt=""

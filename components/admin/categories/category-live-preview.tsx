@@ -1441,6 +1441,7 @@ export function CategoryLivePreview({
                               iconType={cat.icon_type}
                               fallbackIcon={cat.fallback_icon}
                               accentColor={cat.accent_color}
+                              iconScale={cat.icon_scale}
                               alt={cat.name}
                               sizeClassName="w-full h-full"
                               iconClassName="w-[54%] h-[54%]"
@@ -1623,6 +1624,7 @@ export function CategoryLivePreview({
                         iconType={cat.icon_type}
                         fallbackIcon={cat.fallback_icon}
                         accentColor={cat.accent_color}
+                        iconScale={cat.icon_scale}
                         alt={cat.name}
                         sizeClassName="w-full h-full"
                         iconClassName="w-[54%] h-[54%]"
@@ -1753,6 +1755,7 @@ export function CategoryLivePreview({
                       iconType={cat.icon_type}
                       fallbackIcon={cat.fallback_icon}
                       accentColor={cat.accent_color}
+                      iconScale={cat.icon_scale}
                       alt={cat.name}
                       sizeClassName="w-7 h-7"
                       iconClassName="w-3.5 h-3.5"
@@ -2215,6 +2218,7 @@ function MenuWireframeCard({
           iconType={category.icon_type}
           fallbackIcon={category.fallback_icon}
           accentColor={category.accent_color}
+          iconScale={category.icon_scale}
           alt={category.name}
           sizeClassName={compact ? "w-5 h-5" : "w-6 h-6"}
           iconClassName={compact ? "w-3 h-3" : "w-3.5 h-3.5"}

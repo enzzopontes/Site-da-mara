@@ -1,5 +1,19 @@
 import { getSupabase } from "@/lib/supabase-fix"
-import { isSafeCategoryHref, normalizeLegacyCategorySlug } from "@/lib/category-icons"
+import {
+  CATEGORY_ICON_SCALE_DEFAULT,
+  CATEGORY_ICON_SCALE_MAX,
+  CATEGORY_ICON_SCALE_MIN,
+  isSafeCategoryHref,
+  normalizeCategoryIconScale,
+  normalizeLegacyCategorySlug,
+} from "@/lib/category-icons"
+
+export {
+  CATEGORY_ICON_SCALE_DEFAULT,
+  CATEGORY_ICON_SCALE_MAX,
+  CATEGORY_ICON_SCALE_MIN,
+  normalizeCategoryIconScale,
+}
 
 export type CategoryKind = "product_category" | "home_shortcut"
 export type CategoryIconType = "upload" | "preset_3d" | "lucide"
@@ -14,6 +28,7 @@ export interface Category {
   kind: CategoryKind
   icon_url: string | null
   icon_type: CategoryIconType
+  icon_scale: number
   fallback_icon: string
   accent_color: string
   badge_text: string | null
@@ -52,6 +67,7 @@ export const DEFAULT_CATEGORIES: Category[] = [
     kind: "home_shortcut",
     icon_url: "/assets/icones3d/icone cardapio.png",
     icon_type: "preset_3d",
+    icon_scale: 100,
     fallback_icon: "BookOpen",
     accent_color: "#E3A008",
     badge_text: null,
@@ -81,6 +97,7 @@ export const DEFAULT_CATEGORIES: Category[] = [
     kind: "product_category",
     icon_url: "/assets/icones3d/icone batata.png",
     icon_type: "preset_3d",
+    icon_scale: 100,
     fallback_icon: "Flame",
     accent_color: "#E3A008",
     badge_text: null,
@@ -110,6 +127,7 @@ export const DEFAULT_CATEGORIES: Category[] = [
     kind: "product_category",
     icon_url: "/assets/icones3d/icone macarrao.png",
     icon_type: "preset_3d",
+    icon_scale: 100,
     fallback_icon: "Utensils",
     accent_color: "#C1440E",
     badge_text: null,
@@ -139,6 +157,7 @@ export const DEFAULT_CATEGORIES: Category[] = [
     kind: "product_category",
     icon_url: "/assets/icones3d/icone bebidas geladas.png",
     icon_type: "preset_3d",
+    icon_scale: 100,
     fallback_icon: "CupSoda",
     accent_color: "#0284C7",
     badge_text: null,
@@ -168,6 +187,7 @@ export const DEFAULT_CATEGORIES: Category[] = [
     kind: "home_shortcut",
     icon_url: "/assets/icones3d/icone cupom.png",
     icon_type: "preset_3d",
+    icon_scale: 100,
     fallback_icon: "Ticket",
     accent_color: "#C1440E",
     badge_text: null,
@@ -197,6 +217,7 @@ export const DEFAULT_CATEGORIES: Category[] = [
     kind: "home_shortcut",
     icon_url: "/assets/icones3d/iconetodos.png",
     icon_type: "preset_3d",
+    icon_scale: 100,
     fallback_icon: "LayoutGrid",
     accent_color: "#E3A008",
     badge_text: null,
@@ -255,6 +276,7 @@ export function mapCategoryRow(row: Record<string, any>): Category {
       row.icon_type === "upload" || row.icon_type === "lucide"
         ? row.icon_type
         : "preset_3d",
+    icon_scale: normalizeCategoryIconScale(row.icon_scale),
     fallback_icon: row.fallback_icon || "UtensilsCrossed",
     accent_color: row.accent_color || "#E3A008",
     badge_text: row.badge_text ?? null,

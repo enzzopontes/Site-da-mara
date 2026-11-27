@@ -9,6 +9,7 @@ export interface MenuCategory {
   id: string
   label: string
   iconSrc: string
+  iconScale?: number
   count: number
   category?: Category
 }
@@ -148,6 +149,7 @@ export const MenuStickyNav = memo(function MenuStickyNav({
                     <CategoryIcon
                       iconUrl={cat.category.icon_url}
                       iconType={cat.category.icon_type}
+                      iconScale={cat.category.icon_scale}
                       fallbackIcon={cat.category.fallback_icon}
                       accentColor={cat.category.accent_color}
                       sizeClassName="w-5 h-5 md:w-5.5 md:h-5.5"
@@ -158,6 +160,7 @@ export const MenuStickyNav = memo(function MenuStickyNav({
                     <CategoryIcon
                       iconUrl={cat.iconSrc}
                       iconType="preset_3d"
+                      iconScale={cat.iconScale}
                       fallbackIcon={isTodos ? "LayoutGrid" : "UtensilsCrossed"}
                       accentColor="#E3A008"
                       sizeClassName={

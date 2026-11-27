@@ -55,7 +55,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import type { CategoryIconType } from "@/lib/categories-db"
-import { isSafeIconUrl } from "@/lib/category-icons"
+import { isSafeIconUrl, normalizeCategoryIconScale } from "@/lib/category-icons"
 
 const LUCIDE_ICON_MAP: Record<string, LucideIcon> = {
   UtensilsCrossed,
@@ -118,6 +118,7 @@ export function getLucideIconComponent(name?: string | null): LucideIcon {
 export interface CategoryIconProps {
   iconUrl?: string | null
   iconType?: CategoryIconType
+  iconScale?: number
   fallbackIcon?: string | null
   accentColor?: string | null
   alt?: string
@@ -129,6 +130,7 @@ export interface CategoryIconProps {
 export function CategoryIcon({
   iconUrl,
   iconType = "preset_3d",
+  iconScale = 100,
   fallbackIcon = "UtensilsCrossed",
   accentColor = "#E3A008",
   alt = "",
@@ -142,19 +144,28 @@ export function CategoryIcon({
     setImgError(false)
   }, [iconUrl, iconType])
 
+  const safeScale = normalizeCategoryIconScale(iconScale)
+  const scaleFactor = safeScale / 100
+
   const shouldShowImage =
     iconType !== "lucide" && Boolean(iconUrl) && isSafeIconUrl(iconUrl) && !imgError
 
   if (shouldShowImage && iconUrl) {
     return (
-      <img
-        src={iconUrl}
-        alt={alt}
-        decoding="async"
+      <span
         aria-hidden={alt === "" ? true : undefined}
-        onError={() => setImgError(true)}
-        className={`${sizeClassName} shrink-0 object-contain select-none ${className}`}
-      />
+        className={`${sizeClassName} relative inline-flex shrink-0 items-center justify-center overflow-hidden select-none ${className}`}
+      >
+        <img
+          src={iconUrl}
+          alt={alt}
+          loading="lazy"
+          decoding="async"
+          onError={() => setImgError(true)}
+          className="w-full h-full object-contain select-none"
+          style={safeScale !== 100 ? { transform: `scale(${scaleFactor})` } : undefined}
+        />
+      </span>
     )
   }
 

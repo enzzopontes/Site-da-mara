@@ -1419,6 +1419,7 @@ export default function AdminCategoriasPage() {
                                 iconType={cat.icon_type}
                                 fallbackIcon={cat.fallback_icon}
                                 accentColor={cat.accent_color}
+                                iconScale={cat.icon_scale}
                                 alt={cat.name}
                                 sizeClassName="w-10 h-10"
                                 iconClassName="w-5 h-5"
@@ -1774,6 +1775,7 @@ export default function AdminCategoriasPage() {
                         iconType={cat.icon_type}
                         fallbackIcon={cat.fallback_icon}
                         accentColor={cat.accent_color}
+                        iconScale={cat.icon_scale}
                         alt={cat.name}
                         sizeClassName="w-9 h-9"
                         iconClassName="w-4 h-4"
@@ -1936,6 +1938,7 @@ export default function AdminCategoriasPage() {
                           iconType={cat.icon_type}
                           fallbackIcon={cat.fallback_icon}
                           accentColor={cat.accent_color}
+                          iconScale={cat.icon_scale}
                           alt={cat.name}
                           sizeClassName="w-9 h-9"
                           iconClassName="w-4 h-4"
@@ -2132,6 +2135,7 @@ export default function AdminCategoriasPage() {
                           iconType={cat.icon_type}
                           fallbackIcon={cat.fallback_icon}
                           accentColor={cat.accent_color}
+                          iconScale={cat.icon_scale}
                           alt={cat.name}
                           sizeClassName="w-9 h-9"
                           iconClassName="w-4 h-4"

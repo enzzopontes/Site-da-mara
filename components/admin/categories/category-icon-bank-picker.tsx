@@ -17,18 +17,22 @@ import {
   RefreshCw,
   RotateCcw,
   Upload,
+  WifiOff,
   X,
 } from "lucide-react"
 import {
   listCategoryIconsAction,
   type CategoryBankIconItem,
 } from "@/app/admin/categorias/actions"
-import { PRESET_3D_ICONS, isSafeIconUrl } from "@/lib/category-icons"
 import {
-  ICON_ZOOM_MAX,
-  ICON_ZOOM_MIN,
-  type AnalyzedIconImage,
-} from "@/lib/icon-image-processor"
+  CATEGORY_ICON_SCALE_DEFAULT,
+  CATEGORY_ICON_SCALE_MAX,
+  CATEGORY_ICON_SCALE_MIN,
+  PRESET_3D_ICONS,
+  isSafeIconUrl,
+  normalizeCategoryIconScale,
+} from "@/lib/category-icons"
+import { type AnalyzedIconImage } from "@/lib/icon-image-processor"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
@@ -44,7 +48,7 @@ export interface CategoryIconBankPickerProps {
   pendingAnalyzedIcon: AnalyzedIconImage | null
   framedPreviewUrl: string | null
   framedUploadDirty: boolean
-  iconZoomPercent: number
+  iconScale: number
   useAutoTrim?: boolean
   hasExistingStorageIcon: boolean
   removeOldOnReplace: boolean
@@ -53,8 +57,8 @@ export interface CategoryIconBankPickerProps {
   onChangeUrl: (url: string, source: "preset_3d" | "upload" | "manual") => void
   onClearImage: () => void
   onSelectFile: (file: File) => void
-  onZoomChange: (zoom: number) => void
-  onAutoFit: () => void
+  onIconScaleChange: (scale: number) => void
+  onResetIconScale: () => void
   onUploadFramed: () => void
   onRetryUpload: () => void
   onToggleRemoveOld: (checked: boolean) => void
@@ -90,7 +94,7 @@ export function CategoryIconBankPicker({
   pendingAnalyzedIcon,
   framedPreviewUrl,
   framedUploadDirty,
-  iconZoomPercent,
+  iconScale,
   useAutoTrim = true,
   hasExistingStorageIcon,
   removeOldOnReplace,
@@ -99,8 +103,8 @@ export function CategoryIconBankPicker({
   onChangeUrl,
   onClearImage,
   onSelectFile,
-  onZoomChange,
-  onAutoFit,
+  onIconScaleChange,
+  onResetIconScale,
   onUploadFramed,
   onRetryUpload,
   onToggleRemoveOld,
@@ -109,6 +113,7 @@ export function CategoryIconBankPicker({
   const [storageIcons, setStorageIcons] = useState<CategoryBankIconItem[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isOffline, setIsOffline] = useState(false)
   const [hasLoaded, setHasLoaded] = useState(false)
   const [failedIds, setFailedIds] = useState<Record<string, boolean>>({})
   const [previewFailed, setPreviewFailed] = useState(false)
@@ -130,10 +135,17 @@ export function CategoryIconBankPicker({
   const safeFramedPreviewUrl = isSafeFramedPreviewDataUrl(framedPreviewUrl)
     ? framedPreviewUrl.trim()
     : null
+  const safeIconScale = normalizeCategoryIconScale(iconScale)
+  const scaleFactor = safeIconScale / 100
+  const activePreviewUrl =
+    safeFramedPreviewUrl ||
+    (normalizedValue && isSafeIconUrl(normalizedValue) ? normalizedValue : null)
   const activePreviewSrc = safeFramedPreviewUrl ?? normalizedValue
-  const isActivePreviewSafe = safeFramedPreviewUrl
-    ? true
-    : isSafeIconUrl(normalizedValue)
+  const isActivePreviewSafe = Boolean(activePreviewUrl)
+  const previewScaleStyle =
+    safeIconScale !== CATEGORY_ICON_SCALE_DEFAULT
+      ? { transform: `scale(${scaleFactor})` }
+      : undefined
   const isBusy = uploading || analyzing || Boolean(disabled)
   const displayCategoryLabel = categoryName?.trim() || "Categoria"
 
@@ -142,6 +154,15 @@ export function CategoryIconBankPicker({
   }, [activePreviewSrc])
 
   const loadIcons = useCallback(async () => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      requestIdRef.current += 1
+      setIsOffline(true)
+      setError(null)
+      setLoading(false)
+      return
+    }
+
+    setIsOffline(false)
     const currentRequestId = ++requestIdRef.current
     setLoading(true)
     setError(null)
@@ -162,6 +183,11 @@ export function CategoryIconBankPicker({
       if (!isMountedRef.current || requestIdRef.current !== currentRequestId) {
         return
       }
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        setIsOffline(true)
+        setError(null)
+        return
+      }
       const message =
         err instanceof Error && err.message
           ? err.message
@@ -173,6 +199,27 @@ export function CategoryIconBankPicker({
       }
     }
   }, [])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const handleOffline = () => {
+      setIsOffline(true)
+      setError(null)
+    }
+    const handleOnline = () => {
+      setIsOffline(false)
+      if (enabled) {
+        void loadIcons()
+      }
+    }
+    setIsOffline(typeof navigator !== "undefined" && !navigator.onLine)
+    window.addEventListener("offline", handleOffline)
+    window.addEventListener("online", handleOnline)
+    return () => {
+      window.removeEventListener("offline", handleOffline)
+      window.removeEventListener("online", handleOnline)
+    }
+  }, [enabled, loadIcons])
 
   useEffect(() => {
     if (!enabled) return
@@ -253,16 +300,19 @@ export function CategoryIconBankPicker({
       {/* 1. Selected Preview Bar */}
       {activePreviewSrc.length > 0 && (
         <div className="flex items-center gap-3 p-2.5 bg-white border border-gray-200 rounded-xl">
-          <div className="w-12 h-12 rounded-xl bg-[#F7F5F0] border border-[#ECE7E0] p-1 flex items-center justify-center shrink-0 overflow-hidden">
+          <div className="w-12 h-12 rounded-xl bg-[#F7F5F0] border border-[#ECE7E0] p-1 flex items-center justify-center shrink-0">
             {previewFailed || !isActivePreviewSafe ? (
               <ImageIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
             ) : (
-              <img
-                src={activePreviewSrc}
-                alt="Ícone 3D selecionado"
-                onError={() => setPreviewFailed(true)}
-                className="w-full h-full object-contain select-none"
-              />
+              <span className="w-full h-full overflow-hidden flex items-center justify-center">
+                <img
+                  src={activePreviewSrc}
+                  alt="Ícone 3D selecionado"
+                  onError={() => setPreviewFailed(true)}
+                  style={previewScaleStyle}
+                  className="w-full h-full object-contain select-none"
+                />
+              </span>
             )}
           </div>
           <div className="min-w-0 flex-1">
@@ -389,34 +439,53 @@ export function CategoryIconBankPicker({
         )}
       </div>
 
-      {/* 3. Estúdio de Enquadramento 3D */}
-      {pendingAnalyzedIcon && (
+      {/* 3. Tamanho / Zoom do Ícone 3D */}
+      {activePreviewUrl && (
         <div className="rounded-xl border border-[#E3A008]/40 bg-[#FEF8EC]/50 p-3 space-y-3">
-          {/* Status Pills */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            {useAutoTrim && pendingAnalyzedIcon.bounds.trimmed ? (
-              <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                -{pendingAnalyzedIcon.bounds.trimPercent}% de borda transparente removida
-              </span>
-            ) : (
-              <span className="inline-flex items-center rounded-full border border-[#ECE7E0] bg-white px-2 py-0.5 text-[11px] font-medium text-[#1F1B16]/75">
-                Sem bordas transparentes extras
-              </span>
-            )}
-            <span className="inline-flex items-center rounded-full border border-[#ECE7E0] bg-white px-2 py-0.5 text-[11px] font-medium text-[#1F1B16]/75">
-              512×512 PNG
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-[#1F1B16]">
+              Tamanho / Zoom do Ícone 3D
             </span>
-            {framedUploadDirty ? (
-              <span className="inline-flex items-center rounded-full border border-[#E3A008]/45 bg-[#FEF8EC] px-2 py-0.5 text-[11px] font-semibold text-[#8A6100]">
-                Pendente de envio — envia ao salvar
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                <Check className="h-3 w-3" aria-hidden="true" />
-                Enviado
-              </span>
-            )}
+            <span className="inline-flex items-center rounded-md bg-white border border-[#E3A008]/40 px-2 py-0.5 font-mono text-xs font-bold text-[#8A6100]">
+              {safeIconScale}%
+            </span>
           </div>
+
+          {/* Status Pills (upload pendente com auto-trim) */}
+          {pendingAnalyzedIcon && (
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {useAutoTrim && pendingAnalyzedIcon.bounds.trimmed ? (
+                  <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                    Auto-trim ativo · -{pendingAnalyzedIcon.bounds.trimPercent}% borda removida
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center rounded-full border border-[#ECE7E0] bg-white px-2 py-0.5 text-[11px] font-medium text-[#1F1B16]/75">
+                    Auto-trim ativo · Sem bordas extras
+                  </span>
+                )}
+                <span className="inline-flex items-center rounded-full border border-[#ECE7E0] bg-white px-2 py-0.5 text-[11px] font-medium text-[#1F1B16]/75">
+                  {pendingAnalyzedIcon.bounds.originalWidth}×
+                  {pendingAnalyzedIcon.bounds.originalHeight} → 512×512 PNG
+                </span>
+                {framedUploadDirty ? (
+                  <span className="inline-flex items-center rounded-full border border-[#E3A008]/45 bg-[#FEF8EC] px-2 py-0.5 text-[11px] font-semibold text-[#8A6100]">
+                    Pendente de envio — envia ao salvar
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                    <Check className="h-3 w-3" aria-hidden="true" />
+                    Enviado
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-[#1F1B16]/65">
+                O arquivo PNG 512×512 é exportado em escala neutra (100%). O zoom abaixo ajusta
+                apenas a exibição visual e pode ser alterado a qualquer momento sem perder
+                qualidade.
+              </p>
+            </div>
+          )}
 
           {/* Comparador lado a lado */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-[#ECE7E0] bg-white/80 p-2.5">
@@ -427,18 +496,18 @@ export function CategoryIconBankPicker({
               </p>
               <div className="flex items-start gap-2">
                 <div className="rounded-xl border border-[#ECE7E0] bg-[#F7F5F0] px-2 py-2 flex flex-col items-center w-[92px] shrink-0">
-                  {referenceFailed ? (
-                    <span className="w-11 h-11 flex items-center justify-center">
+                  <span className="w-11 h-11 overflow-hidden flex items-center justify-center shrink-0">
+                    {referenceFailed ? (
                       <ImageIcon className="w-5 h-5 text-gray-400" aria-hidden="true" />
-                    </span>
-                  ) : (
-                    <img
-                      src={REFERENCE_3D_ICON_PATH}
-                      alt="Referência Batata"
-                      onError={() => setReferenceFailed(true)}
-                      className="w-11 h-11 object-contain select-none"
-                    />
-                  )}
+                    ) : (
+                      <img
+                        src={REFERENCE_3D_ICON_PATH}
+                        alt="Referência Batata"
+                        onError={() => setReferenceFailed(true)}
+                        className="w-full h-full object-contain select-none"
+                      />
+                    )}
+                  </span>
                   <span className="mt-1.5 text-[11px] font-semibold text-[#1F1B16] text-center leading-tight line-clamp-1 w-full">
                     Batata
                   </span>
@@ -448,61 +517,65 @@ export function CategoryIconBankPicker({
                 </div>
 
                 <div className="rounded-xl border border-[#E3A008]/60 bg-[#F7F5F0] px-2 py-2 flex flex-col items-center w-[92px] shrink-0 ring-1 ring-[#E3A008]/25">
-                  {safeFramedPreviewUrl ? (
-                    <img
-                      src={safeFramedPreviewUrl}
-                      alt={displayCategoryLabel}
-                      className="w-11 h-11 object-contain select-none"
-                    />
-                  ) : (
-                    <span
-                      aria-hidden="true"
-                      className="w-11 h-11 rounded-lg bg-[#ECE7E0] animate-pulse"
-                    />
-                  )}
+                  <span className="w-11 h-11 overflow-hidden flex items-center justify-center shrink-0">
+                    {previewFailed ? (
+                      <ImageIcon className="w-5 h-5 text-gray-400" aria-hidden="true" />
+                    ) : (
+                      <img
+                        src={activePreviewUrl}
+                        alt={displayCategoryLabel}
+                        onError={() => setPreviewFailed(true)}
+                        style={previewScaleStyle}
+                        className="w-full h-full object-contain select-none"
+                      />
+                    )}
+                  </span>
                   <span className="mt-1.5 text-[11px] font-semibold text-[#1F1B16] text-center leading-tight line-clamp-1 w-full">
                     {displayCategoryLabel}
                   </span>
                   <span className="mt-0.5 rounded-full bg-[#FEF8EC] border border-[#E3A008]/40 px-1.5 py-0.5 text-[9px] font-semibold text-[#8A6100]">
-                    Novo
+                    {pendingAnalyzedIcon ? "Novo" : "Prévia"}
                   </span>
                 </div>
               </div>
             </div>
 
             {/* Mini-pílula do Cardápio */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 min-w-0">
               <p className="text-[11px] font-semibold text-[#1F1B16]/75">
                 Mini-pílula do Cardápio
               </p>
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-800">
-                  {referenceFailed ? (
-                    <ImageIcon className="w-4 h-4 text-gray-400 shrink-0" aria-hidden="true" />
-                  ) : (
-                    <img
-                      src={REFERENCE_3D_ICON_PATH}
-                      alt=""
-                      onError={() => setReferenceFailed(true)}
-                      className="w-4 h-4 object-contain select-none"
-                    />
-                  )}
+                  <span className="w-4 h-4 overflow-hidden flex items-center justify-center shrink-0">
+                    {referenceFailed ? (
+                      <ImageIcon className="w-4 h-4 text-gray-400" aria-hidden="true" />
+                    ) : (
+                      <img
+                        src={REFERENCE_3D_ICON_PATH}
+                        alt=""
+                        onError={() => setReferenceFailed(true)}
+                        className="w-full h-full object-contain select-none"
+                      />
+                    )}
+                  </span>
                   Batatas
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#E3A008]/60 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-800 ring-1 ring-[#E3A008]/25">
-                  {safeFramedPreviewUrl ? (
-                    <img
-                      src={safeFramedPreviewUrl}
-                      alt=""
-                      className="w-4 h-4 object-contain select-none"
-                    />
-                  ) : (
-                    <span
-                      aria-hidden="true"
-                      className="w-4 h-4 rounded bg-gray-200 animate-pulse"
-                    />
-                  )}
-                  {displayCategoryLabel}
+                <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[#E3A008]/60 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-800 ring-1 ring-[#E3A008]/25">
+                  <span className="w-4 h-4 overflow-hidden flex items-center justify-center shrink-0">
+                    {previewFailed ? (
+                      <ImageIcon className="w-4 h-4 text-gray-400" aria-hidden="true" />
+                    ) : (
+                      <img
+                        src={activePreviewUrl}
+                        alt=""
+                        onError={() => setPreviewFailed(true)}
+                        style={previewScaleStyle}
+                        className="w-full h-full object-contain select-none"
+                      />
+                    )}
+                  </span>
+                  <span className="truncate">{displayCategoryLabel}</span>
                 </span>
               </div>
             </div>
@@ -515,75 +588,83 @@ export function CategoryIconBankPicker({
                 htmlFor="category-icon-zoom-slider"
                 className="text-xs font-semibold text-[#1F1B16]"
               >
-                Tamanho / Zoom
+                Escala visual
               </Label>
-              <span className="inline-flex items-center rounded-md bg-white border border-[#E3A008]/40 px-2 py-0.5 font-mono text-xs font-bold text-[#8A6100]">
-                {iconZoomPercent}%
+              <span className="text-[11px] font-mono font-semibold text-[#8A6100]">
+                {safeIconScale}%
               </span>
             </div>
             <input
               id="category-icon-zoom-slider"
               type="range"
-              min={ICON_ZOOM_MIN}
-              max={ICON_ZOOM_MAX}
+              min={CATEGORY_ICON_SCALE_MIN}
+              max={CATEGORY_ICON_SCALE_MAX}
               step={1}
-              value={iconZoomPercent}
+              value={safeIconScale}
               disabled={isBusy}
-              onChange={(e) => onZoomChange(Number(e.target.value))}
+              onChange={(e) =>
+                onIconScaleChange(normalizeCategoryIconScale(Number(e.target.value)))
+              }
               className="w-full accent-[#E3A008] cursor-pointer disabled:cursor-not-allowed"
             />
-            <div className="flex items-center justify-between text-[10px] font-mono text-[#1F1B16]/55">
-              <span>{ICON_ZOOM_MIN}%</span>
-              <span>100%</span>
-              <span>125%</span>
-              <span>{ICON_ZOOM_MAX}%</span>
+            <div className="relative h-4 text-[10px] font-mono text-[#1F1B16]/55">
+              <span className="absolute left-0">{CATEGORY_ICON_SCALE_MIN}%</span>
+              <span className="absolute left-[44.44%] -translate-x-1/2">
+                {CATEGORY_ICON_SCALE_DEFAULT}%
+              </span>
+              <span className="absolute left-[72.22%] -translate-x-1/2">125%</span>
+              <span className="absolute right-0">{CATEGORY_ICON_SCALE_MAX}%</span>
             </div>
           </div>
 
-          {/* Framing Actions */}
+          {/* Framing & Scale Actions */}
           <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              disabled={isBusy}
-              onClick={onAutoFit}
+              disabled={isBusy || safeIconScale === CATEGORY_ICON_SCALE_DEFAULT}
+              onClick={onResetIconScale}
               className="border-[#ECE7E0] bg-white hover:bg-[#FEF8EC] text-[#1F1B16]"
             >
               <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
-              Ajustar automático
+              Resetar 100%
             </Button>
 
-            <Button
-              type="button"
-              size="sm"
-              disabled={isBusy}
-              onClick={onUploadFramed}
-              className="bg-[#E3A008] hover:bg-[#C1440E] text-white font-semibold"
-            >
-              {uploading ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
-                  Enviando PNG...
-                </>
-              ) : (
-                <>
-                  <Upload className="w-3.5 h-3.5" aria-hidden="true" />
-                  Enviar PNG enquadrado
-                </>
-              )}
-            </Button>
+            {pendingAnalyzedIcon && (
+              <>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={isBusy || !framedUploadDirty}
+                  onClick={onUploadFramed}
+                  className="bg-[#E3A008] hover:bg-[#C1440E] text-white font-semibold"
+                >
+                  {uploading ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                      Enviando PNG...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-3.5 h-3.5" aria-hidden="true" />
+                      Enviar PNG 512×512
+                    </>
+                  )}
+                </Button>
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={isBusy}
-              onClick={() => fileInputRef.current?.click()}
-              className="border-[#ECE7E0] bg-white hover:bg-[#F7F5F0] text-[#1F1B16]"
-            >
-              Trocar imagem
-            </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isBusy}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-[#ECE7E0] bg-white hover:bg-[#F7F5F0] text-[#1F1B16]"
+                >
+                  Trocar imagem
+                </Button>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -600,7 +681,7 @@ export function CategoryIconBankPicker({
           <button
             type="button"
             onClick={() => void loadIcons()}
-            disabled={loading || isBusy}
+            disabled={loading || isBusy || isOffline}
             aria-label="Atualizar banco de ícones 3D"
             title="Atualizar banco de ícones 3D"
             className="inline-flex items-center gap-1 rounded-md shrink-0 min-h-[36px] px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200/70 hover:text-gray-900 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E3A008] focus-visible:ring-offset-1 transition-colors"
@@ -613,7 +694,18 @@ export function CategoryIconBankPicker({
           </button>
         </div>
 
-        {error && (
+        {isOffline ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex items-center gap-2 rounded-xl border border-[#ECE7E0] bg-white px-3 py-2 text-left text-xs text-gray-600"
+          >
+            <WifiOff className="h-3.5 w-3.5 text-gray-400 shrink-0" aria-hidden="true" />
+            <p>
+              Modo offline: exibindo apenas os ícones 3D oficiais locais. Reconecte-se para listar os ícones enviados.
+            </p>
+          </div>
+        ) : error ? (
           <div
             role="alert"
             className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-left"
@@ -631,7 +723,7 @@ export function CategoryIconBankPicker({
               Tentar novamente
             </button>
           </div>
-        )}
+        ) : null}
 
         {loading && !hasLoaded ? (
           <div role="status" aria-live="polite">

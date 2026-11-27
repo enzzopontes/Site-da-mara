@@ -96,6 +96,21 @@ export const ALLOWED_CATEGORY_ICON_MIME_TYPES = [
 
 export const MAX_CATEGORY_ICON_BYTES = 2 * 1024 * 1024
 
+export const CATEGORY_ICON_SCALE_MIN = 60
+export const CATEGORY_ICON_SCALE_MAX = 150
+export const CATEGORY_ICON_SCALE_DEFAULT = 100
+
+export function normalizeCategoryIconScale(value: unknown): number {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim() !== ""
+        ? Number(value)
+        : NaN
+  if (!Number.isFinite(parsed)) return CATEGORY_ICON_SCALE_DEFAULT
+  return Math.min(CATEGORY_ICON_SCALE_MAX, Math.max(CATEGORY_ICON_SCALE_MIN, Math.round(parsed)))
+}
+
 export function sanitizeCategorySlug(input: string): string {
   return input
     .normalize("NFD")

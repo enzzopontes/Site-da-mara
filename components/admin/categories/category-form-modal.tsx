@@ -30,15 +30,16 @@ import {
   ACCENT_COLOR_PRESETS,
   ALLOWED_CATEGORY_ICON_MIME_TYPES,
   BADGE_PRESETS,
+  CATEGORY_ICON_SCALE_DEFAULT,
   MAX_CATEGORY_ICON_BYTES,
   PRESET_3D_ICONS,
   isSafeCategoryHref,
   isSafeIconUrl,
+  normalizeCategoryIconScale,
   sanitizeCategorySlug,
 } from "@/lib/category-icons"
 import {
   type AnalyzedIconImage,
-  ICON_ZOOM_DEFAULT,
   analyzeIconImageFile,
   exportFramedIconFile,
   isRasterIconFile,
@@ -127,7 +128,9 @@ export function CategoryFormModal({
   const [uploading, setUploading] = useState(false)
   const [analyzingImage, setAnalyzingImage] = useState(false)
   const [pendingAnalyzedIcon, setPendingAnalyzedIcon] = useState<AnalyzedIconImage | null>(null)
-  const [iconZoomPercent, setIconZoomPercent] = useState<number>(ICON_ZOOM_DEFAULT)
+  const [iconScale, setIconScale] = useState<number>(() =>
+    normalizeCategoryIconScale(initialCategory?.icon_scale)
+  )
   const [framedPreviewUrl, setFramedPreviewUrl] = useState<string | null>(null)
   const [framedUploadDirty, setFramedUploadDirty] = useState(false)
   const [bankRefreshTrigger, setBankRefreshTrigger] = useState(0)
@@ -286,7 +289,7 @@ export function CategoryFormModal({
     setPendingRetryFile(null)
     setErrors({})
     setPendingAnalyzedIcon(null)
-    setIconZoomPercent(ICON_ZOOM_DEFAULT)
+    setIconScale(normalizeCategoryIconScale(initialCategory?.icon_scale))
     setFramedPreviewUrl(null)
     setFramedUploadDirty(false)
     setAnalyzingImage(false)
@@ -299,14 +302,14 @@ export function CategoryFormModal({
     }
     try {
       const nextUrl = renderFramedIconPreviewDataUrl(pendingAnalyzedIcon, {
-        zoomPercent: iconZoomPercent,
+        zoomPercent: 100,
         useAutoTrim: true,
       })
       setFramedPreviewUrl(nextUrl)
     } catch {
       setFramedPreviewUrl(null)
     }
-  }, [pendingAnalyzedIcon, iconZoomPercent])
+  }, [pendingAnalyzedIcon])
 
   const hasExistingStorageIcon = Boolean(originalStorageUrl)
 
@@ -417,7 +420,6 @@ export function CategoryFormModal({
       try {
         const analyzed = await analyzeIconImageFile(file)
         setPendingAnalyzedIcon(analyzed)
-        setIconZoomPercent(ICON_ZOOM_DEFAULT)
         setFramedUploadDirty(true)
       } catch (err) {
         const msg =
@@ -439,7 +441,7 @@ export function CategoryFormModal({
     if (!pendingAnalyzedIcon) return iconUrl.trim() || null
     try {
       const framedFile = await exportFramedIconFile(pendingAnalyzedIcon, {
-        zoomPercent: iconZoomPercent,
+        zoomPercent: 100,
         useAutoTrim: true,
       })
       return await performFileUpload(framedFile, {
@@ -546,6 +548,8 @@ export function CategoryFormModal({
         }
       }
 
+      const normalizedIconScale = normalizeCategoryIconScale(iconScale)
+
       const payload: CategoryFormInput = isQuickMenuMode
         ? {
             name: name.trim(),
@@ -554,6 +558,7 @@ export function CategoryFormModal({
             kind: "product_category",
             icon_type: finalIconType,
             icon_url: finalIconUrl,
+            icon_scale: normalizedIconScale,
             fallback_icon: fallbackIcon,
             accent_color: accentColor,
             badge_text: null,
@@ -582,6 +587,7 @@ export function CategoryFormModal({
             kind,
             icon_type: finalIconType,
             icon_url: finalIconUrl,
+            icon_scale: normalizedIconScale,
             fallback_icon: fallbackIcon,
             accent_color: accentColor,
             badge_text: badgeText.trim() || null,
@@ -655,7 +661,7 @@ export function CategoryFormModal({
           pendingAnalyzedIcon={pendingAnalyzedIcon}
           framedPreviewUrl={framedPreviewUrl}
           framedUploadDirty={framedUploadDirty}
-          iconZoomPercent={iconZoomPercent}
+          iconScale={iconScale}
           hasExistingStorageIcon={hasExistingStorageIcon}
           removeOldOnReplace={removeOldOnReplace}
           pendingRetryFile={pendingRetryFile}
@@ -686,14 +692,8 @@ export function CategoryFormModal({
             }
           }}
           onSelectFile={(file) => void handleFileSelected(file)}
-          onZoomChange={(zoom) => {
-            setIconZoomPercent(zoom)
-            setFramedUploadDirty(true)
-          }}
-          onAutoFit={() => {
-            setIconZoomPercent(ICON_ZOOM_DEFAULT)
-            setFramedUploadDirty(true)
-          }}
+          onIconScaleChange={(next) => setIconScale(normalizeCategoryIconScale(next))}
+          onResetIconScale={() => setIconScale(CATEGORY_ICON_SCALE_DEFAULT)}
           onUploadFramed={() => void handleUploadFramedIcon(false)}
           onRetryUpload={() => {
             if (pendingRetryFile) void performFileUpload(pendingRetryFile)

@@ -1,6 +1,12 @@
 "use client"
 
-import { MAX_CATEGORY_ICON_BYTES } from "@/lib/category-icons"
+import {
+  CATEGORY_ICON_SCALE_DEFAULT,
+  CATEGORY_ICON_SCALE_MAX,
+  CATEGORY_ICON_SCALE_MIN,
+  MAX_CATEGORY_ICON_BYTES,
+  normalizeCategoryIconScale,
+} from "@/lib/category-icons"
 
 export interface IconImageBounds {
   x: number
@@ -21,16 +27,16 @@ export interface AnalyzedIconImage {
 }
 
 export interface FrameIconOptions {
-  zoomPercent: number
+  zoomPercent?: number
   useAutoTrim?: boolean
   outputSize?: number
   basePaddingRatio?: number
 }
 
 export const ICON_ALPHA_THRESHOLD = 12
-export const ICON_ZOOM_MIN = 80
-export const ICON_ZOOM_MAX = 150
-export const ICON_ZOOM_DEFAULT = 100
+export const ICON_ZOOM_MIN = CATEGORY_ICON_SCALE_MIN
+export const ICON_ZOOM_MAX = CATEGORY_ICON_SCALE_MAX
+export const ICON_ZOOM_DEFAULT = CATEGORY_ICON_SCALE_DEFAULT
 export const ICON_EXPORT_SIZE = 512
 const MAX_ANALYSIS_DIM = 1024
 
@@ -193,15 +199,12 @@ export async function analyzeIconImageFile(
 
 export function renderFramedIconCanvas(
   analyzed: AnalyzedIconImage,
-  options: FrameIconOptions
+  options: FrameIconOptions = {}
 ): HTMLCanvasElement {
   const outputSize = options.outputSize ?? ICON_EXPORT_SIZE
   const basePaddingRatio = options.basePaddingRatio ?? 0.05
   const useAutoTrim = options.useAutoTrim ?? true
-  const clampedZoom = Math.min(
-    ICON_ZOOM_MAX,
-    Math.max(ICON_ZOOM_MIN, options.zoomPercent)
-  )
+  const clampedZoom = normalizeCategoryIconScale(options.zoomPercent)
   const zoomFactor = clampedZoom / 100
 
   const canvas = document.createElement("canvas")
@@ -237,10 +240,11 @@ export function renderFramedIconCanvas(
 
 export function renderFramedIconPreviewDataUrl(
   analyzed: AnalyzedIconImage,
-  options: FrameIconOptions
+  options: FrameIconOptions = {}
 ): string {
   const canvas = renderFramedIconCanvas(analyzed, {
     ...options,
+    zoomPercent: ICON_ZOOM_DEFAULT,
     outputSize: options.outputSize ?? 256,
   })
   return canvas.toDataURL("image/png")
@@ -268,11 +272,15 @@ function canvasToBlob(
 
 export async function exportFramedIconFile(
   analyzed: AnalyzedIconImage,
-  options: FrameIconOptions
+  options?: Partial<FrameIconOptions>
 ): Promise<File> {
+  // Always export neutral 100% scale 512x512 PNG so visual zoom is stored
+  // non-destructively in categories.icon_scale without double-scaling.
   const canvas = renderFramedIconCanvas(analyzed, {
-    ...options,
-    outputSize: options.outputSize ?? ICON_EXPORT_SIZE,
+    useAutoTrim: options?.useAutoTrim ?? true,
+    outputSize: options?.outputSize ?? ICON_EXPORT_SIZE,
+    basePaddingRatio: options?.basePaddingRatio,
+    zoomPercent: ICON_ZOOM_DEFAULT,
   })
 
   const baseName = analyzed.fileName.replace(/\.[^/.]+$/, "") || "icone-3d"

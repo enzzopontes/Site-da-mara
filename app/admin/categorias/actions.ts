@@ -17,9 +17,13 @@ import {
 } from "@/lib/categories-db"
 import {
   ALLOWED_CATEGORY_ICON_MIME_TYPES,
+  CATEGORY_ICON_SCALE_DEFAULT,
+  CATEGORY_ICON_SCALE_MAX,
+  CATEGORY_ICON_SCALE_MIN,
   MAX_CATEGORY_ICON_BYTES,
   isSafeCategoryHref,
   isSafeIconUrl,
+  normalizeCategoryIconScale,
   normalizeLegacyCategorySlug,
   sanitizeCategorySlug,
 } from "@/lib/category-icons"
@@ -43,6 +47,7 @@ export interface CategoryFormInput {
   kind: CategoryKind
   icon_url?: string | null
   icon_type: CategoryIconType
+  icon_scale?: number
   fallback_icon: string
   accent_color: string
   badge_text?: string | null
@@ -93,6 +98,12 @@ const CategoryFormSchema = z.object({
     .nullable()
     .optional(),
   icon_type: z.enum(["upload", "preset_3d", "lucide"]),
+  icon_scale: z
+    .preprocess(
+      (val) => normalizeCategoryIconScale(val),
+      z.number().int().min(CATEGORY_ICON_SCALE_MIN).max(CATEGORY_ICON_SCALE_MAX)
+    )
+    .default(CATEGORY_ICON_SCALE_DEFAULT),
   fallback_icon: z.string().trim().min(1).max(40).default("UtensilsCrossed"),
   accent_color: z.string().regex(HEX_COLOR_REGEX, "Cor de destaque inválida (use HEX #RRGGBB)").default("#E3A008"),
   badge_text: z.string().trim().max(20).nullable().optional(),
@@ -343,6 +354,15 @@ function isMissingProfileColumnError(error: unknown): boolean {
   )
 }
 
+const ICON_SCALE_MIGRATION_PENDING_ERROR =
+  "Execute a migração scripts/034_category_icon_scale.sql no Supabase para salvar escala customizada do ícone."
+
+function isMissingIconScaleColumnError(error: unknown): boolean {
+  const msg = String((error as { message?: string } | null)?.message || "")
+  const code = String((error as { code?: string } | null)?.code || "")
+  return (code === "42703" || code === "PGRST204") && /icon_scale/i.test(msg)
+}
+
 export async function listCategoriesAdminAction(): Promise<
   ActionResult<{ categories: CategoryWithCounts[]; migrationPending?: boolean }>
 > {
@@ -490,6 +510,7 @@ export async function createCategoryAction(input: CategoryFormInput): Promise<Ac
       kind: data.kind,
       icon_url: data.icon_type === "lucide" ? null : data.icon_url?.trim() || null,
       icon_type: data.icon_type,
+      icon_scale: normalizeCategoryIconScale(data.icon_scale),
       fallback_icon: data.fallback_icon,
       accent_color: data.accent_color,
       badge_text: data.badge_text?.trim() || null,
@@ -512,11 +533,30 @@ export async function createCategoryAction(input: CategoryFormInput): Promise<Ac
       show_ranking: data.kind === "product_category" ? data.show_ranking : false,
     }
 
-    const { data: inserted, error } = await service
+    let { data: inserted, error } = await service
       .from("categories")
       .insert(payload)
       .select("*")
       .single()
+
+    if (error && isMissingIconScaleColumnError(error)) {
+      if (payload.icon_scale === CATEGORY_ICON_SCALE_DEFAULT) {
+        const { icon_scale: _omittedIconScale, ...fallbackPayload } = payload
+        const retry = await service
+          .from("categories")
+          .insert(fallbackPayload)
+          .select("*")
+          .single()
+        inserted = retry.data
+        error = retry.error
+      } else {
+        return {
+          ok: false,
+          code: "MIGRATION_PENDING",
+          error: ICON_SCALE_MIGRATION_PENDING_ERROR,
+        }
+      }
+    }
 
     if (error && isMissingProfileColumnError(error)) {
       return {
@@ -608,6 +648,7 @@ export async function updateCategoryAction(
       kind: data.kind,
       icon_url: data.icon_type === "lucide" ? null : data.icon_url?.trim() || null,
       icon_type: data.icon_type,
+      icon_scale: normalizeCategoryIconScale(data.icon_scale),
       fallback_icon: data.fallback_icon,
       accent_color: data.accent_color,
       badge_text: data.badge_text?.trim() || null,
@@ -630,12 +671,32 @@ export async function updateCategoryAction(
       show_ranking: data.kind === "product_category" ? data.show_ranking : false,
     }
 
-    const { data: updated, error } = await service
+    let { data: updated, error } = await service
       .from("categories")
       .update(payload)
       .eq("id", id)
       .select("*")
       .single()
+
+    if (error && isMissingIconScaleColumnError(error)) {
+      if (payload.icon_scale === CATEGORY_ICON_SCALE_DEFAULT) {
+        const { icon_scale: _omittedIconScale, ...fallbackPayload } = payload
+        const retry = await service
+          .from("categories")
+          .update(fallbackPayload)
+          .eq("id", id)
+          .select("*")
+          .single()
+        updated = retry.data
+        error = retry.error
+      } else {
+        return {
+          ok: false,
+          code: "MIGRATION_PENDING",
+          error: ICON_SCALE_MIGRATION_PENDING_ERROR,
+        }
+      }
+    }
 
     if (error && isMissingProfileColumnError(error)) {
       return {
@@ -705,38 +766,52 @@ export async function duplicateCategoryAction(id: string): Promise<ActionResult<
     const dupShowDesktop = Boolean(source.show_on_home_bar_desktop ?? source.show_on_home_bar)
     const dupShowApp = Boolean(source.show_on_home_bar_app ?? source.show_on_home_bar)
 
-    const { data: inserted, error } = await service
+    const dupPayload = {
+      slug: candidateSlug,
+      name: `${source.name} (Cópia)`.slice(0, 60),
+      description: source.description,
+      kind: source.kind,
+      icon_url: source.icon_url,
+      icon_type: source.icon_type,
+      icon_scale: normalizeCategoryIconScale(source.icon_scale),
+      fallback_icon: source.fallback_icon,
+      accent_color: source.accent_color,
+      badge_text: source.badge_text,
+      badge_color: source.badge_color,
+      custom_href: source.custom_href,
+      is_active: false,
+      show_on_home_bar: dupShowMobile || dupShowDesktop || dupShowApp,
+      show_on_home_bar_mobile: dupShowMobile,
+      show_on_home_bar_desktop: dupShowDesktop,
+      show_on_home_bar_app: dupShowApp,
+      home_bar_order: Number(source.home_bar_order || 0) + 1,
+      show_on_home_featured: source.show_on_home_featured,
+      home_featured_order: Number(source.home_featured_order || 0) + 1,
+      home_featured_limit: source.home_featured_limit,
+      show_on_menu: source.show_on_menu,
+      menu_order: Number(source.menu_order || 0) + 1,
+      menu_layout_zone: source.menu_layout_zone,
+      allows_addons: source.allows_addons,
+      allows_notes: source.allows_notes,
+      show_ranking: source.show_ranking,
+    }
+
+    let { data: inserted, error } = await service
       .from("categories")
-      .insert({
-        slug: candidateSlug,
-        name: `${source.name} (Cópia)`.slice(0, 60),
-        description: source.description,
-        kind: source.kind,
-        icon_url: source.icon_url,
-        icon_type: source.icon_type,
-        fallback_icon: source.fallback_icon,
-        accent_color: source.accent_color,
-        badge_text: source.badge_text,
-        badge_color: source.badge_color,
-        custom_href: source.custom_href,
-        is_active: false,
-        show_on_home_bar: dupShowMobile || dupShowDesktop || dupShowApp,
-        show_on_home_bar_mobile: dupShowMobile,
-        show_on_home_bar_desktop: dupShowDesktop,
-        show_on_home_bar_app: dupShowApp,
-        home_bar_order: Number(source.home_bar_order || 0) + 1,
-        show_on_home_featured: source.show_on_home_featured,
-        home_featured_order: Number(source.home_featured_order || 0) + 1,
-        home_featured_limit: source.home_featured_limit,
-        show_on_menu: source.show_on_menu,
-        menu_order: Number(source.menu_order || 0) + 1,
-        menu_layout_zone: source.menu_layout_zone,
-        allows_addons: source.allows_addons,
-        allows_notes: source.allows_notes,
-        show_ranking: source.show_ranking,
-      })
+      .insert(dupPayload)
       .select("*")
       .single()
+
+    if (error && isMissingIconScaleColumnError(error)) {
+      const { icon_scale: _omittedIconScale, ...fallbackDupPayload } = dupPayload
+      const retry = await service
+        .from("categories")
+        .insert(fallbackDupPayload)
+        .select("*")
+        .single()
+      inserted = retry.data
+      error = retry.error
+    }
 
     if (error && isMissingProfileColumnError(error)) {
       return {
