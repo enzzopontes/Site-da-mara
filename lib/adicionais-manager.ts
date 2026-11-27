@@ -1,6 +1,7 @@
 'use client'
 
 import { appToast } from "@/lib/app-toast"
+import { normalizeLegacyCategorySlug } from "@/lib/category-icons"
 
 import { createBrowserClient } from "./supabase/client"
 
@@ -25,12 +26,11 @@ async function callAdminAdicionalApi<T = any>(body: Record<string, unknown>): Pr
   } catch {
     return null
   }
-  if (res.status === 404) return null
-
   let json: any = null
   try {
     json = await res.json()
   } catch {}
+  if (res.status === 404 && !json) return null
   if (!res.ok || !json?.success) {
     throw new Error(json?.error || `Falha na API (HTTP ${res.status}).`)
   }
@@ -74,6 +74,135 @@ class AdicionaisManagerClient {
     } catch (error) {
       console.error("[AdicionaisManager] Falha no getAllAdicionais:", error)
       throw error
+    }
+  }
+
+  async getAdicionaisByProductId(
+    productId: string
+  ): Promise<{
+    allowsAddons: boolean | null
+    allowsNotes: boolean | null
+    adicionais: Adicional[]
+    loadError?: boolean
+  }> {
+    const trimmedId = String(productId || "").trim()
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmedId)) {
+      return { allowsAddons: null, allowsNotes: null, adicionais: [] }
+    }
+
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
+    try {
+      const timeoutPromise = new Promise<{
+        allowsAddons: boolean | null
+        allowsNotes: boolean | null
+        adicionais: Adicional[]
+        loadError?: boolean
+      }>((resolve) => {
+        timeoutId = setTimeout(() => {
+          resolve({ allowsAddons: null, allowsNotes: null, adicionais: [], loadError: true })
+        }, 8000)
+      })
+
+      const fetchPromise = (async (): Promise<{
+        allowsAddons: boolean | null
+        allowsNotes: boolean | null
+        adicionais: Adicional[]
+        loadError?: boolean
+      }> => {
+        try {
+          const supabase = createBrowserClient()
+          let row: any = null
+          const { data, error } = await supabase
+            .from("products")
+            .select(
+              "id, category, category_id, categories ( allows_addons, allows_notes ), product_adicionais ( adicional_id, adicionais (*) )"
+            )
+            .eq("id", trimmedId)
+            .maybeSingle()
+
+          if (error) {
+            const { data: retryData, error: retryError } = await supabase
+              .from("products")
+              .select("id, category, product_adicionais ( adicional_id, adicionais (*) )")
+              .eq("id", trimmedId)
+              .maybeSingle()
+
+            if (retryError) {
+              console.warn("[AdicionaisManager] Falha ao buscar adicionais do produto:", retryError.message)
+              return { allowsAddons: null, allowsNotes: null, adicionais: [], loadError: true }
+            }
+            row = retryData
+          } else {
+            row = data
+          }
+
+          if (!row) {
+            return { allowsAddons: null, allowsNotes: null, adicionais: [] }
+          }
+
+          const cat = Array.isArray(row.categories) ? row.categories[0] : row.categories
+          let allowsAddons: boolean | null =
+            typeof cat?.allows_addons === "boolean" ? cat.allows_addons : null
+          let allowsNotes: boolean | null =
+            typeof cat?.allows_notes === "boolean" ? cat.allows_notes : null
+
+          if (
+            (allowsAddons === null || allowsNotes === null) &&
+            typeof row.category === "string" &&
+            row.category.trim() !== ""
+          ) {
+            const slug = normalizeLegacyCategorySlug(row.category)
+            if (slug) {
+              const { data: catRow, error: catErr } = await supabase
+                .from("categories")
+                .select("allows_addons, allows_notes")
+                .eq("slug", slug)
+                .maybeSingle()
+              if (!catErr && catRow) {
+                if (allowsAddons === null && typeof (catRow as any).allows_addons === "boolean") {
+                  allowsAddons = (catRow as any).allows_addons
+                }
+                if (allowsNotes === null && typeof (catRow as any).allows_notes === "boolean") {
+                  allowsNotes = (catRow as any).allows_notes
+                }
+              }
+            }
+          }
+
+          if (allowsAddons === false) {
+            return { allowsAddons: false, allowsNotes, adicionais: [] }
+          }
+
+          const seen = new Set<string>()
+          const adicionais: Adicional[] = (row.product_adicionais || [])
+            .map((pa: any) => (Array.isArray(pa?.adicionais) ? pa.adicionais[0] : pa?.adicionais))
+            .filter((a: any) => a && a.available !== false)
+            .filter((a: any) => {
+              const id = String(a.id)
+              if (seen.has(id)) return false
+              seen.add(id)
+              return true
+            })
+            .map((a: any) => ({
+              id: String(a.id),
+              name: String(a.name),
+              price: Number(a.price) || 0,
+              available: a.available,
+              adicional_categoria: a.adicional_categoria ?? null,
+              category: a.category ?? null,
+            }))
+            .sort((a: Adicional, b: Adicional) => a.name.localeCompare(b.name, "pt-BR"))
+
+          return { allowsAddons, allowsNotes, adicionais }
+        } catch (error) {
+          console.warn("[AdicionaisManager] Falha no getAdicionaisByProductId:", error)
+          return { allowsAddons: null, allowsNotes: null, adicionais: [], loadError: true }
+        }
+      })()
+
+      return await Promise.race([fetchPromise, timeoutPromise])
+    } finally {
+      if (timeoutId !== undefined) clearTimeout(timeoutId)
     }
   }
 

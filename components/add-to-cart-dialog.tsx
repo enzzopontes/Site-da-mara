@@ -11,10 +11,11 @@ import { useCart } from "@/lib/cart-context"
 import { secureRandomInt } from "@/lib/secure-random"
 import { useAuth } from "@/lib/auth-context"
 import { appToast } from "@/lib/app-toast"
-import { ArrowLeft, Minus, Plus, ShoppingCart, Tag } from "lucide-react"
+import { AlertCircle, ArrowLeft, Minus, Plus, RefreshCw, ShoppingCart, Tag } from "lucide-react"
 import { storeStatusManager, type StoreStatus } from "@/lib/store-status-manager"
 import { Skeleton } from "@/components/ui/skeleton"
 import { adicionaisManager } from "@/lib/adicionais-manager"
+import { normalizeLegacyCategorySlug } from "@/lib/category-icons"
 import { createBrowserClient } from "@/lib/supabase/client"
 import { trackViewContent } from "@/lib/meta-pixel"
 
@@ -213,6 +214,23 @@ function classifyAdicional(item: Adicional): string {
   return "geral"
 }
 
+function normalizeProductAdicionais(items: Adicional[]): Adicional[] {
+  const seen = new Set<string>()
+  return items
+    .filter((a) => a && a.available !== false)
+    .filter((a) => {
+      const id = String(a.id)
+      if (seen.has(id)) return false
+      seen.add(id)
+      return true
+    })
+    .map((a) => ({
+      ...a,
+      id: String(a.id),
+      price: Number(a.price) || 0,
+    }))
+}
+
 function buildHydratedAdicionais(
   available: Adicional[],
   initial?: Array<{ id?: string; name: string; price: number; quantity?: number }>
@@ -261,6 +279,10 @@ export function AddToCartDialog({
 }: AddToCartDialogProps) {
   const [selectedAdicionais, setSelectedAdicionais] = useState<Record<string, number>>({})
   const [adicionaisDisponiveis, setAdicionaisDisponiveis] = useState<Adicional[]>([])
+  const [resolvedAllowsAddons, setResolvedAllowsAddons] = useState<boolean | null>(null)
+  const [resolvedAllowsNotes, setResolvedAllowsNotes] = useState<boolean | null>(null)
+  const [isLoadingAdicionais, setIsLoadingAdicionais] = useState(false)
+  const [adicionaisLoadError, setAdicionaisLoadError] = useState(false)
   const [selectedBebidas, setSelectedBebidas] = useState<Record<string, number>>({})
   const [bebidasDisponiveis, setBebidasDisponiveis] = useState<DrinkProduct[]>([])
   const [quantity, setQuantity] = useState(1)
@@ -269,6 +291,7 @@ export function AddToCartDialog({
   const [storeStatus, setStoreStatus] = useState<StoreStatus | null>(null)
   const [dialogImageLoaded, setDialogImageLoaded] = useState(false)
   const userInteractedAdicionaisRef = useRef(false)
+  const adicionaisRequestIdRef = useRef(0)
 
   // Mapas de frases sorteadas a cada abertura da tela
   const [fraseIndices, setFraseIndices] = useState<Record<string, number>>({})
@@ -284,9 +307,13 @@ export function AddToCartDialog({
     product.name.toLowerCase().includes("coca-cola") ||
     product.name.toLowerCase().includes("fanta")
 
-  const allowsAddons = categoryRules?.allowsAddons ?? !isBebida
-  const allowsNotes = categoryRules?.allowsNotes ?? true
-  const isMacarrao = product.category === "macarrao"
+  const baseAllowsAddons = categoryRules?.allowsAddons ?? !isBebida
+  const allowsAddons =
+    categoryRules?.allowsAddons ??
+    resolvedAllowsAddons ??
+    (isLoadingAdicionais || adicionaisLoadError ? true : !isBebida)
+  const allowsNotes = categoryRules?.allowsNotes ?? resolvedAllowsNotes ?? !isBebida
+  const isMacarrao = normalizeLegacyCategorySlug(product.category || "") === "macarrao"
   const isUnavailable = product.available === false
   const resolvedPromoPrice = useMemo(
     () => resolvePromoPrice(product, storeStatus),
@@ -295,6 +322,22 @@ export function AddToCartDialog({
   const hasActivePromo = resolvedPromoPrice !== null
   const basePrice = hasActivePromo ? resolvedPromoPrice : product.price
   const lastTrackedViewKeyRef = useRef<string | null>(null)
+  const latestProductAdicionaisRef = useRef(product.adicionais)
+  latestProductAdicionaisRef.current = product.adicionais
+  const productAdicionaisKey = useMemo(
+    () =>
+      Array.isArray(product.adicionais)
+        ? product.adicionais
+            .map((a) => `${a.id}:${a.name}:${a.price}:${a.available !== false}`)
+            .join("|")
+        : "__fetch__",
+    [product.adicionais]
+  )
+  const imageUrl = product.image || "/ui/placeholder.jpg"
+
+  useEffect(() => {
+    setDialogImageLoaded(false)
+  }, [imageUrl])
 
   useEffect(() => {
     const checkPromo = async () => {
@@ -324,11 +367,14 @@ export function AddToCartDialog({
       }
 
       userInteractedAdicionaisRef.current = false
+      setResolvedAllowsAddons(null)
+      setResolvedAllowsNotes(null)
+      setIsLoadingAdicionais(false)
+      setAdicionaisLoadError(false)
       setSelectedBebidas({})
       setQuantity(editMode ? Math.max(1, initialQuantity ?? 1) : 1)
       setObservacoes(editMode ? (initialObservacoes ?? "") : "")
       setPastaType(editMode ? normalizePastaType(initialPastaType) : "penne")
-      setDialogImageLoaded(false)
 
       // Sorteia 1 das 5 frases para a seção de bebidas
       setFraseBebidaIndex(secureRandomInt(5))
@@ -350,36 +396,65 @@ export function AddToCartDialog({
       }
       setFraseIndices(randomMap)
 
-      if (!allowsAddons) {
+      const currentProductAdicionais = latestProductAdicionaisRef.current
+      if (
+        categoryRules?.allowsAddons === false ||
+        (Array.isArray(currentProductAdicionais) && !baseAllowsAddons)
+      ) {
         setAdicionaisDisponiveis([])
         setSelectedAdicionais({})
-      } else if (product.adicionais && product.adicionais.length > 0) {
-        setAdicionaisDisponiveis(product.adicionais)
+        setIsLoadingAdicionais(false)
+      } else if (Array.isArray(currentProductAdicionais)) {
+        const linkedAdicionais = normalizeProductAdicionais(currentProductAdicionais)
+        setAdicionaisDisponiveis(linkedAdicionais)
         setSelectedAdicionais(
-          editMode ? buildHydratedAdicionais(product.adicionais, initialAdicionais) : {}
+          editMode ? buildHydratedAdicionais(linkedAdicionais, initialAdicionais) : {}
         )
+        setIsLoadingAdicionais(false)
       } else {
-        setSelectedAdicionais(
-          editMode && adicionaisDisponiveis.length > 0
-            ? buildHydratedAdicionais(adicionaisDisponiveis, initialAdicionais)
-            : {}
-        )
+        const requestId = ++adicionaisRequestIdRef.current
+        setAdicionaisDisponiveis([])
+        setSelectedAdicionais({})
+        setIsLoadingAdicionais(true)
+        setAdicionaisLoadError(false)
         adicionaisManager
-          .getAdicionais()
-          .then((data) => {
-            if (cancelled) return
-            if (data && data.length > 0) {
-              const loaded = data as Adicional[]
-              setAdicionaisDisponiveis(loaded)
-              if (editMode && !userInteractedAdicionaisRef.current) {
-                setSelectedAdicionais(buildHydratedAdicionais(loaded, initialAdicionais))
-              }
+          .getAdicionaisByProductId(String(product.id))
+          .then(({ allowsAddons: fetchedAllowsAddons, allowsNotes: fetchedAllowsNotes, adicionais, loadError }) => {
+            if (cancelled || adicionaisRequestIdRef.current !== requestId) return
+            setIsLoadingAdicionais(false)
+            if (loadError) {
+              setAdicionaisLoadError(true)
+              setAdicionaisDisponiveis([])
+              setSelectedAdicionais({})
+              return
+            }
+            setResolvedAllowsNotes(fetchedAllowsNotes)
+            if (fetchedAllowsAddons === false) {
+              setResolvedAllowsAddons(false)
+              setAdicionaisDisponiveis([])
+              setSelectedAdicionais({})
+              setSelectedBebidas({})
+              setBebidasDisponiveis([])
+              return
+            }
+            setResolvedAllowsAddons(fetchedAllowsAddons)
+            const linkedAdicionais = normalizeProductAdicionais(adicionais)
+            setAdicionaisDisponiveis(linkedAdicionais)
+            if (editMode && !userInteractedAdicionaisRef.current) {
+              setSelectedAdicionais(buildHydratedAdicionais(linkedAdicionais, initialAdicionais))
             }
           })
-          .catch((err) => console.error("Erro ao carregar adicionais:", err))
+          .catch((err) => {
+            if (cancelled || adicionaisRequestIdRef.current !== requestId) return
+            console.error("Erro ao carregar adicionais do produto:", err)
+            setIsLoadingAdicionais(false)
+            setAdicionaisLoadError(true)
+            setAdicionaisDisponiveis([])
+            setSelectedAdicionais({})
+          })
       }
 
-      if (allowsAddons && !editMode) {
+      if (baseAllowsAddons && !editMode) {
         const fetchDrinks = async () => {
           try {
             const supabase = createBrowserClient()
@@ -432,12 +507,63 @@ export function AddToCartDialog({
       }
     } else {
       lastTrackedViewKeyRef.current = null
+      setAdicionaisDisponiveis([])
+      setSelectedAdicionais({})
+      setSelectedBebidas({})
+      setBebidasDisponiveis([])
+      setResolvedAllowsAddons(null)
+      setResolvedAllowsNotes(null)
+      setIsLoadingAdicionais(false)
+      setAdicionaisLoadError(false)
     }
 
     return () => {
       cancelled = true
+      adicionaisRequestIdRef.current += 1
     }
-  }, [open, product.id, product.adicionais, allowsAddons, editMode])
+  }, [open, product.id, productAdicionaisKey, baseAllowsAddons, categoryRules?.allowsAddons, editMode])
+
+  const handleRetryLoadAdicionais = () => {
+    if (!open || isLoadingAdicionais) return
+    const requestId = ++adicionaisRequestIdRef.current
+    setIsLoadingAdicionais(true)
+    setAdicionaisLoadError(false)
+    adicionaisManager
+      .getAdicionaisByProductId(String(product.id))
+      .then(({ allowsAddons: fetchedAllowsAddons, allowsNotes: fetchedAllowsNotes, adicionais, loadError }) => {
+        if (adicionaisRequestIdRef.current !== requestId) return
+        setIsLoadingAdicionais(false)
+        if (loadError) {
+          setAdicionaisLoadError(true)
+          setAdicionaisDisponiveis([])
+          setSelectedAdicionais({})
+          return
+        }
+        setResolvedAllowsNotes(fetchedAllowsNotes)
+        if (fetchedAllowsAddons === false) {
+          setResolvedAllowsAddons(false)
+          setAdicionaisDisponiveis([])
+          setSelectedAdicionais({})
+          setSelectedBebidas({})
+          setBebidasDisponiveis([])
+          return
+        }
+        setResolvedAllowsAddons(fetchedAllowsAddons)
+        const linkedAdicionais = normalizeProductAdicionais(adicionais)
+        setAdicionaisDisponiveis(linkedAdicionais)
+        if (editMode && !userInteractedAdicionaisRef.current) {
+          setSelectedAdicionais(buildHydratedAdicionais(linkedAdicionais, initialAdicionais))
+        }
+      })
+      .catch((err) => {
+        if (adicionaisRequestIdRef.current !== requestId) return
+        console.error("Erro ao recarregar adicionais do produto:", err)
+        setIsLoadingAdicionais(false)
+        setAdicionaisLoadError(true)
+        setAdicionaisDisponiveis([])
+        setSelectedAdicionais({})
+      })
+  }
 
   const updateAdicionalQuantity = (id: string, delta: number) => {
     userInteractedAdicionaisRef.current = true
@@ -515,42 +641,70 @@ export function AddToCartDialog({
   const fraseBebida = FRASES_CATEGORIA.bebidas[fraseBebidaIndex % FRASES_CATEGORIA.bebidas.length]
 
   const calculateTotal = useMemo(() => {
-    const adicionaisTotal = Object.entries(selectedAdicionais).reduce((sum, [id, qty]) => {
-      const adicional = adicionaisDisponiveis.find((a) => a.id === id)
-      return sum + (adicional?.price || 0) * qty
-    }, 0)
+    const adicionaisTotal = !allowsAddons
+      ? 0
+      : editMode && adicionaisLoadError && !userInteractedAdicionaisRef.current && Array.isArray(initialAdicionais)
+        ? initialAdicionais.reduce(
+            (sum, a) => sum + (Number(a.price) || 0) * Math.max(1, Number(a.quantity ?? 1) || 1),
+            0
+          )
+        : Object.entries(selectedAdicionais).reduce((sum, [id, qty]) => {
+            const adicional = adicionaisDisponiveis.find((a) => a.id === id)
+            return sum + (adicional?.price || 0) * qty
+          }, 0)
 
-    const bebidasTotal = Object.entries(selectedBebidas).reduce((sum, [id, qty]) => {
-      const bebida = bebidasDisponiveis.find((b) => b.id === id)
-      return sum + (bebida?.price || 0) * qty
-    }, 0)
+    const bebidasTotal = allowsAddons
+      ? Object.entries(selectedBebidas).reduce((sum, [id, qty]) => {
+          const bebida = bebidasDisponiveis.find((b) => b.id === id)
+          return sum + (bebida?.price || 0) * qty
+        }, 0)
+      : 0
 
     return (basePrice + adicionaisTotal) * quantity + bebidasTotal
-  }, [selectedAdicionais, adicionaisDisponiveis, selectedBebidas, bebidasDisponiveis, basePrice, quantity])
+  }, [
+    allowsAddons,
+    editMode,
+    adicionaisLoadError,
+    initialAdicionais,
+    selectedAdicionais,
+    adicionaisDisponiveis,
+    selectedBebidas,
+    bebidasDisponiveis,
+    basePrice,
+    quantity,
+  ])
 
   const handleAddToCart = () => {
     if (isUnavailable) {
       appToast.error("Produto indisponível", "Este item está temporariamente indisponível no momento.")
       return
     }
+    if (editMode && isLoadingAdicionais) return
 
     const trimmedObservacoes = allowsNotes ? observacoes.trim() || undefined : undefined
 
     if (editMode) {
       const adicionais = !allowsAddons
         ? []
-        : Object.entries(selectedAdicionais)
-            .map(([id, qty]) => {
-              const adicional = adicionaisDisponiveis.find((a) => a.id === id)
-              if (!adicional || qty <= 0) return null
-              return {
-                id: adicional.id,
-                name: adicional.name,
-                price: adicional.price,
-                quantity: qty,
-              }
-            })
-            .filter(Boolean) as Array<{ id: string; name: string; price: number; quantity: number }>
+        : adicionaisLoadError && !userInteractedAdicionaisRef.current && Array.isArray(initialAdicionais)
+          ? initialAdicionais.map((a) => ({
+              id: String(a.id || a.name),
+              name: a.name,
+              price: Number(a.price) || 0,
+              quantity: Math.max(1, Number(a.quantity ?? 1) || 1),
+            }))
+          : Object.entries(selectedAdicionais)
+              .map(([id, qty]) => {
+                const adicional = adicionaisDisponiveis.find((a) => a.id === id)
+                if (!adicional || qty <= 0) return null
+                return {
+                  id: adicional.id,
+                  name: adicional.name,
+                  price: adicional.price,
+                  quantity: qty,
+                }
+              })
+              .filter(Boolean) as Array<{ id: string; name: string; price: number; quantity: number }>
 
       onSaveEdit?.({
         price: basePrice,
@@ -671,7 +825,9 @@ export function AddToCartDialog({
     }
 
     const pastaTypeText = isMacarrao ? ` (${pastaType})` : ""
-    const totalBebidasCount = Object.values(selectedBebidas).reduce((a, b) => a + b, 0)
+    const totalBebidasCount = allowsAddons
+      ? Object.values(selectedBebidas).reduce((a, b) => a + b, 0)
+      : 0
     const bebidasExtraText =
       totalBebidasCount > 0 ? ` (+${totalBebidasCount} bebida${totalBebidasCount > 1 ? "s" : ""})` : ""
 
@@ -682,8 +838,6 @@ export function AddToCartDialog({
 
     onOpenChange(false)
   }
-
-  const imageUrl = product.image || "/ui/placeholder.jpg"
 
   return (
     <ResponsiveModal open={open} onOpenChange={onOpenChange}>
@@ -805,7 +959,69 @@ export function AddToCartDialog({
             )}
 
             {/* SEÇÃO DE ADICIONAIS AGRUPADOS ESTILO IFOOD (COM FRASES EM RODÍZIO IDÊNTICAS AO APP) */}
-            {allowsAddons && activeCategories.length > 0 && (
+            {allowsAddons && isLoadingAdicionais ? (
+              <div
+                role="status"
+                aria-busy="true"
+                aria-label="Carregando adicionais"
+                className="space-y-4 pt-1"
+              >
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[16px] font-black text-[#1F1B16]">Adicionais</h4>
+                  <span className="text-[10px] font-bold bg-[#f0f0f0] text-gray-500 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                    OPCIONAL
+                  </span>
+                </div>
+
+                <div className="divide-y divide-gray-100">
+                  {[0, 1].map((row) => (
+                    <div key={row} className="flex items-center justify-between gap-2 py-3">
+                      <div className="flex-1 min-w-0 space-y-2">
+                        <Skeleton className="h-4 w-40 rounded-md" />
+                        <Skeleton className="h-3.5 w-20 rounded-md" />
+                      </div>
+                      <Skeleton className="w-8 h-8 rounded-full shrink-0" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : allowsAddons && adicionaisLoadError ? (
+              <div className="space-y-3 pt-1">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[16px] font-black text-[#1F1B16]">Adicionais</h4>
+                  <span className="text-[10px] font-bold bg-[#f0f0f0] text-gray-500 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                    OPCIONAL
+                  </span>
+                </div>
+
+                <div
+                  role="alert"
+                  className="bg-[#FEF8EC] border border-[#FCE8C3] rounded-2xl p-3.5 flex items-start gap-3"
+                >
+                  <AlertCircle className="w-5 h-5 text-[#C68A07] shrink-0 mt-0.5" aria-hidden="true" />
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-semibold text-[#1F1B16]">
+                        Não foi possível carregar os adicionais agora.
+                      </p>
+                      {editMode && (
+                        <p className="text-xs text-[#8A6100]">
+                          Seus adicionais já selecionados serão mantidos ao salvar.
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRetryLoadAdicionais}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-[#8A6100] bg-white hover:bg-[#FFFDF8] border border-[#FCE8C3] px-3 py-1.5 rounded-xl transition-colors active:scale-95"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+                      <span>Tentar novamente</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : allowsAddons && activeCategories.length > 0 ? (
               <div className="space-y-4 pt-1">
                 <div className="flex items-center justify-between">
                   <h4 className="text-[16px] font-black text-[#1F1B16]">Adicionais</h4>
@@ -891,7 +1107,7 @@ export function AddToCartDialog({
                   })}
                 </div>
               </div>
-            )}
+            ) : null}
 
             {/* SEÇÃO DE CROSS-SELL DE BEBIDAS (EMBAIXO DOS ADICIONAIS COM RODÍZIO DE FRASES) */}
             {allowsAddons && !editMode && bebidasDisponiveis.length > 0 && (
@@ -984,6 +1200,7 @@ export function AddToCartDialog({
                   data-vaul-no-drag
                   value={observacoes}
                   onChange={(e) => setObservacoes(e.target.value)}
+                  maxLength={300}
                   rows={3}
                   placeholder="Ex: sem cebola, maionese à parte..."
                   className="w-full p-4 bg-[#F7F5F1]/70 border border-gray-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#E3A008] focus:border-transparent transition-all text-sm text-[#1F1B16] placeholder:text-gray-400 resize-none"
@@ -1025,11 +1242,11 @@ export function AddToCartDialog({
             <button
               type="button"
               onClick={handleAddToCart}
-              disabled={isUnavailable}
+              disabled={isUnavailable || (editMode && isLoadingAdicionais)}
               className={`flex-1 min-w-0 font-black text-xs sm:text-sm h-12 sm:h-13 rounded-2xl transition-all flex items-center gap-2 px-3 sm:px-4 ${
                 isUnavailable
                   ? "bg-gray-200 text-gray-500 cursor-not-allowed justify-center shadow-none"
-                  : "bg-[#E3A008] hover:bg-[#C68A07] active:scale-[0.98] text-white shadow-md justify-between"
+                  : "bg-[#E3A008] hover:bg-[#C68A07] active:scale-[0.98] text-white shadow-md justify-between disabled:opacity-60 disabled:cursor-not-allowed"
               }`}
             >
               {isUnavailable ? (
@@ -1039,7 +1256,9 @@ export function AddToCartDialog({
                   <span className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                     <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
                     {editMode ? (
-                      <span className="truncate">Salvar alterações</span>
+                      <span className="truncate">
+                        {isLoadingAdicionais ? "Carregando..." : "Salvar alterações"}
+                      </span>
                     ) : (
                       <>
                         <span className="sm:hidden truncate">Adicionar</span>

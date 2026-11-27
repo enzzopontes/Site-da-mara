@@ -19,8 +19,39 @@ class ApiError extends Error {
   }
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const SAFE_TEXT_ID_REGEX = /^[a-zA-Z0-9_-]{1,128}$/
+const MAX_ADICIONAIS_PER_PRODUCT = 100
+
 const ok = (data: unknown, status = 200) => NextResponse.json({ success: true, data }, { status })
 const fail = (error: string, status = 400) => NextResponse.json({ success: false, error }, { status })
+
+function assertSameOriginForCookieAuth(request: NextRequest) {
+  if (
+    request.headers.get("authorization")?.toLowerCase().startsWith("bearer ") &&
+    !request.headers.get("cookie")
+  ) {
+    return
+  }
+
+  const secFetchSite = request.headers.get("sec-fetch-site")?.toLowerCase()
+  if (secFetchSite && secFetchSite !== "same-origin" && secFetchSite !== "none") {
+    throw new ApiError(403, "Origem da requisição não permitida.")
+  }
+
+  const originOrReferer = request.headers.get("origin") || request.headers.get("referer")
+  if (originOrReferer) {
+    let parsed: URL
+    try {
+      parsed = new URL(originOrReferer)
+    } catch {
+      throw new ApiError(403, "Origem da requisição não permitida.")
+    }
+    if (parsed.host !== request.nextUrl.host) {
+      throw new ApiError(403, "Origem da requisição não permitida.")
+    }
+  }
+}
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -179,7 +210,16 @@ function buildProductRow(input: Json, partial: boolean) {
 function cleanIds(ids: unknown): string[] {
   if (ids === undefined || ids === null) return []
   if (!Array.isArray(ids)) throw new ApiError(400, "adicionalIds deve ser uma lista.")
-  return [...new Set(ids.map((i) => String(i).trim()).filter(Boolean))]
+  if (ids.length > MAX_ADICIONAIS_PER_PRODUCT) {
+    throw new ApiError(400, "Limite de adicionais por produto excedido.")
+  }
+  const cleaned = [...new Set(ids.map((i) => String(i).trim()).filter(Boolean))]
+  for (const id of cleaned) {
+    if (!SAFE_TEXT_ID_REGEX.test(id)) {
+      throw new ApiError(400, "adicionalIds contém identificador inválido.")
+    }
+  }
+  return cleaned
 }
 
 function isMissingCategoryIdColumnError(error: { code?: string; message?: string } | null | undefined): boolean {
@@ -308,15 +348,22 @@ async function syncAdicionais(
 
 export async function POST(request: NextRequest) {
   try {
+    const contentType = (request.headers.get("content-type") || "").toLowerCase()
+    if (!contentType.includes("application/json")) {
+      return fail("Content-Type application/json obrigatório.", 415)
+    }
+
+    assertSameOriginForCookieAuth(request)
+
+    const service = getServiceClient()
+    await requireAdmin(request, service)
+
     let body: Json
     try {
       body = await request.json()
     } catch {
       return fail("Corpo da requisição inválido (JSON esperado).", 400)
     }
-
-    const service = getServiceClient()
-    await requireAdmin(request, service)
 
     const action = body.action as string
 
@@ -370,6 +417,7 @@ export async function POST(request: NextRequest) {
     if (action === "updateProduct") {
       const productId = String(body.productId ?? "").trim()
       if (!productId) throw new ApiError(400, "productId é obrigatório.")
+      if (!UUID_REGEX.test(productId)) throw new ApiError(400, "productId inválido.")
 
       const row = buildProductRow(body.updates ?? {}, true)
       let categoryMeta: { id: string | null; slug: string; allowsAddons: boolean }
@@ -438,6 +486,7 @@ export async function POST(request: NextRequest) {
     if (action === "deleteProduct") {
       const productId = String(body.productId ?? "").trim()
       if (!productId) throw new ApiError(400, "productId é obrigatório.")
+      if (!UUID_REGEX.test(productId)) throw new ApiError(400, "productId inválido.")
 
       const { error: relErr } = await service.from("product_adicionais").delete().eq("product_id", productId)
       if (relErr) throw new ApiError(500, `Erro ao remover vínculos de adicionais: ${relErr.message}`)
@@ -463,6 +512,7 @@ export async function POST(request: NextRequest) {
     if (action === "setAdicionais") {
       const productId = String(body.productId ?? "").trim()
       if (!productId) throw new ApiError(400, "productId é obrigatório.")
+      if (!UUID_REGEX.test(productId)) throw new ApiError(400, "productId inválido.")
       const adicionalIds = cleanIds(body.adicionalIds)
       const existing = await fetchProductCategoryRef(service, productId)
       const meta = await resolveCategoryMeta(service, existing.category, existing.category_id)
@@ -498,12 +548,14 @@ export async function POST(request: NextRequest) {
         .select()
         .single()
       if (error || !adicional) throw new ApiError(500, `Erro ao criar adicional: ${error?.message ?? "sem retorno"}`)
+      revalidateMenuCache()
       return ok({ adicional }, 201)
     }
 
     if (action === "updateAdicional") {
       const adicionalId = String(body.adicionalId ?? "").trim()
       if (!adicionalId) throw new ApiError(400, "adicionalId é obrigatório.")
+      if (!SAFE_TEXT_ID_REGEX.test(adicionalId)) throw new ApiError(400, "adicionalId inválido.")
 
       const raw = body.updates ?? {}
       const candidate: Json = {}
@@ -530,12 +582,14 @@ export async function POST(request: NextRequest) {
         .maybeSingle()
       if (error) throw new ApiError(500, `Erro ao atualizar adicional: ${error.message}`)
       if (!adicional) throw new ApiError(404, "Adicional não encontrado.")
+      revalidateMenuCache()
       return ok({ adicional })
     }
 
     if (action === "deleteAdicional") {
       const adicionalId = String(body.adicionalId ?? "").trim()
       if (!adicionalId) throw new ApiError(400, "adicionalId é obrigatório.")
+      if (!SAFE_TEXT_ID_REGEX.test(adicionalId)) throw new ApiError(400, "adicionalId inválido.")
 
       const { error: relErr } = await service.from("product_adicionais").delete().eq("adicional_id", adicionalId)
       if (relErr) throw new ApiError(500, `Erro ao remover vínculos do adicional: ${relErr.message}`)
@@ -548,6 +602,7 @@ export async function POST(request: NextRequest) {
       if (delErr) throw new ApiError(500, `Erro ao excluir adicional: ${delErr.message}`)
       if (!deleted || deleted.length === 0) throw new ApiError(404, "Adicional não encontrado.")
 
+      revalidateMenuCache()
       return ok({ deleted: true, adicionalId })
     }
 
