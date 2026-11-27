@@ -4,10 +4,11 @@ import React, { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { AddressFlow } from "@/components/MapAddressPicker/AddressFlow";
+import { sanitizeReturnUrl } from "@/lib/security-auth";
 
 function SelecionarEnderecoContent() {
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirect") || "/cardapio";
+  const redirectTo = sanitizeReturnUrl(searchParams.get("redirect"), "/cardapio");
 
   return (
     <div className="min-h-screen w-full bg-[#FAF8F5] flex justify-center">

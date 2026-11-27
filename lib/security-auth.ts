@@ -438,7 +438,7 @@ export function isSecureAdminCheck(user: any, allowedEmailsCsv?: string): boolea
 export function sanitizeReturnUrl(rawUrl: string | null | undefined, fallback = "/cardapio"): string {
   if (!rawUrl || typeof rawUrl !== "string") return fallback
   const trimmed = rawUrl.trim()
-  if (trimmed.startsWith("/") && !trimmed.startsWith("//") && !trimmed.includes("\\") && !trimmed.includes(":")) {
+  if (trimmed.startsWith("/") && !trimmed.startsWith("//") && !trimmed.includes("\\") && !trimmed.includes(":") && !/[\u0000-\u001F\u007F]/.test(trimmed)) {
     return trimmed
   }
   return fallback
