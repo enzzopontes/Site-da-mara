@@ -137,13 +137,16 @@ export function CardapioContent({
     return () => window.removeEventListener("catalog-search", handleCatalogSearch)
   }, [])
 
-  // Sincronizar parâmetros de busca e categoria da URL (?q= e ?category=)
+  // Sincronizar parâmetro de busca da URL (?q=) isoladamente
   useEffect(() => {
     const q = searchParams.get("q")
     if (q !== null) {
       setSearchQuery(q)
     }
+  }, [searchParams])
 
+  // Sincronizar parâmetro de categoria da URL (?category=)
+  useEffect(() => {
     if (!mounted) return
 
     const cat = searchParams.get("category")
@@ -343,16 +346,19 @@ export function CardapioContent({
     [centerActiveTab]
   )
 
-  const renderedSlugsKey = useMemo(
-    () => filteredSections.map((s) => s.category.slug).join("|"),
-    [filteredSections]
+  const scrollSpySlugsKey = useMemo(
+    () =>
+      (useSplitDesktopLayout ? mainSections : filteredSections)
+        .map((s) => s.category.slug)
+        .join("|"),
+    [useSplitDesktopLayout, mainSections, filteredSections]
   )
 
   // IntersectionObserver: ScrollSpy dinâmico de alta performance (sem listeners pesados de scroll)
   useEffect(() => {
     if (!mounted) return
 
-    const sectionIds = renderedSlugsKey ? renderedSlugsKey.split("|") : []
+    const sectionIds = scrollSpySlugsKey ? scrollSpySlugsKey.split("|") : []
     const observedElements: HTMLElement[] = []
 
     sectionIds.forEach((id) => {
@@ -362,24 +368,31 @@ export function CardapioContent({
 
     if (observedElements.length === 0) return
 
+    const intersectingIds = new Set<string>()
+
     const observer = new IntersectionObserver(
       (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            intersectingIds.add(entry.target.id)
+          } else {
+            intersectingIds.delete(entry.target.id)
+          }
+        }
+
         if (isManualScrollRef.current || window.scrollY < 60) return
 
-        // Procura a seção que intersecta a zona de leitura do topo
-        const visibleEntry = entries.find((entry) => entry.isIntersecting)
-        if (visibleEntry?.target?.id) {
-          const newActiveId = visibleEntry.target.id
-          if (newActiveId !== activeTabRef.current) {
-            activeTabRef.current = newActiveId
-            setActiveTab(newActiveId)
-            centerActiveTab(newActiveId)
-          }
+        // Seleciona a primeira seção em ordem de documento que intersecta a zona de leitura
+        const newActiveId = sectionIds.find((id) => intersectingIds.has(id))
+        if (newActiveId && newActiveId !== activeTabRef.current) {
+          activeTabRef.current = newActiveId
+          setActiveTab(newActiveId)
+          centerActiveTab(newActiveId)
         }
       },
       {
-        // Linha de disparo logo abaixo do header sticky (110px do topo)
-        rootMargin: "-110px 0px -65% 0px",
+        // Linha de disparo logo abaixo do header sticky (80px no desktop slim / 110px no mobile)
+        rootMargin: isDesktop ? "-80px 0px -65% 0px" : "-110px 0px -65% 0px",
         threshold: [0, 0.15],
       }
     )
@@ -408,7 +421,7 @@ export function CardapioContent({
         clearTimeout(manualScrollTimerRef.current)
       }
     }
-  }, [mounted, centerActiveTab, renderedSlugsKey, useSplitDesktopLayout])
+  }, [mounted, centerActiveTab, scrollSpySlugsKey, useSplitDesktopLayout, isDesktop])
 
   const handleClearSearch = useCallback(() => {
     setSearchQuery("")
@@ -619,7 +632,7 @@ export function CardapioContent({
                 <section
                   key={sec.category.id}
                   id={sec.category.slug}
-                  className="w-full px-0.5 scroll-mt-28 sm:scroll-mt-32"
+                  className="w-full px-0.5 scroll-mt-28 sm:scroll-mt-32 lg:scroll-mt-24"
                   aria-labelledby={`heading-${sec.category.slug}`}
                 >
                   {renderSectionHeader(sec.category, sec.products.length, false)}
@@ -648,12 +661,12 @@ export function CardapioContent({
             </div>
 
             {/* Zona Lateral Direita (Sidebar Fixa) */}
-            <aside className="sticky top-28 space-y-6">
+            <aside className="sticky top-28 lg:top-20 space-y-6">
               {sidebarSections.map((sec) => (
                 <section
                   key={sec.category.id}
                   id={sec.category.slug}
-                  className="bg-white border border-[#ECE7E0] rounded-2xl p-4 shadow-xs scroll-mt-28 sm:scroll-mt-32"
+                  className="bg-white border border-[#ECE7E0] rounded-2xl p-4 shadow-xs scroll-mt-28 sm:scroll-mt-32 lg:scroll-mt-24"
                   aria-labelledby={`heading-${sec.category.slug}`}
                 >
                   {renderSectionHeader(sec.category, sec.products.length, true)}
@@ -688,7 +701,7 @@ export function CardapioContent({
             <section
               key={sec.category.id}
               id={sec.category.slug}
-              className="w-full px-0.5 scroll-mt-28 sm:scroll-mt-32"
+              className="w-full px-0.5 scroll-mt-28 sm:scroll-mt-32 lg:scroll-mt-24"
               aria-labelledby={`heading-${sec.category.slug}`}
             >
               {renderSectionHeader(sec.category, sec.products.length, false)}

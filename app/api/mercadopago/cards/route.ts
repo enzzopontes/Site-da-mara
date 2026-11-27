@@ -234,11 +234,12 @@ export async function PATCH(req: NextRequest) {
 
     // Desmarcar todos e marcar o selecionado
     await supabase.from('payment_cards').update({ is_default: false }).eq('user_id', user.id);
-    await supabase.from('payment_cards').update({ is_default: true }).eq('id', cardId);
+    await supabase.from('payment_cards').update({ is_default: true }).eq('id', cardId).eq('user_id', user.id);
 
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err?.message }, { status: 500 });
+    console.error('[cards][PATCH]', err);
+    return NextResponse.json({ success: false, error: 'Erro interno ao atualizar cartão' }, { status: 500 });
   }
 }
 
@@ -282,7 +283,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     // Deletar do banco
-    await supabase.from('payment_cards').delete().eq('id', cardId);
+    await supabase.from('payment_cards').delete().eq('id', cardId).eq('user_id', user.id);
 
     // Se o removido era padrão, promover outro se houver
     if (card.is_default) {
@@ -294,7 +295,7 @@ export async function DELETE(req: NextRequest) {
         .maybeSingle();
 
       if (nextCard) {
-        await supabase.from('payment_cards').update({ is_default: true }).eq('id', nextCard.id);
+        await supabase.from('payment_cards').update({ is_default: true }).eq('id', nextCard.id).eq('user_id', user.id);
       }
     }
 

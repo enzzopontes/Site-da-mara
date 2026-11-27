@@ -61,6 +61,7 @@ export function Header({ variant = "default" }: HeaderProps) {
 
   const hiddenRef = useRef(false)
   const addressRequestIdRef = useRef(0)
+  const headerWrapperRef = useRef<HTMLDivElement>(null)
 
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0)
@@ -176,7 +177,7 @@ export function Header({ variant = "default" }: HeaderProps) {
     }
 
     const handleScroll = () => {
-      if (window.scrollY <= 40 && hiddenRef.current) {
+      if (window.scrollY <= 45 && hiddenRef.current) {
         hiddenRef.current = false
         setIsHeaderHidden(false)
       }
@@ -184,7 +185,7 @@ export function Header({ variant = "default" }: HeaderProps) {
 
     window.addEventListener("header-scroll-swap", onHeaderScrollSwap)
     window.addEventListener("scroll", handleScroll, { passive: true })
-    if (window.scrollY <= 40) {
+    if (window.scrollY <= 45) {
       hiddenRef.current = false
       setIsHeaderHidden(false)
     }
@@ -246,10 +247,22 @@ export function Header({ variant = "default" }: HeaderProps) {
   const hideHeader = isHeaderHidden && (pathname === "/" || pathname === "/cardapio")
   const isInitialLoading = !mounted || authLoading || addressLoading
 
+  useEffect(() => {
+    if (hideHeader && headerWrapperRef.current) {
+      const active = document.activeElement
+      if (active instanceof HTMLElement && headerWrapperRef.current.contains(active)) {
+        active.blur()
+      }
+    }
+  }, [hideHeader])
+
   return (
     <>
       <div
-        className={`${isPerfil ? "hidden md:block" : "block"} sticky top-0 z-40 transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        ref={headerWrapperRef}
+        aria-hidden={hideHeader}
+        inert={hideHeader}
+        className={`${isPerfil ? "hidden md:block" : "block"} sticky top-0 z-40 transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${
           hideHeader
             ? "-translate-y-full pointer-events-none"
             : "translate-y-0 opacity-100 pointer-events-auto"

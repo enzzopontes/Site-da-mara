@@ -6,6 +6,7 @@ import { authenticateRequestUser } from "@/lib/supabase/route-auth"
 import { isAdminUser } from "@/lib/supabase/admin"
 import { CATEGORIES_CACHE_TAG } from "@/lib/categories-server"
 import { normalizeLegacyCategorySlug } from "@/lib/category-icons"
+import { syncProductWebpImageName } from "@/lib/product-image-sync-server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -68,7 +69,10 @@ const SafeImageUrlSchema = z
   .trim()
   .max(2048, "URL da imagem muito longa.")
   .refine(
-    (val) => val === "" || val.startsWith("/") || /^https?:\/\/[^\s]+$/i.test(val),
+    (val) =>
+      val === "" ||
+      (val.startsWith("/") && !val.startsWith("//") && !val.includes("\\")) ||
+      /^https?:\/\/[^\s]+$/i.test(val),
     "URL da imagem inválida (use caminho relativo iniciado por / ou URL http/https)."
   )
 
@@ -346,6 +350,19 @@ export async function POST(request: NextRequest) {
           warning = e?.message || "Produto criado, mas adicionais não foram vinculados."
         }
       }
+      try {
+        const syncRes = await syncProductWebpImageName({
+          service,
+          productId: String(product.id),
+          productName: String(product.name ?? ""),
+          imageUrl: product.image_url,
+        })
+        if (syncRes.renamed) {
+          product = { ...product, image_url: syncRes.imageUrl }
+        }
+      } catch (syncErr) {
+        console.warn("[api/admin/products] Falha ao sincronizar nome da imagem WebP (create):", syncErr)
+      }
       revalidateMenuCache()
       return ok({ product, warning }, 201)
     }
@@ -393,6 +410,26 @@ export async function POST(request: NextRequest) {
         await syncAdicionais(service, productId, [])
       } else if (body.adicionalIds !== undefined) {
         await syncAdicionais(service, productId, cleanIds(body.adicionalIds))
+      }
+      if (
+        (row.name !== undefined || row.image_url !== undefined) &&
+        product &&
+        product.name &&
+        product.image_url
+      ) {
+        try {
+          const syncRes = await syncProductWebpImageName({
+            service,
+            productId: String(product.id),
+            productName: String(product.name),
+            imageUrl: String(product.image_url),
+          })
+          if (syncRes.renamed) {
+            product = { ...product, image_url: syncRes.imageUrl }
+          }
+        } catch (syncErr) {
+          console.warn("[api/admin/products] Falha ao sincronizar nome da imagem WebP (update):", syncErr)
+        }
       }
       revalidateMenuCache()
       return ok({ product })
@@ -521,6 +558,6 @@ export async function POST(request: NextRequest) {
   } catch (e: any) {
     if (e instanceof ApiError) return fail(e.message, e.status)
     console.error("[api/admin/products]", e)
-    return fail(e?.message || "Erro interno do servidor.", 500)
+    return fail("Erro interno do servidor.", 500)
   }
 }

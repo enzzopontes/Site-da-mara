@@ -514,6 +514,7 @@ function AdminLayoutContent({
           <Link
             href="/"
             target="_blank"
+            rel="noopener noreferrer"
             className="flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-stone-300 hover:bg-[#2A241E] hover:text-[#E3A008] transition-colors"
           >
             <div className="flex items-center gap-2">

@@ -17,14 +17,18 @@ export default async function CardapioPage() {
   let loadError: string | null = null
 
   try {
-    // Rankings REAIS baseados nas vendas do banco de dados
+    // Rankings REAIS baseados nas vendas do banco de dados (isolado para não derrubar o catálogo)
     ;[categories, allProducts, rankingNames] = await Promise.all([
       getCachedActiveCategories(),
       productsManager.getProducts(),
-      productsManager.getGlobalRankingNames(80),
+      productsManager.getGlobalRankingNames(80).catch((rankErr) => {
+        console.warn("[cardapio] Falha não impeditiva ao carregar ranking:", rankErr)
+        return []
+      }),
     ])
   } catch (err) {
-    loadError = err instanceof Error ? err.message : "Não foi possível carregar o cardápio."
+    console.error("[cardapio] Erro ao carregar dados do cardápio:", err)
+    loadError = "Não foi possível carregar o cardápio no momento. Tente novamente em instantes."
   }
 
   const availableProducts = allProducts.filter((p) => p.available !== false)
