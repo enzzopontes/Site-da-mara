@@ -103,6 +103,35 @@ export async function POST(req: NextRequest) {
         })
       }
 
+      if (!isAdmin && order.metadata?.bark_last_sent_at) {
+        const lastSentMs = Date.parse(String(order.metadata.bark_last_sent_at))
+        if (Number.isFinite(lastSentMs) && Date.now() - lastSentMs < 15_000) {
+          return NextResponse.json(
+            {
+              success: false,
+              skipped: true,
+              message: "Aguarde alguns segundos antes de reenviar a notificação",
+            },
+            { status: 429 }
+          )
+        }
+      }
+
+      // NEW-08 FIX: Incrementa bark_attempts atomicamente via merge_order_metadata mesmo em falha para evitar loop infinito
+      const nextAttempt = attempts + 1
+      const { error: reserveError } = await supabase.rpc("merge_order_metadata", {
+        order_id: orderId,
+        patch: {
+          bark_attempts: nextAttempt,
+          bark_last_sent_at: new Date().toISOString(),
+        },
+      })
+
+      if (reserveError) {
+        console.error("[api/bark] Falha ao reservar tentativa do Bark:", reserveError.message || reserveError)
+        return NextResponse.json({ success: false, error: "Erro interno ao processar notificação" }, { status: 500 })
+      }
+
       const result = await sendBarkNotification({
         id: order.id,
         order_number: order.order_number,
@@ -111,27 +140,25 @@ export async function POST(req: NextRequest) {
         payment_method: order.payment_method,
       })
 
-      // NEW-08 FIX: Incrementa bark_attempts atomicamente via merge_order_metadata mesmo em falha para evitar loop infinito
-      const nextAttempt = attempts + 1
-      await supabase.rpc("merge_order_metadata", {
-        order_id: orderId,
-        patch: {
-          bark_attempts: nextAttempt,
-          bark_last_sent_at: new Date().toISOString(),
-          ...(result.success ? {} : { bark_last_error: result.error || "failed" }),
-        },
-      })
+      if (!result.success) {
+        await supabase.rpc("merge_order_metadata", {
+          order_id: orderId,
+          patch: {
+            bark_last_error: result.error || "failed",
+          },
+        })
+      }
 
       return NextResponse.json({
         success: result.success,
         attempt: nextAttempt,
-        error: result.error,
+        error: isAdmin ? result.error : result.success ? undefined : "Não foi possível enviar notificação",
       })
     }
 
     return NextResponse.json({ success: false, error: "Ação inválida" }, { status: 400 })
   } catch (err: any) {
     console.error("[api/bark] Erro interno:", err?.message || err)
-    return NextResponse.json({ success: false, error: err?.message || "Erro interno" }, { status: 500 })
+    return NextResponse.json({ success: false, error: "Erro interno ao processar notificação" }, { status: 500 })
   }
 }

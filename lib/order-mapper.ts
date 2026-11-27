@@ -6,6 +6,19 @@ function safeDate(value: unknown): Date | null {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
+function safeCoordinate(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim()
+    if (!trimmed) return null
+    const parsed = Number(trimmed)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
 function normalizeAdicionais(raw: unknown) {
   if (!Array.isArray(raw)) return []
   return raw
@@ -77,8 +90,8 @@ export function mapOrderData(rawOrder: any, rawItems: any[] = []): Order {
     address: o.customer_address,
     neighborhood: o.customer_neighborhood || "",
     complement: o.customer_complement || "",
-    deliveryLat: o.delivery_lat ?? o.metadata?.delivery_lat ?? null,
-    deliveryLng: o.delivery_lng ?? o.metadata?.delivery_lng ?? null,
+    deliveryLat: safeCoordinate(o.delivery_lat) ?? safeCoordinate(o.metadata?.delivery_lat),
+    deliveryLng: safeCoordinate(o.delivery_lng) ?? safeCoordinate(o.metadata?.delivery_lng),
     createdAt: safeDate(o.created_at) ?? new Date(0),
     completedAt: safeDate(o.updated_at) ?? undefined,
     statusUpdatedAt: safeDate(o.metadata?.statusUpdatedAt) ?? safeDate(o.updated_at) ?? undefined,

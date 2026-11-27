@@ -42,20 +42,16 @@ import {
   Printer,
   MessageCircle,
   Sparkles,
+  Navigation,
+  AlertTriangle,
+  WifiOff,
 } from "lucide-react"
 import { ordersManager, type Order } from "@/lib/orders-manager"
-import { storeStatusManager } from "@/lib/store-status-manager"
 import { adicionaisManager, type Adicional } from "@/lib/adicionais-manager"
+import { buildWazeNavigationUrl, isPickupDeliveryType } from "@/lib/waze"
 import Link from "next/link"
 
 import { isAdmin as checkIsAdminRole } from "@/lib/supabase/admin"
-
-type ExtendedStatus = Order["status"] | "out_for_delivery"
-
-const isPickupOrder = (deliveryType?: string | null): boolean => {
-  const normalized = (deliveryType || "").trim().toLowerCase()
-  return normalized === "pickup" || normalized === "retirada"
-}
 
 const statusConfig: Record<
   string,
@@ -131,12 +127,16 @@ export default function AdminPedidosPage() {
   const router = useRouter()
   const [isAdmin, setIsAdmin] = useState(false)
   const [orders, setOrders] = useState<Order[]>([])
-  const [filter, setFilter] = useState<"all" | ExtendedStatus>("all")
+  const [filter, setFilter] = useState<"all" | Order["status"]>("all")
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [permissionStatus, setPermissionStatus] = useState<string>("default")
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null)
-  const lastOrdersCount = useRef<number>(0)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [isInitialLoading, setIsInitialLoading] = useState(true)
+  const [isOffline, setIsOffline] = useState(false)
+  const isLoadingOrdersRef = useRef(false)
+  const requestSeqRef = useRef(0)
   const [isTestingBark, setIsTestingBark] = useState(false)
   const [adicionaisCatalog, setAdicionaisCatalog] = useState<Record<string, Adicional>>({})
   const [pendingConfirm, setPendingConfirm] = useState<
@@ -254,33 +254,67 @@ export default function AdminPedidosPage() {
     }
   }, [user, loading, router])
 
-  const loadOrders = async (isInitial = false) => {
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    setIsOffline(typeof navigator !== "undefined" ? !navigator.onLine : false)
+    const handleOffline = () => setIsOffline(true)
+    const handleOnline = () => {
+      setIsOffline(false)
+      if (isAdmin) {
+        loadOrders(true)
+      }
+    }
+    window.addEventListener("offline", handleOffline)
+    window.addEventListener("online", handleOnline)
+    return () => {
+      window.removeEventListener("offline", handleOffline)
+      window.removeEventListener("online", handleOnline)
+    }
+  }, [isAdmin])
+
+  const loadOrders = async (force = false) => {
+    if (
+      !force &&
+      (isLoadingOrdersRef.current || (typeof navigator !== "undefined" && !navigator.onLine))
+    ) {
+      return
+    }
+    const seq = ++requestSeqRef.current
+    isLoadingOrdersRef.current = true
     try {
       const todayOrders = await ordersManager.getTodayOrders()
       const activeOrders = await ordersManager.getActiveOrders()
+      if (seq !== requestSeqRef.current) return
       const allOrders = [...activeOrders, ...todayOrders]
       const uniqueOrders = allOrders.filter(
         (order, index, self) => index === self.findIndex((t) => t.id === order.id)
       )
 
-      lastOrdersCount.current = uniqueOrders.length
       setOrders(uniqueOrders)
+      setLoadError(null)
     } catch (error) {
+      if (seq !== requestSeqRef.current) return
       console.error("Erro ao carregar pedidos:", error)
+      setLoadError("Não foi possível carregar os pedidos. Verifique sua conexão e tente novamente.")
+    } finally {
+      if (seq === requestSeqRef.current) {
+        isLoadingOrdersRef.current = false
+        setIsInitialLoading(false)
+      }
     }
   }
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
-    await loadOrders()
+    await loadOrders(true)
     setIsRefreshing(false)
   }
 
-  const handleStatusChange = async (orderId: string, status: ExtendedStatus) => {
+  const handleStatusChange = async (orderId: string, status: Order["status"]) => {
     try {
       setUpdatingId(orderId)
       await ordersManager.updateOrderStatus(orderId, status as any)
-      await loadOrders()
+      await loadOrders(true)
     } catch (error) {
       console.error("Erro ao atualizar status do pedido:", error)
       appToast.error("Erro ao atualizar", "Não foi possível atualizar o status do pedido.")
@@ -293,7 +327,7 @@ export default function AdminPedidosPage() {
     try {
       await ordersManager.deleteOrder(orderId)
       setOrders(prev => prev.filter(o => o.id !== orderId))
-      await loadOrders()
+      await loadOrders(true)
     } catch (error: any) {
       console.error("Erro ao deletar pedido:", error)
       appToast.error("Erro ao deletar pedido", error?.message || "Falha inesperada")
@@ -318,16 +352,26 @@ export default function AdminPedidosPage() {
     }, 150)
   }
 
-  const getWhatsAppUrl = (phone: string, customerName: string, orderNumber?: number) => {
+  const getWhatsAppUrl = (
+    phone: string,
+    customerName: string,
+    orderNumber?: number
+  ): string | null => {
     const cleanPhone = (phone || "").replace(/\D/g, "")
-    const fullPhone = cleanPhone.startsWith("55") ? cleanPhone : `55${cleanPhone}`
+    const normalized = cleanPhone.replace(/^0+/, "")
+    if (normalized.length < 10) return null
+    const fullPhone =
+      normalized.length >= 12 && normalized.startsWith("55")
+        ? normalized
+        : `55${normalized}`
     const message = encodeURIComponent(
       `Olá ${customerName}! Tudo bem? Falamos da Batata Top Gourmet sobre o seu Pedido #${orderNumber || ""}.`
     )
-    return `https://wa.me/${fullPhone}?text=${message}`
+    const url = `https://wa.me/${fullPhone}?text=${message}`
+    return url.startsWith("https://wa.me/") ? url : null
   }
 
-  if (loading || !isAdmin) {
+  if (loading || !isAdmin || isInitialLoading) {
     return <AdminTableSkeleton rows={8} />
   }
 
@@ -357,14 +401,14 @@ export default function AdminPedidosPage() {
               {new Date(receiptOrder.createdAt).toLocaleDateString("pt-BR")} - {new Date(receiptOrder.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
             </p>
             <div className="mt-1 font-bold text-xs uppercase px-2 py-0.5 border border-black inline-block">
-              {isPickupOrder(receiptOrder.deliveryType) ? ">>> RETIRADA NO BALCÃO <<<" : ">>> ENTREGA EM DOMICÍLIO <<<"}
+              {isPickupDeliveryType(receiptOrder.deliveryType) ? ">>> RETIRADA NO BALCÃO <<<" : ">>> ENTREGA EM DOMICÍLIO <<<"}
             </div>
           </div>
 
           <div className="py-2 border-b border-dashed border-black space-y-1">
             <p><span className="font-bold">CLIENTE:</span> {receiptOrder.customerName}</p>
             <p><span className="font-bold">TELEFONE:</span> {receiptOrder.customerPhone}</p>
-            {!isPickupOrder(receiptOrder.deliveryType) && (
+            {!isPickupDeliveryType(receiptOrder.deliveryType) && (
               <p><span className="font-bold">ENDEREÇO:</span> {receiptOrder.address}</p>
             )}
           </div>
@@ -441,7 +485,7 @@ export default function AdminPedidosPage() {
               (sum, it) => sum + getItemTotal(it),
               0
             )
-            const receiptDeliveryFee = isPickupOrder(receiptOrder.deliveryType)
+            const receiptDeliveryFee = isPickupDeliveryType(receiptOrder.deliveryType)
               ? 0
               : Number(receiptOrder.metadata?.delivery_fee ?? receiptOrder.metadata?.deliveryFee ?? Math.max(0, (receiptOrder.total || 0) - receiptItemsSubtotal + (receiptOrder.discountAmount || 0)))
 
@@ -477,7 +521,7 @@ export default function AdminPedidosPage() {
         </div>
       )}
 
-      <main className="flex-1 py-8 px-4 md:px-6">
+      <main className="flex-1 py-8 px-4 md:px-6 print:hidden">
         <div className="container mx-auto max-w-7xl">
           {permissionStatus === "denied" && (
             <div className="mb-6 p-4 bg-amber-50 border-2 border-amber-200 rounded-2xl flex items-center gap-3 text-amber-800 shadow-sm">
@@ -622,8 +666,52 @@ export default function AdminPedidosPage() {
             </button>
           </div>
 
+          {isOffline && (
+            <div
+              role="status"
+              className="mb-6 p-4 bg-amber-50 border border-amber-300 rounded-2xl flex items-center gap-3 text-amber-900 shadow-sm"
+            >
+              <WifiOff className="h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
+              <p className="font-semibold text-sm">
+                Você está offline. As atualizações automáticas estão pausadas e serão retomadas assim que a conexão voltar.
+              </p>
+            </div>
+          )}
+
+          {loadError && (
+            <div
+              role="alert"
+              className="mb-6 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-rose-700 shadow-sm"
+            >
+              <div className="flex items-start sm:items-center gap-3 min-w-0">
+                <AlertTriangle className="h-5 w-5 shrink-0 text-rose-700 mt-0.5 sm:mt-0" aria-hidden="true" />
+                <p className="font-semibold text-sm">{loadError}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  className="border-rose-300 bg-white hover:bg-rose-100 text-rose-700 font-bold rounded-xl h-8"
+                >
+                  Tentar novamente
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setLoadError(null)}
+                  className="text-rose-700 hover:text-rose-900 hover:bg-rose-100 font-semibold rounded-xl h-8 px-2.5"
+                  aria-label="Dispensar aviso de erro"
+                >
+                  Dispensar
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* LISTA DE PEDIDOS */}
-          {filteredOrders.length === 0 ? (
+          {loadError && orders.length === 0 ? null : filteredOrders.length === 0 ? (
             <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-gray-200">
               <ShoppingBag className="h-16 w-16 text-gray-300 mx-auto mb-4" />
               <h3 className="text-xl font-bold text-gray-500">Nenhum pedido encontrado nesta seção</h3>
@@ -635,7 +723,10 @@ export default function AdminPedidosPage() {
                 const currentStatus = (order.status as any) || "pending"
                 const cfg = statusConfig[currentStatus] || statusConfig.pending
                 const StatusIcon = cfg.icon
-                const isDelivery = !isPickupOrder(order.deliveryType)
+                const isDelivery = !isPickupDeliveryType(order.deliveryType)
+                const orderLabel = order.orderNumber || order.id.slice(-4).toUpperCase()
+                const whatsappUrl = getWhatsAppUrl(order.customerPhone, order.customerName, order.orderNumber)
+                const wazeUrl = isDelivery ? buildWazeNavigationUrl(order) : null
                 const wantsCutlery = Boolean(
                   order.metadata?.wantsCutlery ?? (order as any).wantsCutlery ?? (order as any).wants_cutlery
                 )
@@ -648,11 +739,11 @@ export default function AdminPedidosPage() {
                     {/* Header do Pedido */}
                     <div className={`p-4 md:p-6 ${cfg.bgColor} border-b border-gray-100`}>
                       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                        <div className="flex items-start gap-4">
+                        <div className="flex items-start gap-4 min-w-0">
                           <div className={`h-12 w-12 rounded-2xl flex items-center justify-center ${cfg.badgeBg} shadow-sm shrink-0 mt-0.5`}>
                             <StatusIcon className="h-6 w-6" />
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <h3 className="text-2xl font-black text-gray-900">
                                 Pedido #{order.orderNumber || String(order.id || "").slice(0, 5)}
@@ -943,44 +1034,61 @@ export default function AdminPedidosPage() {
                             </h4>
                             <div className="space-y-4 bg-gray-50/80 p-4 rounded-2xl border border-gray-100">
                               {/* Telefone e WhatsApp Direto */}
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-3 min-w-0">
                                   <div className="h-10 w-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-gray-500 shrink-0">
                                     <Phone className="h-4 w-4" />
                                   </div>
-                                  <div>
+                                  <div className="min-w-0">
                                     <p className="text-[10px] text-gray-400 font-bold uppercase">Telefone</p>
-                                    <p className="font-bold text-gray-900 text-sm">{order.customerPhone}</p>
+                                    <p className="font-bold text-gray-900 text-sm break-words">{order.customerPhone}</p>
                                   </div>
                                 </div>
 
-                                {order.customerPhone && (
+                                {whatsappUrl && (
                                   <a
-                                    href={getWhatsAppUrl(order.customerPhone, order.customerName, order.orderNumber)}
+                                    href={whatsappUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm"
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-9 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition-all shadow-sm shrink-0 print:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
                                     title="Conversar direto no WhatsApp"
+                                    aria-label={`Conversar no WhatsApp com ${order.customerName || "cliente"} sobre o pedido #${orderLabel}`}
                                   >
-                                    <MessageCircle className="h-3.5 w-3.5" />
+                                    <MessageCircle className="h-3.5 w-3.5" aria-hidden="true" />
                                     <span>WhatsApp</span>
                                   </a>
                                 )}
                               </div>
 
                               {/* Endereço de Entrega */}
-                              <div className="flex items-start gap-3">
-                                <div className="h-10 w-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-gray-500 shrink-0 mt-0.5">
-                                  <MapPin className="h-4 w-4" />
+                              <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-2.5">
+                                <div className="flex items-start gap-3 min-w-0 flex-1">
+                                  <div className="h-10 w-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-gray-500 shrink-0 mt-0.5">
+                                    <MapPin className="h-4 w-4" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-[10px] text-gray-400 font-bold uppercase">
+                                      {isDelivery ? "Endereço de Entrega" : "Local de Retirada"}
+                                    </p>
+                                    <p className="font-bold text-gray-900 text-sm leading-snug break-words">
+                                      {isDelivery ? order.address || "Endereço não informado" : "Retirada no Balcão da Loja"}
+                                    </p>
+                                  </div>
                                 </div>
-                                <div className="flex-1">
-                                  <p className="text-[10px] text-gray-400 font-bold uppercase">
-                                    {isDelivery ? "Endereço de Entrega" : "Local de Retirada"}
-                                  </p>
-                                  <p className="font-bold text-gray-900 text-sm leading-snug">
-                                    {isDelivery ? order.address || "Endereço não informado" : "Retirada no Balcão da Loja"}
-                                  </p>
-                                </div>
+
+                                {isDelivery && wazeUrl && (
+                                  <a
+                                    href={wazeUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 min-h-9 bg-sky-700 hover:bg-sky-800 text-white text-xs font-bold rounded-xl transition-all shadow-sm shrink-0 self-start print:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
+                                    title={`Abrir endereço do pedido #${orderLabel} no Waze`}
+                                    aria-label={`Abrir endereço do pedido #${orderLabel} no Waze`}
+                                  >
+                                    <Navigation className="h-3.5 w-3.5" aria-hidden="true" />
+                                    <span>Waze</span>
+                                  </a>
+                                )}
                               </div>
 
                               {/* Forma de Pagamento */}
@@ -1002,7 +1110,7 @@ export default function AdminPedidosPage() {
                               (sum, it) => sum + getItemTotal(it),
                               0
                             )
-                            const deliveryFee = isPickupOrder(order.deliveryType)
+                            const deliveryFee = isPickupDeliveryType(order.deliveryType)
                               ? 0
                               : Number(order.metadata?.delivery_fee ?? order.metadata?.deliveryFee ?? Math.max(0, order.total - itemsSubtotal + (order.discountAmount || 0)))
                             const hasCoupon = Boolean(order.couponCode || (order.discountAmount ?? 0) > 0)
@@ -1037,7 +1145,7 @@ export default function AdminPedidosPage() {
 
                                   <div className="flex items-center justify-between text-xs">
                                     <span className="text-gray-500 font-semibold">
-                                      {isPickupOrder(order.deliveryType) ? "Retirada no Balcão" : "Taxa de Entrega"}
+                                      {isPickupDeliveryType(order.deliveryType) ? "Retirada no Balcão" : "Taxa de Entrega"}
                                     </span>
                                     <span className="font-bold text-gray-900">
                                       {deliveryFee > 0 ? `R$ ${deliveryFee.toFixed(2).replace('.', ',')}` : "Grátis"}
