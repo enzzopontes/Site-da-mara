@@ -147,12 +147,14 @@ export const MenuStickyNav = memo(function MenuStickyNav({
                 >
                   {cat.category ? (
                     <CategoryIcon
-                      iconUrl={cat.category.icon_url}
+                      iconUrl={cat.category.icon_url || (cat.category.icon_type !== "lucide" ? cat.iconSrc : null)}
                       iconType={cat.category.icon_type}
                       iconScale={cat.category.icon_scale}
                       fallbackIcon={cat.category.fallback_icon}
                       accentColor={cat.category.accent_color}
-                      sizeClassName="w-5 h-5 md:w-5.5 md:h-5.5"
+                      sizeClassName={
+                        isTodos ? "w-6 h-6 md:w-6.5 md:h-6.5" : "w-5 h-5 md:w-5.5 md:h-5.5"
+                      }
                       iconClassName="w-3.5 h-3.5"
                       className="shrink-0 drop-shadow-xs"
                     />

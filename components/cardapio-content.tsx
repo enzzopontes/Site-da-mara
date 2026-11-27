@@ -24,6 +24,7 @@ import type {
 
 export function CardapioContent({
   sections,
+  todosCategory = null,
   loadError = null,
 }: CardapioContentProps) {
   const searchParams = useSearchParams()
@@ -274,7 +275,9 @@ export function CardapioContent({
       {
         id: "todos",
         label: "Todos",
-        iconSrc: "/assets/icones3d/iconetodos.png",
+        iconSrc: todosCategory?.icon_url || "/assets/icones3d/iconetodos.png",
+        iconScale: todosCategory?.icon_scale,
+        category: todosCategory ?? undefined,
         count: totalProductCount,
       },
       ...tabSections.map((sec) => ({
@@ -286,7 +289,7 @@ export function CardapioContent({
         count: sec.products.length,
       })),
     ]
-  }, [hasActiveSearch, filteredSections, processedSections, totalProductCount])
+  }, [hasActiveSearch, filteredSections, processedSections, totalProductCount, todosCategory])
 
   const mainSections = useMemo(
     () =>

@@ -490,11 +490,11 @@ export function CategoryIconBankPicker({
           {/* Comparador lado a lado */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-[#ECE7E0] bg-white/80 p-2.5">
             {/* Grade 3D da Home */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 min-w-0">
               <p className="text-[11px] font-semibold text-[#1F1B16]/75">
                 Grade 3D da Home
               </p>
-              <div className="flex items-start gap-2">
+              <div className="flex flex-wrap items-start gap-2">
                 <div className="rounded-xl border border-[#ECE7E0] bg-[#F7F5F0] px-2 py-2 flex flex-col items-center w-[92px] shrink-0">
                   <span className="w-11 h-11 overflow-hidden flex items-center justify-center shrink-0">
                     {referenceFailed ? (
@@ -607,7 +607,7 @@ export function CategoryIconBankPicker({
               }
               className="w-full accent-[#E3A008] cursor-pointer disabled:cursor-not-allowed"
             />
-            <div className="relative h-4 text-[10px] font-mono text-[#1F1B16]/55">
+            <div className="relative h-4 text-[10px] font-mono text-[#1F1B16]/75">
               <span className="absolute left-0">{CATEGORY_ICON_SCALE_MIN}%</span>
               <span className="absolute left-[44.44%] -translate-x-1/2">
                 {CATEGORY_ICON_SCALE_DEFAULT}%

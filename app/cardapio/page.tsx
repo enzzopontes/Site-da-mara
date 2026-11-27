@@ -86,10 +86,12 @@ export default async function CardapioPage() {
     })
     .filter((section) => section.products.length > 0)
 
+  const todosCategory = categories.find((c) => normalizeLegacyCategorySlug(c.slug) === "todos") ?? null
+
   return (
     <div className="min-h-screen flex flex-col">
       <HeaderWrapper />
-      <CardapioContentWrapper sections={sections} loadError={loadError} />
+      <CardapioContentWrapper sections={sections} todosCategory={todosCategory} loadError={loadError} />
       <Footer />
       <OrderSummary />
     </div>

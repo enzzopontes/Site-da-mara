@@ -14,13 +14,14 @@ export interface MenuSectionData {
 
 export interface CardapioContentProps {
   sections: MenuSectionData[]
+  todosCategory?: Category | null
   loadError?: string | null
 }
 
-export function CardapioContentWrapper({ sections, loadError }: CardapioContentProps) {
+export function CardapioContentWrapper({ sections, todosCategory, loadError }: CardapioContentProps) {
   return (
     <Suspense fallback={<CardapioSkeleton />}>
-      <CardapioContent sections={sections} loadError={loadError} />
+      <CardapioContent sections={sections} todosCategory={todosCategory} loadError={loadError} />
     </Suspense>
   )
 }

@@ -136,13 +136,75 @@ export function normalizeLegacyCategorySlug(raw?: string | null): string {
   return clean
 }
 
+function isPrivateOrLocalHostname(rawHostname: string): boolean {
+  const host = rawHostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.+$/, "")
+  if (!host) return true
+
+  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) {
+    return true
+  }
+
+  const ipv4Match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host)
+  if (ipv4Match) {
+    const a = Number(ipv4Match[1])
+    const b = Number(ipv4Match[2])
+    if (a === 0 || a === 10 || a === 127) return true
+    if (a === 169 && b === 254) return true
+    if (a === 172 && b >= 16 && b <= 31) return true
+    if (a === 192 && b === 168) return true
+    return false
+  }
+
+  if (host.includes(":")) {
+    if (host === "::" || host === "::1" || host === "0:0:0:0:0:0:0:1" || host === "0:0:0:0:0:0:0:0") {
+      return true
+    }
+    if (/^(?:fc|fd)[0-9a-f]{0,2}:/i.test(host)) return true
+    if (/^fe[89ab][0-9a-f]:/i.test(host)) return true
+    if (host.startsWith("::ffff:")) {
+      const mapped = host.slice("::ffff:".length)
+      if (mapped.includes(".")) {
+        return isPrivateOrLocalHostname(mapped)
+      }
+      const hexMatch = /^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(mapped)
+      if (hexMatch) {
+        const hi = parseInt(hexMatch[1], 16)
+        const lo = parseInt(hexMatch[2], 16)
+        const ipv4 = `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`
+        return isPrivateOrLocalHostname(ipv4)
+      }
+    }
+  }
+
+  return false
+}
+
 export function isSafeCategoryHref(raw?: string | null): boolean {
   if (!raw) return false
   const trimmed = raw.trim()
   if (!trimmed) return false
   if (/[\u0000-\u001f\u007f]/.test(trimmed)) return false
+  if (/%(?:0[0-9a-f]|1[0-9a-f]|7f)/i.test(trimmed)) return false
   if (trimmed.includes("\\")) return false
   if (trimmed.includes("..")) return false
+
+  let decoded: string
+  try {
+    decoded = decodeURIComponent(trimmed)
+  } catch {
+    return false
+  }
+  if (/[\u0000-\u001f\u007f]/.test(decoded)) return false
+  if (/%(?:0[0-9a-f]|1[0-9a-f]|7f)/i.test(decoded)) return false
+  if (decoded.includes("\\") || decoded.includes("..")) return false
+
+  try {
+    const twiceDecoded = decodeURIComponent(decoded)
+    if (/[\u0000-\u001f\u007f]/.test(twiceDecoded)) return false
+    if (twiceDecoded.includes("\\") || twiceDecoded.includes("..")) return false
+  } catch {
+    // Allow literal percent signs produced by decoding valid "%25" sequences
+  }
 
   const lower = trimmed.toLowerCase()
   if (
@@ -154,7 +216,14 @@ export function isSafeCategoryHref(raw?: string | null): boolean {
   }
 
   if (trimmed.startsWith("/")) {
-    if (trimmed.startsWith("//") || trimmed.startsWith("/\\")) return false
+    if (
+      trimmed.startsWith("//") ||
+      trimmed.startsWith("/\\") ||
+      decoded.startsWith("//") ||
+      decoded.startsWith("/\\")
+    ) {
+      return false
+    }
     return true
   }
 
@@ -162,7 +231,9 @@ export function isSafeCategoryHref(raw?: string | null): boolean {
     try {
       const url = new URL(trimmed)
       if (url.username || url.password) return false
-      return url.protocol === "https:"
+      if (url.protocol !== "https:") return false
+      if (isPrivateOrLocalHostname(url.hostname)) return false
+      return true
     } catch {
       return false
     }

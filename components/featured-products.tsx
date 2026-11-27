@@ -209,23 +209,30 @@ export function FeaturedProducts({
               ? "Ver todas as massas"
               : "Ver todas"
           const is3dCategory = slugNorm === "batata" || slugNorm === "macarrao"
-          const preset3dUrl = is3dCategory
-            ? (PRESET_3D_ICONS.find((icon) => icon.id === slugNorm)?.path ?? null)
-            : null
-          const section3dIconUrl = is3dCategory
-            ? (cat.icon_type !== "lucide" && cat.icon_url ? cat.icon_url : preset3dUrl)
-            : null
-          const showFlameBadge = !is3dCategory && sectionIdx === 0
+          const isLucideIcon = cat.icon_type === "lucide"
+          const preset3dUrl =
+            !isLucideIcon && is3dCategory
+              ? (PRESET_3D_ICONS.find((icon) => icon.id === slugNorm)?.path ?? null)
+              : null
+          const hasCustom3dIcon = !isLucideIcon && Boolean(cat.icon_url)
+          const section3dIconUrl = hasCustom3dIcon ? cat.icon_url : preset3dUrl
+          const section3dIconType = isLucideIcon
+            ? "lucide"
+            : hasCustom3dIcon
+            ? cat.icon_type
+            : "preset_3d"
+          const showCategoryIcon = isLucideIcon || Boolean(section3dIconUrl)
+          const showFlameBadge = !showCategoryIcon && sectionIdx === 0
 
           return (
             <div key={cat.id}>
               <ScrollReveal className="flex items-center justify-between gap-4 mb-4 sm:mb-6 pb-3 border-b border-[#ECE7E0]">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    {is3dCategory && section3dIconUrl ? (
+                    {showCategoryIcon ? (
                       <CategoryIcon
-                        iconUrl={section3dIconUrl}
-                        iconType="preset_3d"
+                        iconUrl={isLucideIcon ? null : section3dIconUrl}
+                        iconType={section3dIconType}
                         iconScale={cat.icon_scale}
                         fallbackIcon={cat.fallback_icon}
                         accentColor={cat.accent_color}
