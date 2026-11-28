@@ -24,6 +24,7 @@ import type {
 export function CardapioContent({
   sections,
   todosCategory = null,
+  homeGridLayout,
   loadError = null,
 }: CardapioContentProps) {
   const searchParams = useSearchParams()
@@ -570,6 +571,7 @@ export function CardapioContent({
         onSearchChange={setSearchQuery}
         onSearchClear={handleClearSearch}
         searchInputRef={searchInputRef}
+        layout={homeGridLayout}
       />
 
       {/* Estado Empty (busca sem resultados ou cardápio sem itens) */}

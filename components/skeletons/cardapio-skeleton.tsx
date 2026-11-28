@@ -21,15 +21,15 @@ export function CardapioSkeleton() {
           {/* Abas de Categorias Skeleton (Centralizadas no Desktop) */}
           <div className="w-full overflow-x-auto no-scrollbar py-0.5">
             <div className="flex items-center gap-2 sm:gap-2.5 w-max md:mx-auto px-3 sm:px-6">
-              <div className="w-9.5 h-9.5 md:w-10 md:h-10 rounded-full border border-[#ECE7E0] bg-[#FDFBF7] flex items-center justify-center shrink-0">
-                <Skeleton className="w-5.5 h-5.5 rounded-full" />
+              <div className="w-10 h-10 rounded-full border border-[#ECE7E0] bg-[#FDFBF7] flex items-center justify-center shrink-0">
+                <Skeleton className="w-8 h-8 rounded-full" />
               </div>
               {[...Array(3)].map((_, i) => (
                 <div
                   key={i}
-                  className="h-9.5 md:h-10 px-3.5 md:px-4 rounded-full border border-[#ECE7E0] bg-[#FDFBF7] flex items-center gap-2 shrink-0"
+                  className="h-9 md:h-9.5 pl-2 pr-3.5 md:pr-4 rounded-full border border-[#ECE7E0] bg-[#FDFBF7] flex items-center gap-2 shrink-0"
                 >
-                  <Skeleton className="w-5 h-5 rounded-full" />
+                  <Skeleton className="w-7 h-7 rounded-full" />
                   <Skeleton className="w-14 h-3.5 rounded" />
                 </div>
               ))}

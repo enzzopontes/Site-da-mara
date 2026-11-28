@@ -1,12 +1,18 @@
 "use client"
 
-import { memo, useState, useEffect, useRef, useCallback } from "react"
+import { memo, useState, useEffect, useRef, useCallback, useMemo } from "react"
+import type React from "react"
 import Link from "next/link"
 import { Search, X, ShoppingCart } from "lucide-react"
 import { AnimatedSearchBar } from "./animated-search-bar"
 import { CategoryIcon } from "@/components/category-icon"
 import { useCart } from "@/lib/cart-context"
 import type { Category } from "@/lib/categories-db"
+import {
+  DEFAULT_HOME_GRID_LAYOUT,
+  getFloatingCategoryIconCssVars,
+  type HomeGridLayout,
+} from "@/lib/home-grid-layout"
 
 export interface MenuCategory {
   id: string
@@ -26,6 +32,7 @@ interface MenuStickyNavProps {
   onSearchChange: (val: string) => void
   onSearchClear: () => void
   searchInputRef: React.RefObject<HTMLInputElement | null>
+  layout?: HomeGridLayout
 }
 
 export const MenuStickyNav = memo(function MenuStickyNav({
@@ -36,8 +43,13 @@ export const MenuStickyNav = memo(function MenuStickyNav({
   searchQuery,
   onSearchChange,
   onSearchClear,
-  searchInputRef
+  searchInputRef,
+  layout = DEFAULT_HOME_GRID_LAYOUT,
 }: MenuStickyNavProps) {
+  const floatingIconVars = useMemo(
+    () => getFloatingCategoryIconCssVars(layout) as React.CSSProperties,
+    [layout],
+  )
   const [isScrolled, setIsScrolled] = useState(false)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
@@ -198,85 +210,131 @@ export const MenuStickyNav = memo(function MenuStickyNav({
 
           <div
             ref={tabsContainerRef}
-            className="relative w-full overflow-x-auto no-scrollbar py-0.5 scroll-smooth touch-pan-x"
+            className="relative w-full overflow-x-auto no-scrollbar py-1.5 scroll-smooth touch-pan-x"
             style={{ WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}
           >
             <div
               role="tablist"
               aria-label="Categorias de produtos"
+              style={floatingIconVars}
               className="flex items-center gap-2 sm:gap-2.5 w-max md:mx-auto lg:mx-0 px-3 sm:px-6 lg:px-0.5"
             >
             {categories.map((cat) => {
               const isActive = activeTab === cat.id
               const isTodos = cat.id === "todos"
+              if (isTodos) {
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    id={`tab-${cat.id}`}
+                    role="tab"
+                    aria-label={cat.label}
+                    title={cat.label}
+                    aria-selected={isActive}
+                    onClick={() => onSelectCategory(cat.id)}
+                    className={`group shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all border active:scale-95 cursor-pointer ${
+                      isActive
+                        ? "bg-[#FEF8EC] border-[#E3A008] shadow-xs"
+                        : "bg-[#F7F5F0] border-[#ECE7E0] hover:border-[#E3A008]/50 hover:bg-[#FFF9EE]"
+                    }`}
+                  >
+                    {cat.category ? (
+                      <CategoryIcon
+                        iconUrl={cat.category.icon_url || (cat.category.icon_type !== "lucide" ? cat.iconSrc : null)}
+                        iconType={cat.category.icon_type}
+                        iconScale={cat.category.icon_scale}
+                        fallbackIcon={cat.category.fallback_icon}
+                        accentColor={cat.category.accent_color}
+                        alt=""
+                        sizeClassName="[width:var(--float-todos-m)] [height:var(--float-todos-m)] md:[width:var(--float-todos-d)] md:[height:var(--float-todos-d)]"
+                        iconClassName="w-4 h-4"
+                        className="rounded-full drop-shadow-[0_2px_4px_rgba(0,0,0,0.12)] transition-transform duration-200 group-hover:scale-105"
+                      />
+                    ) : (
+                      <CategoryIcon
+                        iconUrl={cat.iconSrc}
+                        iconType="preset_3d"
+                        iconScale={cat.iconScale}
+                        fallbackIcon="LayoutGrid"
+                        accentColor="#E3A008"
+                        alt=""
+                        sizeClassName="[width:var(--float-todos-m)] [height:var(--float-todos-m)] md:[width:var(--float-todos-d)] md:[height:var(--float-todos-d)]"
+                        iconClassName="w-4 h-4"
+                        className="rounded-full drop-shadow-[0_2px_4px_rgba(0,0,0,0.12)] transition-transform duration-200 group-hover:scale-105"
+                      />
+                    )}
+                  </button>
+                )
+              }
+
               return (
                 <button
                   key={cat.id}
                   type="button"
                   id={`tab-${cat.id}`}
                   role="tab"
-                  aria-label={isTodos ? cat.label : undefined}
-                  title={isTodos ? cat.label : undefined}
                   aria-selected={isActive}
-                  aria-controls={isTodos ? undefined : cat.id}
+                  aria-controls={cat.id}
                   onClick={() => onSelectCategory(cat.id)}
-                  className={`shrink-0 h-9.5 md:h-10 rounded-full flex items-center justify-center text-xs md:text-sm font-bold transition-all border whitespace-nowrap active:scale-95 cursor-pointer ${
-                    isTodos ? "w-9.5 md:w-10 px-0" : "px-3.5 md:px-4 gap-2"
-                  } ${
-                    isActive
-                      ? "bg-[#FEF8EC] border-[#E3A008] text-[#A16207] shadow-xs"
-                      : "bg-[#F7F5F0] border-[#ECE7E0] text-[#1A1A1A] hover:border-[#E3A008]/50 hover:bg-[#FFF9EE]"
-                  }`}
+                  className="group relative shrink-0 py-1 flex items-center active:scale-95 transition-transform cursor-pointer"
                 >
-                  {cat.category ? (
-                    <CategoryIcon
-                      iconUrl={cat.category.icon_url || (cat.category.icon_type !== "lucide" ? cat.iconSrc : null)}
-                      iconType={cat.category.icon_type}
-                      iconScale={cat.category.icon_scale}
-                      fallbackIcon={cat.category.fallback_icon}
-                      accentColor={cat.category.accent_color}
-                      sizeClassName={
-                        isTodos ? "w-6 h-6 md:w-6.5 md:h-6.5" : "w-5 h-5 md:w-5.5 md:h-5.5"
-                      }
-                      iconClassName="w-3.5 h-3.5"
-                      className="shrink-0 drop-shadow-xs"
-                    />
-                  ) : (
-                    <CategoryIcon
-                      iconUrl={cat.iconSrc}
-                      iconType="preset_3d"
-                      iconScale={cat.iconScale}
-                      fallbackIcon={isTodos ? "LayoutGrid" : "UtensilsCrossed"}
-                      accentColor="#E3A008"
-                      sizeClassName={
-                        isTodos ? "w-6 h-6 md:w-6.5 md:h-6.5" : "w-5 h-5 md:w-5.5 md:h-5.5"
-                      }
-                      iconClassName="w-3.5 h-3.5"
-                      className="shrink-0 drop-shadow-xs"
-                    />
-                  )}
-                  {!isTodos && (
-                    <>
-                      <span>{cat.label}</span>
-                      {cat.category?.badge_text && (
-                        <span
-                          className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full text-white leading-none"
-                          style={{ backgroundColor: cat.category.badge_color || "#C1440E" }}
-                        >
-                          {cat.category.badge_text}
-                        </span>
-                      )}
+                  <span
+                    className={`h-9 md:h-9.5 [padding-left:var(--float-pad-l-m)] md:[padding-left:var(--float-pad-l-d)] pr-3.5 md:pr-4 rounded-full flex items-center gap-1.5 md:gap-2 text-xs md:text-sm font-bold leading-none transition-colors border whitespace-nowrap ${
+                      isActive
+                        ? "bg-[#FEF8EC] border-[#E3A008] text-[#A16207] shadow-xs"
+                        : "bg-[#F7F5F0] border-[#ECE7E0] text-[#1A1A1A] hover:border-[#E3A008]/50 hover:bg-[#FFF9EE]"
+                    }`}
+                  >
+                    <span>{cat.label}</span>
+                    {cat.category?.badge_text && (
                       <span
-                        className={`px-1.5 py-0.5 rounded-full text-[10px] md:text-xs font-bold leading-none ${
-                          isActive
-                            ? "bg-[#FDE68A] text-[#854D0E]"
-                            : "bg-[#ECE7E0] text-[#57534E]"
-                        }`}
+                        className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full text-white leading-none"
+                        style={{ backgroundColor: cat.category.badge_color || "#C1440E" }}
                       >
-                        {cat.count}
+                        {cat.category.badge_text}
                       </span>
-                    </>
-                  )}
+                    )}
+                    <span
+                      className={`px-1.5 py-0.5 rounded-full text-[10px] md:text-xs font-bold leading-none ${
+                        isActive
+                          ? "bg-[#FDE68A] text-[#854D0E]"
+                          : "bg-[#ECE7E0] text-[#57534E]"
+                      }`}
+                    >
+                      {cat.count}
+                    </span>
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute left-0.5 top-1/2 -translate-y-1/2 [width:calc(var(--float-icon-m)+6px)] [height:calc(var(--float-icon-m)+6px)] md:[width:calc(var(--float-icon-d)+6px)] md:[height:calc(var(--float-icon-d)+6px)] flex items-center justify-center"
+                  >
+                    {cat.category ? (
+                      <CategoryIcon
+                        iconUrl={cat.category.icon_url || (cat.category.icon_type !== "lucide" ? cat.iconSrc : null)}
+                        iconType={cat.category.icon_type}
+                        iconScale={cat.category.icon_scale}
+                        fallbackIcon={cat.category.fallback_icon}
+                        accentColor={cat.category.accent_color}
+                        alt=""
+                        sizeClassName="[width:var(--float-icon-m)] [height:var(--float-icon-m)] md:[width:var(--float-icon-d)] md:[height:var(--float-icon-d)]"
+                        iconClassName="w-4 h-4"
+                        className="drop-shadow-[0_2px_4px_rgba(0,0,0,0.12)] transition-transform duration-200 group-hover:scale-105"
+                      />
+                    ) : (
+                      <CategoryIcon
+                        iconUrl={cat.iconSrc}
+                        iconType="preset_3d"
+                        iconScale={cat.iconScale}
+                        fallbackIcon="UtensilsCrossed"
+                        accentColor="#E3A008"
+                        alt=""
+                        sizeClassName="[width:var(--float-icon-m)] [height:var(--float-icon-m)] md:[width:var(--float-icon-d)] md:[height:var(--float-icon-d)]"
+                        iconClassName="w-4 h-4"
+                        className="drop-shadow-[0_2px_4px_rgba(0,0,0,0.12)] transition-transform duration-200 group-hover:scale-105"
+                      />
+                    )}
+                  </span>
                 </button>
               )
             })}

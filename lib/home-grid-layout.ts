@@ -594,6 +594,53 @@ export function isSameHomeGridLayout(a: HomeGridLayout, b: HomeGridLayout): bool
   )
 }
 
+export interface FloatingCategoryIconSizes {
+  mobileIconPx: number
+  desktopIconPx: number
+  mobileTodosPx: number
+  desktopTodosPx: number
+  mobilePadLeftPx: number
+  desktopPadLeftPx: number
+}
+
+export function getFloatingCategoryIconSizes(
+  layout?: Partial<HomeGridLayout> | null,
+): FloatingCategoryIconSizes {
+  const normalized = normalizeHomeGridLayout(layout)
+  const mobileRatio = normalized.mobile_icon_size / DEFAULT_HOME_GRID_LAYOUT.mobile_icon_size
+  const desktopRatio = normalized.desktop_icon_size / DEFAULT_HOME_GRID_LAYOUT.desktop_icon_size
+  const clampPx = (value: number, min: number, max: number) =>
+    Math.min(max, Math.max(min, Math.round(value)))
+
+  const mobileIconPx = clampPx(36 * mobileRatio, 28, 44)
+  const desktopIconPx = clampPx(36 * desktopRatio, 28, 44)
+  const mobileTodosPx = clampPx(32 * mobileRatio, 24, 38)
+  const desktopTodosPx = clampPx(32 * desktopRatio, 24, 38)
+
+  return {
+    mobileIconPx,
+    desktopIconPx,
+    mobileTodosPx,
+    desktopTodosPx,
+    mobilePadLeftPx: mobileIconPx + 8,
+    desktopPadLeftPx: desktopIconPx + 8,
+  }
+}
+
+export function getFloatingCategoryIconCssVars(
+  layout?: Partial<HomeGridLayout> | null,
+): Record<string, string> {
+  const sizes = getFloatingCategoryIconSizes(layout)
+  return {
+    "--float-icon-m": `${sizes.mobileIconPx}px`,
+    "--float-icon-d": `${sizes.desktopIconPx}px`,
+    "--float-todos-m": `${sizes.mobileTodosPx}px`,
+    "--float-todos-d": `${sizes.desktopTodosPx}px`,
+    "--float-pad-l-m": `${sizes.mobilePadLeftPx}px`,
+    "--float-pad-l-d": `${sizes.desktopPadLeftPx}px`,
+  }
+}
+
 export async function fetchHomeGridLayoutFromDb(): Promise<HomeGridLayout> {
   try {
     const supabase = getSupabase()

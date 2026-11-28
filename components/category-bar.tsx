@@ -7,6 +7,7 @@ import Link from "next/link"
 import { DEFAULT_CATEGORIES, getCategoryHref, type Category } from "@/lib/categories-db"
 import {
   DEFAULT_HOME_GRID_LAYOUT,
+  getFloatingCategoryIconCssVars,
   normalizeHomeGridLayout,
   type HomeGridLayout,
 } from "@/lib/home-grid-layout"
@@ -130,6 +131,10 @@ export function CategoryBar({
     "--cat-radius-m": `${gridLayout.mobile_card_radius}px`,
     "--cat-radius-d": `${gridLayout.desktop_card_radius}px`,
   } as React.CSSProperties
+  const floatingIconVars = useMemo(
+    () => getFloatingCategoryIconCssVars(gridLayout) as React.CSSProperties,
+    [gridLayout],
+  )
 
   return (
     <>
@@ -216,7 +221,7 @@ export function CategoryBar({
         <div className="container mx-auto px-4 max-w-5xl w-full">
           <div
             className="flex items-center justify-start md:justify-center gap-2.5 overflow-x-auto no-scrollbar py-1.5 px-1 mx-auto"
-            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+            style={{ scrollbarWidth: "none", msOverflowStyle: "none", ...floatingIconVars }}
           >
             {floatingItems.map((cat) => {
               const isActive = activeId === cat.id
@@ -247,7 +252,7 @@ export function CategoryBar({
                       fallbackIcon={cat.fallback_icon}
                       accentColor={cat.accent_color}
                       alt=""
-                      sizeClassName="w-8 h-8"
+                      sizeClassName="[width:var(--float-todos-m)] [height:var(--float-todos-m)] md:[width:var(--float-todos-d)] md:[height:var(--float-todos-d)]"
                       iconClassName="w-4 h-4"
                       className="rounded-full drop-shadow-[0_2px_4px_rgba(0,0,0,0.12)] transition-transform duration-200 group-hover:scale-105"
                     />
@@ -262,7 +267,7 @@ export function CategoryBar({
                   className={`group relative ${itemFloatVisibility} items-center shrink-0 py-1 active:scale-[0.98] transition-transform`}
                 >
                   <span
-                    className={`h-9 pl-11 pr-3.5 rounded-full flex items-center gap-1.5 text-xs font-bold leading-none transition-colors border ${
+                    className={`h-9 [padding-left:var(--float-pad-l-m)] md:[padding-left:var(--float-pad-l-d)] pr-3.5 rounded-full flex items-center gap-1.5 text-xs font-bold leading-none transition-colors border ${
                       isActive
                         ? "bg-[#FEF8EC] border-[#E3A008] text-[#A16207]"
                         : "bg-[#F3F0EB] md:bg-white border-[#ECE7E0] text-[#1A1A1A] hover:border-[#E3A008]/50"
@@ -280,7 +285,7 @@ export function CategoryBar({
                   </span>
                   <span
                     aria-hidden="true"
-                    className="pointer-events-none absolute left-0.5 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center"
+                    className="pointer-events-none absolute left-0.5 top-1/2 -translate-y-1/2 [width:calc(var(--float-icon-m)+6px)] [height:calc(var(--float-icon-m)+6px)] md:[width:calc(var(--float-icon-d)+6px)] md:[height:calc(var(--float-icon-d)+6px)] flex items-center justify-center"
                   >
                     <CategoryIcon
                       iconUrl={cat.icon_url}
@@ -289,7 +294,7 @@ export function CategoryBar({
                       fallbackIcon={cat.fallback_icon}
                       accentColor={cat.accent_color}
                       alt=""
-                      sizeClassName="w-9 h-9"
+                      sizeClassName="[width:var(--float-icon-m)] [height:var(--float-icon-m)] md:[width:var(--float-icon-d)] md:[height:var(--float-icon-d)]"
                       iconClassName="w-4 h-4"
                       className="drop-shadow-[0_2px_4px_rgba(0,0,0,0.12)] transition-transform duration-200 group-hover:scale-105"
                     />

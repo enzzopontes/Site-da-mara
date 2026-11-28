@@ -3,8 +3,9 @@ import { Footer } from "@/components/footer"
 import { OrderSummary } from "@/components/order-summary"
 import { CardapioContentWrapper, type MenuSectionData } from "@/components/cardapio-content-wrapper"
 import { productsManager, type Product } from "@/lib/products-db"
-import { getCachedActiveCategories } from "@/lib/categories-server"
+import { getCachedActiveCategories, getCachedHomeGridLayout } from "@/lib/categories-server"
 import { getMenuCategories, matchProductToCategory, type Category } from "@/lib/categories-db"
+import { DEFAULT_HOME_GRID_LAYOUT, type HomeGridLayout } from "@/lib/home-grid-layout"
 import { normalizeLegacyCategorySlug } from "@/lib/category-icons"
 
 // Força a revalidação da página para ser dinâmica (sempre atualizada)
@@ -12,14 +13,16 @@ export const revalidate = 0
 
 export default async function CardapioPage() {
   let categories: Category[] = []
+  let homeGridLayout: HomeGridLayout = DEFAULT_HOME_GRID_LAYOUT
   let allProducts: Product[] = []
   let rankingNames: string[] = []
   let loadError: string | null = null
 
   try {
     // Rankings REAIS baseados nas vendas do banco de dados (isolado para não derrubar o catálogo)
-    ;[categories, allProducts, rankingNames] = await Promise.all([
+    ;[categories, homeGridLayout, allProducts, rankingNames] = await Promise.all([
       getCachedActiveCategories(),
+      getCachedHomeGridLayout().catch(() => DEFAULT_HOME_GRID_LAYOUT),
       productsManager.getProducts(),
       productsManager.getGlobalRankingNames(80).catch((rankErr) => {
         console.warn("[cardapio] Falha não impeditiva ao carregar ranking:", rankErr)
@@ -95,7 +98,12 @@ export default async function CardapioPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <HeaderWrapper />
-      <CardapioContentWrapper sections={sections} todosCategory={todosCategory} loadError={loadError} />
+      <CardapioContentWrapper
+        sections={sections}
+        todosCategory={todosCategory}
+        homeGridLayout={homeGridLayout}
+        loadError={loadError}
+      />
       <Footer />
       <OrderSummary />
     </div>
