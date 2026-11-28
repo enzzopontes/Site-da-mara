@@ -1,9 +1,26 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 import { isAdminUser } from "./lib/supabase/admin"
-import { checkRateLimit } from "./lib/rate-limit"
+import { checkRateLimitDistributed } from "./lib/rate-limit"
+import { buildContentSecurityPolicy } from "./lib/security-transport"
 
 export default async function proxy(request: NextRequest) {
+  const nonce = Buffer.from(crypto.randomUUID()).toString("base64")
+  const isDev = process.env.NODE_ENV !== "production"
+  const cspHeader = buildContentSecurityPolicy({ nonce, isDev })
+
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set("x-nonce", nonce)
+  requestHeaders.set("Content-Security-Policy", cspHeader)
+
+  const withCsp = (response: NextResponse): NextResponse => {
+    response.headers.set("Content-Security-Policy", cspHeader)
+    return response
+  }
+
+  const nextWithNonce = (): NextResponse =>
+    withCsp(NextResponse.next({ request: { headers: requestHeaders } }))
+
   const url = request.nextUrl.clone()
 
   // 0. Rate Limiting por IP (Proteção contra força bruta, scraping e DDoS)
@@ -20,27 +37,37 @@ export default async function proxy(request: NextRequest) {
     const isWebhook = url.pathname.startsWith("/api/mercadopago/webhook")
     const limit = isWebhook ? 180 : 60
     const rateLimitKey = isGeocode ? `geocode:${clientIp}` : `api:${clientIp}`
-    const rl = checkRateLimit(rateLimitKey, limit, 60 * 1000)
+    const rl = await checkRateLimitDistributed(rateLimitKey, limit, 60 * 1000)
 
     if (!rl.success) {
-      return NextResponse.json(
-        { error: "Limite de requisições excedido. Aguarde um minuto e tente novamente." },
-        { status: 429, headers: { "Retry-After": "60" } }
+      const retryAfter = String(
+        Math.max(1, Math.ceil((rl.resetTime - Date.now()) / 1000)) || 60
+      )
+      return withCsp(
+        NextResponse.json(
+          { error: "Limite de requisições excedido. Aguarde um minuto e tente novamente." },
+          { status: 429, headers: { "Retry-After": retryAfter } }
+        )
       )
     }
 
     if (isGeocode) {
-      return NextResponse.next()
+      return nextWithNonce()
     }
   }
 
   // Rate limit para rotas sensíveis de login e cadastro (25 req/min por IP)
   if (url.pathname.startsWith("/login") || url.pathname.startsWith("/cadastro") || url.pathname.startsWith("/auth/")) {
-    const rl = checkRateLimit(`auth:${clientIp}`, 25, 60 * 1000)
+    const rl = await checkRateLimitDistributed(`auth:${clientIp}`, 25, 60 * 1000)
     if (!rl.success) {
-      return new NextResponse(
-        "Muitas tentativas de acesso. Por favor, aguarde um minuto e tente novamente.",
-        { status: 429, headers: { "Retry-After": "60" } }
+      const retryAfter = String(
+        Math.max(1, Math.ceil((rl.resetTime - Date.now()) / 1000)) || 60
+      )
+      return withCsp(
+        new NextResponse(
+          "Muitas tentativas de acesso. Por favor, aguarde um minuto e tente novamente.",
+          { status: 429, headers: { "Retry-After": retryAfter } }
+        )
       )
     }
   }
@@ -52,13 +79,15 @@ export default async function proxy(request: NextRequest) {
   if (!supabaseUrl || !supabaseKey) {
     if (!url.pathname.startsWith("/setup-required")) {
       const redirectUrl = new URL("/setup-required", request.url)
-      return NextResponse.redirect(redirectUrl)
+      return withCsp(NextResponse.redirect(redirectUrl))
     }
-    return NextResponse.next()
+    return nextWithNonce()
   }
 
   const supabaseResponse = NextResponse.next({
-    request,
+    request: {
+      headers: requestHeaders,
+    },
   })
 
   const supabase = createServerClient(supabaseUrl, supabaseKey, {
@@ -100,9 +129,11 @@ export default async function proxy(request: NextRequest) {
     }
 
     if (!apiUser) {
-      return NextResponse.json(
-        { success: false, error: "Sessão inválida. Faça login novamente." },
-        { status: 401 }
+      return withCsp(
+        NextResponse.json(
+          { success: false, error: "Sessão inválida. Faça login novamente." },
+          { status: 401 }
+        )
       )
     }
 
@@ -133,9 +164,11 @@ export default async function proxy(request: NextRequest) {
     }
 
     if (!isApiAdmin) {
-      return NextResponse.json(
-        { success: false, error: "Acesso negado: apenas administradores." },
-        { status: 403 }
+      return withCsp(
+        NextResponse.json(
+          { success: false, error: "Acesso negado: apenas administradores." },
+          { status: 403 }
+        )
       )
     }
   }
@@ -144,7 +177,7 @@ export default async function proxy(request: NextRequest) {
     if (!user) {
       const redirectUrl = new URL("/login", request.url)
       redirectUrl.searchParams.set("returnUrl", url.pathname)
-      return NextResponse.redirect(redirectUrl)
+      return withCsp(NextResponse.redirect(redirectUrl))
     }
 
     // Verificação autoritária e segura de admin
@@ -155,7 +188,7 @@ export default async function proxy(request: NextRequest) {
         .from("profiles")
         .select("role")
         .eq("id", user.id)
-        .single()
+        .maybeSingle()
 
       if (profile?.role === "admin") {
         isAdmin = true
@@ -163,7 +196,7 @@ export default async function proxy(request: NextRequest) {
     }
 
     if (!isAdmin) {
-      return NextResponse.redirect(new URL("/", request.url))
+      return withCsp(NextResponse.redirect(new URL("/", request.url)))
     }
   }
 
@@ -178,11 +211,11 @@ export default async function proxy(request: NextRequest) {
     if (!user) {
       const redirectUrl = new URL("/login", request.url)
       redirectUrl.searchParams.set("returnUrl", url.pathname)
-      return NextResponse.redirect(redirectUrl)
+      return withCsp(NextResponse.redirect(redirectUrl))
     }
   }
 
-  return supabaseResponse
+  return withCsp(supabaseResponse)
 }
 
 export const config = {

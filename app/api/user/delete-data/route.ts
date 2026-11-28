@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { authenticateRequestUser } from "@/lib/supabase/route-auth"
 import { evaluateOriginForCors } from "@/lib/security-transport"
-import { checkRateLimit } from "@/lib/rate-limit"
+import { checkRateLimitDistributed } from "@/lib/rate-limit"
 import { secureRandomBetween } from "@/lib/secure-random"
 
 const ALLOWED_ORIGINS = [
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
       req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
       "127.0.0.1"
 
-    const ipRl = checkRateLimit(`delete-data:ip:${clientIp}`, 5, 15 * 60 * 1000)
+    const ipRl = await checkRateLimitDistributed(`delete-data:ip:${clientIp}`, 5, 15 * 60 * 1000)
     if (!ipRl.success) {
       return NextResponse.json(
         { error: "Muitas solicitações. Aguarde alguns minutos e tente novamente." },

@@ -31,7 +31,7 @@ function MetaPixelRouteTracker() {
   return null;
 }
 
-export function MetaPixel() {
+export function MetaPixel({ nonce }: { nonce?: string }) {
   const [marketingAllowed, setMarketingAllowed] = useState(true);
   const prevAllowedRef = useRef(true);
 
@@ -71,7 +71,7 @@ export function MetaPixel() {
 
   return (
     <>
-      <Script id="meta-pixel-base" strategy="afterInteractive">
+      <Script id="meta-pixel-base" strategy="afterInteractive" nonce={nonce}>
         {`
           !function(f,b,e,v,n,t,s)
           {if(f.fbq)return;n=f.fbq=function(){n.callMethod?

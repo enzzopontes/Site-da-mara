@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js"
 import { z } from "zod"
 import { authenticateRequestUser } from "@/lib/supabase/route-auth"
 import { isAdminUser } from "@/lib/supabase/admin"
+import { assertSameOriginForCookieAuth } from "@/lib/security-csrf"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -185,6 +186,13 @@ function replaceExactUrlInJson(
 
 export async function POST(req: NextRequest) {
   try {
+    if (!assertSameOriginForCookieAuth(req)) {
+      return NextResponse.json(
+        { ok: false, error: "Origem da requisição não permitida." },
+        { status: 403 }
+      )
+    }
+
     const service = getServiceClient()
     const allowedOrigin = getAllowedSupabaseOrigin()
     if (!service || !allowedOrigin) {
@@ -195,6 +203,13 @@ export async function POST(req: NextRequest) {
     const auth = await requireAdminUser(req, service)
     if (!auth.ok) {
       return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status })
+    }
+
+    if (!(req.headers.get("content-type") || "").toLowerCase().includes("application/json")) {
+      return NextResponse.json(
+        { ok: false, error: "Content-Type deve ser application/json." },
+        { status: 415 }
+      )
     }
 
     const rawBody = await req.json().catch(() => null)

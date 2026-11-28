@@ -1,5 +1,6 @@
 import type React from "react"
 import type { Metadata } from "next"
+import { headers } from "next/headers"
 import { Geist } from "next/font/google"
 import { ThemedAlertHost } from "@/components/notifications/themed-alert-host"
 import { Toaster } from "sonner"
@@ -34,15 +35,17 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const nonce = (await headers()).get("x-nonce") ?? undefined
+
   return (
     <html lang="pt-BR">
       <body className={`${geist.className} font-sans antialiased`}>
-        <MetaPixel />
+        <MetaPixel nonce={nonce} />
         <AuthProvider>
           <CartProvider>
             <OfflineDetector>
