@@ -273,12 +273,16 @@ export function CardapioContent({
       {
         id: "todos",
         label: "Todos",
+        iconSrc: todosCategory?.icon_url || "/assets/icones3d/iconetodos.png",
+        iconScale: todosCategory?.icon_scale,
         category: todosCategory ?? undefined,
         count: totalProductCount,
       },
       ...tabSections.map((sec) => ({
         id: sec.category.slug,
         label: sec.category.name,
+        iconSrc: sec.category.icon_url || "",
+        iconScale: sec.category.icon_scale,
         category: sec.category,
         count: sec.products.length,
       })),
