@@ -74,6 +74,30 @@ class CouponsManager {
     return data?.map(mapRowToCoupon) || []
   }
 
+  async getActivePublicCoupons(): Promise<Coupon[]> {
+    const client = getSupabase()
+    const now = new Date().toISOString()
+
+    const { data, error } = await client
+      .from("coupons")
+      .select(
+        "id, code, title, description, discount_value, discount_type, min_order_value, expires_at, active, created_at, current_uses, max_uses, show_on_home, home_priority, badge_label",
+      )
+      .eq("active", true)
+      .or(`expires_at.is.null,expires_at.gt.${now}`)
+      .not("code", "ilike", "FIDELIDADE-%")
+      .order("show_on_home", { ascending: false })
+      .order("home_priority", { ascending: false })
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("Error fetching public coupons:", error.message)
+      return []
+    }
+
+    return data?.map(mapRowToCoupon) || []
+  }
+
   async getActiveHomeCoupon(): Promise<Coupon | null> {
     try {
       const client = getSupabase()

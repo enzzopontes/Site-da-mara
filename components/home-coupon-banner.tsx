@@ -63,8 +63,9 @@ export function HomeCouponBanner({
       }
 
       let expiryLabel: string | null = null
-      if (c.expiresAt) {
-        const d = new Date(c.expiresAt)
+      const expRaw = c.expiresAt ?? (c as any).expires_at
+      if (expRaw) {
+        const d = new Date(expRaw)
         if (!isNaN(d.getTime())) {
           expiryLabel = `Até ${expiryFormatter.format(d)}`
         }
@@ -97,8 +98,19 @@ export function HomeCouponBanner({
 
   const touchStartX = useRef<number>(0)
   const touchEndX = useRef<number>(0)
+  const touchStartY = useRef<number>(0)
+  const touchEndY = useRef<number>(0)
+  const animTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const totalItems = displayCoupons.length
   const safeIndex = totalItems > 0 ? currentIndex % totalItems : 0
+
+  useEffect(() => {
+    return () => {
+      if (animTimeoutRef.current) clearTimeout(animTimeoutRef.current)
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
+    }
+  }, [])
 
   // Detecta viewport mobile (<768px) para habilitar autoplay quando totalItems === 2 no mobile
   useEffect(() => {
@@ -113,7 +125,8 @@ export function HomeCouponBanner({
   const triggerChange = useCallback((newDir: "next" | "prev", nextIdx: number) => {
     setAnimDirection(newDir)
     setAnimPhase("exit")
-    setTimeout(() => {
+    if (animTimeoutRef.current) clearTimeout(animTimeoutRef.current)
+    animTimeoutRef.current = setTimeout(() => {
       setCurrentIndex(nextIdx)
       setAnimPhase("enter")
       requestAnimationFrame(() => {
@@ -149,17 +162,31 @@ export function HomeCouponBanner({
   // Touch Swipe
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.targetTouches[0].clientX
+    touchStartY.current = e.targetTouches[0].clientY
+    touchEndX.current = 0
+    touchEndY.current = 0
   }
   const handleTouchMove = (e: React.TouchEvent) => {
     touchEndX.current = e.targetTouches[0].clientX
+    touchEndY.current = e.targetTouches[0].clientY
   }
   const handleTouchEnd = () => {
-    if (!touchStartX.current || !touchEndX.current) return
-    const diff = touchStartX.current - touchEndX.current
-    if (diff > 40) handleNext()
-    else if (diff < -40) handlePrev()
+    const startX = touchStartX.current
+    const endX = touchEndX.current
+    const startY = touchStartY.current
+    const endY = touchEndY.current
     touchStartX.current = 0
     touchEndX.current = 0
+    touchStartY.current = 0
+    touchEndY.current = 0
+
+    if (!canAutoplay || !startX || !endX) return
+    const dx = startX - endX
+    const dy = startY - endY
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+      if (dx > 0) handleNext()
+      else handlePrev()
+    }
   }
 
   const handleCopyCode = async (c: (typeof displayCoupons)[number]) => {
@@ -169,9 +196,11 @@ export function HomeCouponBanner({
     }
 
     const code = c.code
+    let copied = false
     try {
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(code)
+        copied = true
       } else {
         const ta = document.createElement("textarea")
         ta.value = code
@@ -179,18 +208,28 @@ export function HomeCouponBanner({
         ta.style.left = "-9999px"
         document.body.appendChild(ta)
         ta.select()
-        document.execCommand("copy")
+        copied = document.execCommand("copy")
         document.body.removeChild(ta)
       }
-      setCopiedCode(code)
-      setTimeout(() => setCopiedCode(null), 2500)
+    } catch {
+      copied = false
+    }
 
+    if (copied) {
+      setCopiedCode(code)
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
+      copyTimeoutRef.current = setTimeout(() => setCopiedCode(null), 2500)
+    } else {
+      appToast.error("Não foi possível copiar", "Copie manualmente o código " + code + ".")
+    }
+
+    try {
       const currentCartTotal = typeof getTotalPrice === "function" ? getTotalPrice() : subtotal
       const validation = await couponsManager.validateCoupon(code, user?.id, currentCartTotal)
 
       if (!validation.valid) {
         appToast.warning(
-          `Cupom ${code} copiado!`,
+          copied ? `Cupom ${code} copiado!` : `Cupom ${code}`,
           validation.message || "Este cupom ainda não está elegível para o seu carrinho atual."
         )
         return
@@ -216,17 +255,26 @@ export function HomeCouponBanner({
 
       if (minVal > 0 && currentCartTotal < minVal) {
         appToast.warning(
-          `Cupom ${code} copiado!`,
+          copied ? `Cupom ${code} copiado!` : `Cupom ${code} selecionado`,
           `Adicione mais R$ ${missing.toFixed(2).replace(".", ",")} para ativar este cupom.`
         )
       } else {
-        appToast.success("Cupom ativado!", `Cupom ${code} copiado e aplicado ao seu pedido.`)
+        appToast.success(
+          "Cupom ativado!",
+          copied
+            ? `Cupom ${code} copiado e aplicado ao seu pedido.`
+            : `Cupom ${code} aplicado ao seu pedido.`
+        )
       }
     } catch {
-      appToast.warning(
-        `Cupom ${code} copiado!`,
-        "Não foi possível validar agora. Cole o código na sacola ao finalizar."
-      )
+      if (copied) {
+        appToast.warning(
+          `Cupom ${code} copiado!`,
+          "Não foi possível validar agora. Cole o código na sacola ao finalizar."
+        )
+      } else {
+        appToast.error("Não foi possível validar o cupom agora.")
+      }
     }
   }
 
@@ -247,7 +295,7 @@ export function HomeCouponBanner({
   return (
     <section
       id="cupons"
-      className="py-5 bg-[#F7F4EF] select-none overflow-hidden"
+      className="py-5 bg-[#F7F4EF] border-y border-[#ECE7E0] select-none overflow-hidden"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onTouchStart={handleTouchStart}
@@ -261,7 +309,7 @@ export function HomeCouponBanner({
             <h2 className="text-sm font-extrabold text-[#1F1B16] tracking-tight truncate">
               Cupons de Desconto
             </h2>
-            <span className="hidden sm:inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#27AE60]/10 text-[#27AE60] border border-[#27AE60]/20 shrink-0">
+            <span className="hidden sm:inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#27AE60]/10 text-[#15803D] border border-[#27AE60]/20 shrink-0">
               Disponíveis
             </span>
           </div>
@@ -314,7 +362,6 @@ export function HomeCouponBanner({
             if (!c) return null
             const isCopied = copiedCode === c.code
             const missingAmount = c.minOrderVal > 0 ? c.minOrderVal - currentTotal : 0
-            const unavailable = (c.minOrderVal > 0 && missingAmount > 0) || c.isExhausted
             const progress = c.minOrderVal > 0 ? Math.min(currentTotal / c.minOrderVal, 1) : 1
 
             return (
@@ -360,7 +407,7 @@ export function HomeCouponBanner({
                   </p>
 
                   {c.expiryLabel && (
-                    <div className="flex items-center gap-1 mt-1.5 text-[#9CA3AF] text-[11px] font-medium">
+                    <div className="flex items-center gap-1 mt-1.5 text-[#57534E] text-[11px] font-medium">
                       <Clock className="w-3 h-3" />
                       <span>{c.expiryLabel}</span>
                     </div>
@@ -383,7 +430,7 @@ export function HomeCouponBanner({
                 {/* Parte Inferior do Ticket com Caixa Tracejada de Cópia */}
                 <div
                   className={`bg-white border-x-[1.5px] border-[#E5E7EB] px-3 pt-1.5 pb-2.5 ${
-                    !c.isExhausted && unavailable ? "border-b-0 rounded-b-none" : "border-b-[1.5px] rounded-b-2xl"
+                    !c.isExhausted && c.minOrderVal > 0 ? "border-b-0 rounded-b-none" : "border-b-[1.5px] rounded-b-2xl"
                   }`}
                 >
                   <button
@@ -401,12 +448,12 @@ export function HomeCouponBanner({
                       {isCopied ? (
                         <Check className="w-3.5 h-3.5 text-[#16A34A] shrink-0" />
                       ) : (
-                        <Copy className={`w-3.5 h-3.5 shrink-0 ${c.isExhausted ? "text-[#9CA3AF]" : "text-[#FFB800]"}`} />
+                        <Copy className={`w-3.5 h-3.5 shrink-0 ${c.isExhausted ? "text-[#57534E]" : "text-[#8A6100]"}`} />
                       )}
                       <span
                         className={`text-xs font-black tracking-wide truncate ${
                           c.isExhausted
-                            ? "text-[#9CA3AF]"
+                            ? "text-[#57534E]"
                             : isCopied
                             ? "text-[#16A34A]"
                             : "text-[#1F1B16]"
@@ -419,10 +466,10 @@ export function HomeCouponBanner({
                     <span
                       className={`text-[11px] font-extrabold shrink-0 ml-1.5 ${
                         c.isExhausted
-                          ? "text-[#9CA3AF]"
+                          ? "text-[#57534E]"
                           : isCopied
                           ? "text-[#16A34A]"
-                          : "text-[#FFB800]"
+                          : "text-[#8A6100]"
                       }`}
                     >
                       {c.isExhausted ? "Esgotado" : isCopied ? "Pronto" : "Copiar"}
@@ -480,9 +527,8 @@ export function HomeCouponBanner({
               <button
                 key={i}
                 onClick={() => {
-                  if (i !== safeIndex) {
-                    triggerChange(i > safeIndex ? "next" : "prev", i)
-                  }
+                  if (animPhase !== "idle" || i === safeIndex) return
+                  triggerChange(i > safeIndex ? "next" : "prev", i)
                 }}
                 className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
                   i === safeIndex ? "w-5 bg-[#E3A008]" : "w-1.5 bg-[#D1D5DB]"

@@ -33,7 +33,7 @@ export default async function Home() {
     rankingNames,
     mostRequestedData,
     totalCustomers,
-    allCoupons,
+    activeCoupons,
   ] = await Promise.all([
     getCachedActiveCategories().catch(() => DEFAULT_CATEGORIES),
     getCachedHomeGridLayout().catch(() => DEFAULT_HOME_GRID_LAYOUT),
@@ -48,11 +48,8 @@ export default async function Home() {
       customerPhotos: [] as string[],
     })),
     productsManager.getTotalCustomers().catch(() => 0),
-    couponsManager.getCoupons().catch(() => [] as any[]),
+    couponsManager.getActivePublicCoupons().catch(() => []),
   ])
-
-  const activeCoupons = allCoupons.filter((c: any) => c.isActive)
-  const homeCoupon = activeCoupons.find((c: any) => c.showOnHome) || activeCoupons[0]
 
   const availableProducts = allProducts.filter((p) => p.available !== false)
 
@@ -138,14 +135,12 @@ export default async function Home() {
 
       <main className="flex-1 flex flex-col">
         {/* Hero com dados reais, status da loja e chamada de alta conversão */}
-        <ScrollReveal>
         <Hero
           mostRequestedProduct={mostRequested ?? availableProducts[0]}
           totalOrders={mostRequestedData.totalOrders}
           customerPhotos={mostRequestedData.customerPhotos}
           totalCustomers={totalCustomers}
         />
-        </ScrollReveal>
 
         {/* Banner de Campanhas Promocionais Sincronizado com App */}
         <ScrollReveal>
@@ -154,26 +149,12 @@ export default async function Home() {
 
         {/* Barra de Categorias Rápidas (Chips estilo iFood com espaço reservado CLS = 0) */}
         {(hasMobileHomeBar || hasDesktopHomeBar) && (
-          <section
-            aria-label="Navegação por categorias"
+          <div
             className={`w-full min-h-[60px] bg-white ${homeBarWrapperVisibility}`.trim()}
           >
             <CategoryBar items={homeBarItems} layout={homeGridLayout} />
-          </section>
+          </div>
         )}
-
-        {/* Carrossel Rotativo de Cupons da Home (Estilo Mobile iFood) */}
-        <ScrollReveal>
-        <HomeCouponBanner
-          coupons={activeCoupons}
-          couponCode={homeCoupon?.code || "PRIMEIRACOMPRA"}
-          discountText={homeCoupon?.description || homeCoupon?.title || "Desconto especial no seu pedido!"}
-          badgeLabel={homeCoupon?.badgeLabel || "CUPOM EXCLUSIVO"}
-          discountValue={homeCoupon?.discount || 15}
-          discountType={homeCoupon?.type || "percentage"}
-          minOrderValue={homeCoupon?.minOrderValue}
-        />
-        </ScrollReveal>
 
         {/* Blocos de Produtos em Destaque divididos por categoria */}
         <FeaturedProducts
@@ -182,6 +163,14 @@ export default async function Home() {
           categoryRulesBySlug={categoryRulesBySlug}
           mostRequestedProductId={mostRequested?.id}
           loadError={productsLoadError}
+          afterFeaturedSlot={
+            activeCoupons.length > 0 ? (
+              /* Carrossel Rotativo de Cupons da Home (Estilo Mobile iFood) */
+              <ScrollReveal>
+                <HomeCouponBanner coupons={activeCoupons} />
+              </ScrollReveal>
+            ) : undefined
+          }
         />
       </main>
 

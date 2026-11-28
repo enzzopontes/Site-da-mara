@@ -8,7 +8,7 @@ export function HomeSkeleton() {
       aria-busy="true"
       aria-live="polite"
       aria-label="Carregando página inicial"
-      className="min-h-screen flex flex-col bg-stone-50 select-none"
+      className="min-h-screen flex flex-col bg-[#F7F5F0] select-none"
     >
       {/* Header Skeleton */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#ECE7E0] h-14 sm:h-16 px-4 flex items-center justify-between">
@@ -32,7 +32,7 @@ export function HomeSkeleton() {
         </div>
 
         {/* Card Sobreposto do Restaurante */}
-        <div className="container mx-auto px-4 max-w-7xl">
+        <div className="container mx-auto px-4 max-w-5xl">
           <div className="-mt-8 sm:-mt-16 relative z-10 bg-white rounded-2xl sm:rounded-3xl border border-[#ECE7E0] p-4 sm:p-6 shadow-sm mb-6 sm:mb-8">
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
               <Skeleton className="w-16 h-16 sm:w-20 sm:h-20 rounded-full ring-4 ring-white shadow-md shrink-0" />
@@ -68,10 +68,33 @@ export function HomeSkeleton() {
               ))}
             </div>
           </section>
+        </div>
 
-          {/* Banners de Cupons */}
-          <section className="mb-6 sm:mb-8">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+        {/* Seção Destaques */}
+        <section className="bg-white pt-6 pb-8 sm:pt-8 sm:pb-10">
+          <div className="container mx-auto px-4 max-w-5xl">
+            <div className="flex items-center justify-between mb-4 sm:mb-6 pb-3 border-b border-[#ECE7E0]">
+              <Skeleton className="h-6 w-40 rounded-lg" />
+              <Skeleton className="h-4 w-24 rounded" />
+            </div>
+            <div className="flex gap-3 sm:gap-4 overflow-hidden pb-2">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="w-[230px] sm:w-[260px] shrink-0">
+                  <ProductCardSkeleton />
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Banners de Cupons */}
+        <section className="bg-[#F7F4EF] border-y border-[#ECE7E0] py-5">
+          <div className="container mx-auto px-4 max-w-5xl">
+            <div className="flex items-center justify-between mb-3.5 px-1">
+              <Skeleton className="h-4 w-36 rounded" />
+              <Skeleton className="h-3.5 w-20 rounded" />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
               <div className="h-24 sm:h-28 rounded-2xl bg-white border border-[#ECE7E0] p-4 flex items-center justify-between">
                 <div className="space-y-2">
                   <Skeleton className="h-4 w-32 rounded" />
@@ -79,7 +102,7 @@ export function HomeSkeleton() {
                 </div>
                 <Skeleton className="h-8 w-20 rounded-xl" />
               </div>
-              <div className="h-24 sm:h-28 rounded-2xl bg-white border border-[#ECE7E0] p-4 flex items-center justify-between">
+              <div className="h-24 sm:h-28 rounded-2xl bg-white border border-[#ECE7E0] p-4 hidden md:flex items-center justify-between">
                 <div className="space-y-2">
                   <Skeleton className="h-4 w-28 rounded" />
                   <Skeleton className="h-3 w-40 rounded" />
@@ -87,21 +110,8 @@ export function HomeSkeleton() {
                 <Skeleton className="h-8 w-20 rounded-xl" />
               </div>
             </div>
-          </section>
-
-          {/* Seção Destaques */}
-          <section className="mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <Skeleton className="h-6 w-40 rounded-lg" />
-              <Skeleton className="h-4 w-16 rounded" />
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-              {[...Array(4)].map((_, i) => (
-                <ProductCardSkeleton key={i} />
-              ))}
-            </div>
-          </section>
-        </div>
+          </div>
+        </section>
       </main>
     </div>
   )

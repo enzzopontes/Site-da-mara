@@ -1,13 +1,13 @@
 "use client"
 
+import type { ReactNode } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ScrollReveal } from "@/components/ui/scroll-reveal"
 import { ProductCard } from "@/components/product-card"
-import { CategoryIcon } from "@/components/category-icon"
-import { AlertCircle, ChevronRight, Sparkles, Tag, Flame, RefreshCw } from "lucide-react"
+import { AlertCircle, ChevronRight, RefreshCw } from "lucide-react"
 import { DEFAULT_CATEGORIES, type Category } from "@/lib/categories-db"
-import { normalizeLegacyCategorySlug, PRESET_3D_ICONS } from "@/lib/category-icons"
+import { normalizeLegacyCategorySlug } from "@/lib/category-icons"
 import type { Product } from "@/lib/products-db"
 
 export interface FeaturedCategorySection {
@@ -26,6 +26,7 @@ export interface FeaturedProductsProps {
   topMacarrao?: Product[]
   topBatatasNames?: string[]
   topMacarraoNames?: string[]
+  afterFeaturedSlot?: ReactNode
 }
 
 export function FeaturedProducts({
@@ -36,6 +37,7 @@ export function FeaturedProducts({
   topMacarrao,
   mostRequestedProductId,
   loadError = false,
+  afterFeaturedSlot,
 }: FeaturedProductsProps) {
   // Lista de batatas e macarrão separadas com fallback legado quando featuredSections não é passado
   const batatasList =
@@ -91,10 +93,14 @@ export function FeaturedProducts({
   // Fallback para exibir seções de oferta caso não haja no banco ainda
   const displayPromos = promoProducts.length > 0 ? promoProducts : []
 
-  return (
-    <section className="py-8 sm:py-12 bg-white">
-      <div className="container mx-auto px-4 max-w-5xl space-y-10 sm:space-y-14">
-        {loadError && products.length === 0 && (
+  const isLoadErrorEmpty = loadError && products.length === 0
+  const isEmpty = allAvailableProducts.length === 0 && !loadError
+  const hasTopBlocks = isLoadErrorEmpty || isEmpty || displayFeatured.length > 0
+  const hasBottomBlocks = displayPromos.length > 0 || effectiveSections.length > 0 || !isLoadErrorEmpty
+
+  const topBlocks = (
+    <>
+        {isLoadErrorEmpty && (
           <div
             role="alert"
             className="rounded-2xl bg-[#F7F4EF] border border-[#ECE7E0] p-6 text-center flex flex-col sm:flex-row items-center justify-between gap-4"
@@ -115,11 +121,22 @@ export function FeaturedProducts({
             <Button
               type="button"
               onClick={() => window.location.reload()}
-              className="shrink-0 w-full sm:w-auto h-11 bg-[#E3A008] hover:bg-[#B5860A] text-white font-bold text-sm px-6 rounded-xl shadow-xs transition-colors"
+              className="shrink-0 w-full sm:w-auto h-11 bg-[#E3A008] hover:bg-[#B5860A] text-[#1F1B16] font-bold text-sm px-6 rounded-xl shadow-xs transition-colors"
             >
               <RefreshCw className="w-4 h-4 mr-2" />
               Tentar novamente
             </Button>
+          </div>
+        )}
+
+        {isEmpty && (
+          <div className="rounded-2xl bg-[#F7F4EF] border border-[#ECE7E0] p-6 text-center">
+            <h2 className="text-base font-bold text-[#1F1B16]">
+              Cardápio em atualização
+            </h2>
+            <p className="text-xs text-[#6B6157] mt-1">
+              Em breve novos pratos disponíveis.
+            </p>
           </div>
         )}
 
@@ -130,14 +147,9 @@ export function FeaturedProducts({
           <div>
             <ScrollReveal className="flex items-center justify-between gap-4 mb-4 sm:mb-6 pb-3 border-b border-[#ECE7E0]">
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="p-1.5 rounded-lg bg-[#FEF8EC] text-[#E3A008]">
-                    <Sparkles className="w-4 h-4" />
-                  </span>
-                  <h2 className="text-lg sm:text-xl font-black text-[#1F1B16] tracking-tight">
-                    Destaques da Casa
-                  </h2>
-                </div>
+                <h2 className="text-lg sm:text-xl font-black text-[#1F1B16] tracking-tight">
+                  Destaques da Casa
+                </h2>
                 <p className="text-xs text-[#6B6157] mt-0.5">
                   Os pratos mais amados de Iacanga em evidência
                 </p>
@@ -152,7 +164,7 @@ export function FeaturedProducts({
             </ScrollReveal>
 
             {/* Carrossel Horizontal com Snap e Scroll Suave */}
-            <ScrollReveal className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 pt-1 snap-x snap-mandatory scroll-smooth no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
+            <ScrollReveal className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 pt-1 snap-x snap-mandatory scroll-smooth scroll-px-4 sm:scroll-px-0 no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
               {displayFeatured.map((product) => (
                 <div
                   key={`feat-${product.id}`}
@@ -173,7 +185,11 @@ export function FeaturedProducts({
             </ScrollReveal>
           </div>
         )}
+    </>
+  )
 
+  const bottomBlocks = (
+    <>
         {/* ========================================================
             SEÇÃO 2: PROMOÇÕES (Lista Vertical com Foto à Direita)
            ======================================================== */}
@@ -181,14 +197,9 @@ export function FeaturedProducts({
           <div>
             <ScrollReveal className="flex items-center justify-between gap-4 mb-4 sm:mb-6 pb-3 border-b border-[#ECE7E0]">
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700">
-                    <Tag className="w-4 h-4" />
-                  </span>
-                  <h2 className="text-lg sm:text-xl font-black text-[#1F1B16] tracking-tight">
-                    Promoções Imperdíveis
-                  </h2>
-                </div>
+                <h2 className="text-lg sm:text-xl font-black text-[#1F1B16] tracking-tight">
+                  Promoções Imperdíveis
+                </h2>
                 <p className="text-xs text-[#6B6157] mt-0.5">
                   Preços especiais e descontos exclusivos por tempo limitado
                 </p>
@@ -222,7 +233,7 @@ export function FeaturedProducts({
         {/* ========================================================
             SEÇÕES DINÂMICAS POR CATEGORIA (Grid Padronizado)
            ======================================================== */}
-        {effectiveSections.map((section, sectionIdx) => {
+        {effectiveSections.map((section) => {
           const cat = section.category
           const slugNorm = normalizeLegacyCategorySlug(cat.slug)
           const title =
@@ -239,43 +250,12 @@ export function FeaturedProducts({
               : slugNorm === "macarrao"
               ? "Ver todas as massas"
               : "Ver todas"
-          const is3dCategory = slugNorm === "batata" || slugNorm === "macarrao"
-          const isLucideIcon = cat.icon_type === "lucide"
-          const preset3dUrl =
-            !isLucideIcon && is3dCategory
-              ? (PRESET_3D_ICONS.find((icon) => icon.id === slugNorm)?.path ?? null)
-              : null
-          const hasCustom3dIcon = !isLucideIcon && Boolean(cat.icon_url)
-          const section3dIconUrl = hasCustom3dIcon ? cat.icon_url : preset3dUrl
-          const section3dIconType = isLucideIcon
-            ? "lucide"
-            : hasCustom3dIcon
-            ? cat.icon_type
-            : "preset_3d"
-          const showCategoryIcon = isLucideIcon || Boolean(section3dIconUrl)
-          const showFlameBadge = !showCategoryIcon && sectionIdx === 0
 
           return (
             <div key={cat.id}>
               <ScrollReveal className="flex items-center justify-between gap-4 mb-4 sm:mb-6 pb-3 border-b border-[#ECE7E0]">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    {showCategoryIcon ? (
-                      <CategoryIcon
-                        iconUrl={isLucideIcon ? null : section3dIconUrl}
-                        iconType={section3dIconType}
-                        iconScale={cat.icon_scale}
-                        fallbackIcon={cat.fallback_icon}
-                        accentColor={cat.accent_color}
-                        sizeClassName="w-7 h-7 sm:w-8 sm:h-8"
-                        iconClassName="w-4 h-4"
-                        className="shrink-0"
-                      />
-                    ) : showFlameBadge ? (
-                      <span className="p-1.5 rounded-lg bg-[#FEF8EC] text-[#8A6100] shrink-0">
-                        <Flame className="w-4 h-4 fill-[#E3A008] text-[#E3A008]" />
-                      </span>
-                    ) : null}
+                  <div className={cat.badge_text ? "flex items-center gap-2 min-w-0" : "min-w-0"}>
                     <h2 className="text-lg sm:text-xl font-bold text-[#1F1B16] tracking-tight min-w-0">
                       {title}
                     </h2>
@@ -312,7 +292,7 @@ export function FeaturedProducts({
                         <span
                           className={`inline-flex items-center justify-center font-black text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full shadow-2xs ${
                             idx === 0
-                              ? "bg-[#E3A008] text-white"
+                              ? "bg-[#E3A008] text-[#1F1B16]"
                               : idx === 1
                               ? "bg-[#C1440E] text-white"
                               : idx === 2
@@ -344,22 +324,56 @@ export function FeaturedProducts({
         })}
 
         {/* Banner de Personalização / Montar do seu jeito */}
-        <ScrollReveal className="rounded-2xl bg-[#F7F4EF] border border-[#ECE7E0] p-6 text-center flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="text-center sm:text-left">
-            <h3 className="text-base font-bold text-[#1F1B16]">
-              Quer montar do seu jeito?
-            </h3>
-            <p className="text-xs text-[#6B6157] mt-0.5">
-              Escolha seus recheios favoritos, adicionais generosos e monte sua batata personalizada.
-            </p>
-          </div>
-          <Button
-            asChild
-            className="shrink-0 w-full sm:w-auto h-11 bg-[#E3A008] hover:bg-[#B5860A] text-white font-bold text-sm px-6 rounded-xl shadow-xs transition-colors"
-          >
-            <Link href="/cardapio">Abrir cardápio</Link>
-          </Button>
-        </ScrollReveal>
+        {!isLoadErrorEmpty && (
+          <ScrollReveal className="rounded-2xl bg-[#F7F4EF] border border-[#ECE7E0] p-6 text-center flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-center sm:text-left">
+              <h3 className="text-base font-bold text-[#1F1B16]">
+                Quer montar do seu jeito?
+              </h3>
+              <p className="text-xs text-[#6B6157] mt-0.5">
+                Escolha seus recheios favoritos, adicionais generosos e monte sua batata personalizada.
+              </p>
+            </div>
+            <Button
+              asChild
+              className="shrink-0 w-full sm:w-auto h-11 bg-[#E3A008] hover:bg-[#B5860A] text-[#1F1B16] font-bold text-sm px-6 rounded-xl shadow-xs transition-colors"
+            >
+              <Link href="/cardapio">Abrir cardápio</Link>
+            </Button>
+          </ScrollReveal>
+        )}
+    </>
+  )
+
+  if (afterFeaturedSlot) {
+    return (
+      <>
+        {hasTopBlocks && (
+          <section className="pt-6 pb-8 sm:pt-8 sm:pb-10 bg-white">
+            <div className="container mx-auto px-4 max-w-5xl space-y-10 sm:space-y-14">
+              {topBlocks}
+            </div>
+          </section>
+        )}
+
+        {afterFeaturedSlot}
+
+        {hasBottomBlocks && (
+          <section className="py-8 sm:py-12 bg-white">
+            <div className="container mx-auto px-4 max-w-5xl space-y-10 sm:space-y-14">
+              {bottomBlocks}
+            </div>
+          </section>
+        )}
+      </>
+    )
+  }
+
+  return (
+    <section className="py-8 sm:py-12 bg-white">
+      <div className="container mx-auto px-4 max-w-5xl space-y-10 sm:space-y-14">
+        {topBlocks}
+        {bottomBlocks}
       </div>
     </section>
   )
