@@ -291,9 +291,10 @@ export default function AdminProdutosPage() {
       const allProducts = await productsManager.getProducts({ strict: true })
       setProducts(allProducts)
     } catch (err) {
+      console.error("Erro ao carregar produtos:", err)
       appToast.error(
         "Erro ao carregar produtos",
-        err instanceof Error ? err.message : "Não foi possível consultar o cardápio."
+        "Não foi possível consultar o cardápio. Tente novamente."
       )
     }
   }
@@ -503,7 +504,11 @@ export default function AdminProdutosPage() {
       setIsDialogOpen(false)
     } catch (err) {
       // Modal permanece aberto para o admin corrigir e tentar de novo
-      appToast.error("Não foi possível salvar o produto", err instanceof Error ? err.message : String(err))
+      console.error("Erro ao salvar produto:", err)
+      appToast.error(
+        "Não foi possível salvar o produto",
+        "Verifique os dados informados e tente novamente."
+      )
     } finally {
       setIsSaving(false)
     }
@@ -548,7 +553,11 @@ export default function AdminProdutosPage() {
       await loadAdicionais()
       setIsAdicionalDialogOpen(false)
     } catch (err) {
-      appToast.error("Erro ao salvar adicional", err instanceof Error ? err.message : String(err))
+      console.error("Erro ao salvar adicional:", err)
+      appToast.error(
+        "Erro ao salvar adicional",
+        "Não foi possível salvar o adicional. Tente novamente."
+      )
     } finally {
       setIsSaving(false)
     }
@@ -573,7 +582,8 @@ export default function AdminProdutosPage() {
         await loadProducts()
         appToast.success("Produto excluído", "O produto foi removido do cardápio.")
       } catch (err) {
-        appToast.error("Não foi possível excluir o produto", err instanceof Error ? err.message : String(err))
+        console.error("Erro ao excluir produto:", err)
+        appToast.error("Não foi possível excluir o produto", "Tente novamente em instantes.")
       }
     } else {
       try {
@@ -583,7 +593,8 @@ export default function AdminProdutosPage() {
           appToast.success("Adicional excluído", "O adicional foi removido com sucesso.")
         }
       } catch (err) {
-        appToast.error("Não foi possível excluir o adicional", err instanceof Error ? err.message : String(err))
+        console.error("Erro ao excluir adicional:", err)
+        appToast.error("Não foi possível excluir o adicional", "Tente novamente em instantes.")
       }
     }
   }
@@ -600,7 +611,11 @@ export default function AdminProdutosPage() {
       await loadProducts()
     } catch (err) {
       setProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, available: previousStatus } : p)))
-      appToast.error("Erro ao alterar disponibilidade", err instanceof Error ? err.message : String(err))
+      console.error("Erro ao alterar disponibilidade:", err)
+      appToast.error(
+        "Erro ao alterar disponibilidade",
+        "Não foi possível atualizar o status do produto. Tente novamente."
+      )
     }
   }
 

@@ -178,7 +178,7 @@ export default function MeusDadosPage() {
   }
 
   if (!user) {
-    return null
+    return <MeusDadosSkeleton />
   }
 
   return (

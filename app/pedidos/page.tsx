@@ -568,11 +568,15 @@ export default function PedidosPage() {
         setInitialLoading(false)
         return
       }
+      if (!silent) {
+        setLoadError(null)
+      }
       if (!silent && orders.length === 0) {
         setInitialLoading(true)
       }
       try {
         const userOrders = await ordersManager.getUserOrders(uid)
+        setLoadError(null)
         setOrders(userOrders)
         await fetchFeedbacks(uid)
       } catch (err) {

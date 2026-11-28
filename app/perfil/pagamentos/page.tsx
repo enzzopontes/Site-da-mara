@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { usePaymentCards, type SavedCard } from "@/hooks/use-payment-cards"
@@ -30,6 +30,16 @@ export default function PagamentosPage() {
   >("cartão de crédito")
   const [cardToDelete, setCardToDelete] = useState<SavedCard | null>(null)
   const [deletingCard, setDeletingCard] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  const handleLoadCards = useCallback(async () => {
+    setLoadError(null)
+    try {
+      await loadCards({ strict: true })
+    } catch {
+      setLoadError("Verifique sua conexão e tente novamente.")
+    }
+  }, [loadCards])
 
   // Autenticação obrigatória: redireciona para login se não autenticado
   useEffect(() => {
@@ -41,9 +51,9 @@ export default function PagamentosPage() {
   // Carrega cartões salvos do usuário
   useEffect(() => {
     if (user) {
-      loadCards()
+      handleLoadCards()
     }
-  }, [user, loadCards])
+  }, [user, handleLoadCards])
 
   const handleSelectType = (type: "cartão de crédito" | "cartão de débito") => {
     setSelectedType(type)
@@ -60,10 +70,10 @@ export default function PagamentosPage() {
         appToast.success("Cartão removido com sucesso.")
         setCardToDelete(null)
       } else {
-        appToast.error("Erro ao remover cartão", res.error || "Não foi possível remover o cartão.")
+        appToast.error("Erro ao remover cartão", "Não foi possível remover o cartão. Tente novamente.")
       }
-    } catch (err: any) {
-      appToast.error("Erro ao remover cartão", err?.message || "Não foi possível remover o cartão.")
+    } catch {
+      appToast.error("Erro ao remover cartão", "Não foi possível remover o cartão.")
     } finally {
       setDeletingCard(false)
     }
@@ -181,8 +191,31 @@ export default function PagamentosPage() {
           </div>
         )}
 
+        {/* Estado de erro ao carregar cartões */}
+        {!loadingCards && loadError && (
+          <div
+            role="alert"
+            className="rounded-[20px] bg-[#F4F4F5] border border-[#E4E4E7] p-5 flex flex-col items-center text-center"
+          >
+            <CreditCard className="w-7 h-7 text-[#71717A] mb-2" />
+            <h2 className="font-bold text-[#18181B] text-base">
+              Não foi possível carregar seus cartões
+            </h2>
+            <p className="text-sm text-[#71717A] max-w-xs mt-1 mb-4">
+              {loadError}
+            </p>
+            <button
+              type="button"
+              onClick={handleLoadCards}
+              className="px-4 py-2 text-sm font-medium text-[#18181B] bg-white border border-[#E4E4E7] hover:bg-neutral-50 active:scale-95 rounded-lg cursor-pointer transition-all"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        )}
+
         {/* Empty state quando não há cartões e não está carregando */}
-        {!loadingCards && cards.length === 0 && (
+        {!loadingCards && !loadError && cards.length === 0 && (
           <div className="py-8 flex flex-col items-center text-center">
             <img
               src="/assets/batatatoppagamento.png"
@@ -287,7 +320,7 @@ export default function PagamentosPage() {
         onClose={() => setWizardOpen(false)}
         onSaved={() => {
           setWizardOpen(false)
-          loadCards()
+          handleLoadCards()
         }}
       />
 

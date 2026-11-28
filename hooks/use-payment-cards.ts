@@ -56,7 +56,7 @@ export function usePaymentCards() {
   const [loadingCards, setLoadingCards] = useState(false);
   const [savingCard, setSavingCard] = useState(false);
 
-  const loadCards = useCallback(async (): Promise<SavedCard[]> => {
+  const loadCards = useCallback(async (options?: { strict?: boolean }): Promise<SavedCard[]> => {
     setLoadingCards(true);
     try {
       const supabase = getSupabaseBrowserClient();
@@ -79,6 +79,9 @@ export function usePaymentCards() {
       if (error) {
         console.error("Erro ao carregar cartões salvos:", error);
         setCards([]);
+        if (options?.strict) {
+          throw error;
+        }
         return [];
       }
 
@@ -217,14 +220,15 @@ export function usePaymentCards() {
         const data = await response.json().catch(() => ({}));
 
         if (!response.ok || !data.success) {
-          return { success: false, error: data.error || "Não foi possível remover o cartão." };
+          console.error("Erro ao remover cartão:", data?.error || response.status);
+          return { success: false, error: "Não foi possível remover o cartão. Tente novamente." };
         }
 
         await loadCards();
         return { success: true };
       } catch (err: any) {
         console.error("Erro ao remover cartão:", err);
-        return { success: false, error: err?.message || "Não foi possível remover o cartão." };
+        return { success: false, error: "Não foi possível remover o cartão. Tente novamente." };
       }
     },
     [loadCards]

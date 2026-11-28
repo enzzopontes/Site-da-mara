@@ -1277,7 +1277,6 @@ export default function CheckoutPage() {
       const rawMsg = err?.message || ""
       const mappedMsg =
         ERROR_MESSAGES[rawMsg] ||
-        rawMsg ||
         "Ocorreu um erro ao processar seu pedido. Por favor, tente novamente."
       setErrorMessage(mappedMsg)
       appToast.error("Erro no pedido", mappedMsg)

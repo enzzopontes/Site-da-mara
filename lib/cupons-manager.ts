@@ -57,7 +57,7 @@ function mapRowToCoupon(c: any): Coupon {
 class CouponsManager {
   private supabase = getSupabaseBrowserClient()
 
-  async getCoupons(): Promise<Coupon[]> {
+  async getCoupons(options?: { strict?: boolean }): Promise<Coupon[]> {
     const { data, error } = await this.supabase
       .from("coupons")
       .select("*")
@@ -65,6 +65,9 @@ class CouponsManager {
 
     if (error) {
       console.error("Error fetching coupons:", error.message)
+      if (options?.strict) {
+        throw error
+      }
       return []
     }
 

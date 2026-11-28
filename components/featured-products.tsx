@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollReveal } from "@/components/ui/scroll-reveal"
 import { ProductCard } from "@/components/product-card"
 import { CategoryIcon } from "@/components/category-icon"
-import { ChevronRight, Sparkles, Tag, Flame } from "lucide-react"
+import { AlertCircle, ChevronRight, Sparkles, Tag, Flame, RefreshCw } from "lucide-react"
 import { DEFAULT_CATEGORIES, type Category } from "@/lib/categories-db"
 import { normalizeLegacyCategorySlug, PRESET_3D_ICONS } from "@/lib/category-icons"
 import type { Product } from "@/lib/products-db"
@@ -21,6 +21,7 @@ export interface FeaturedProductsProps {
   featuredSections?: FeaturedCategorySection[]
   categoryRulesBySlug?: Record<string, { allowsAddons: boolean; allowsNotes: boolean }>
   mostRequestedProductId?: string | null
+  loadError?: boolean
   topBatatas?: Product[]
   topMacarrao?: Product[]
   topBatatasNames?: string[]
@@ -34,6 +35,7 @@ export function FeaturedProducts({
   topBatatas,
   topMacarrao,
   mostRequestedProductId,
+  loadError = false,
 }: FeaturedProductsProps) {
   // Lista de batatas e macarrão separadas com fallback legado quando featuredSections não é passado
   const batatasList =
@@ -92,6 +94,35 @@ export function FeaturedProducts({
   return (
     <section className="py-8 sm:py-12 bg-white">
       <div className="container mx-auto px-4 max-w-5xl space-y-10 sm:space-y-14">
+        {loadError && products.length === 0 && (
+          <div
+            role="alert"
+            className="rounded-2xl bg-[#F7F4EF] border border-[#ECE7E0] p-6 text-center flex flex-col sm:flex-row items-center justify-between gap-4"
+          >
+            <div className="flex flex-col sm:flex-row items-center gap-3 text-center sm:text-left">
+              <span className="p-2 rounded-lg bg-[#FEF8EC] text-[#C1440E] shrink-0">
+                <AlertCircle className="w-5 h-5" />
+              </span>
+              <div>
+                <h2 className="text-base font-bold text-[#1F1B16]">
+                  Não foi possível carregar o cardápio agora
+                </h2>
+                <p className="text-xs text-[#6B6157] mt-0.5">
+                  Tente novamente em alguns instantes para ver nossos produtos.
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="shrink-0 w-full sm:w-auto h-11 bg-[#E3A008] hover:bg-[#B5860A] text-white font-bold text-sm px-6 rounded-xl shadow-xs transition-colors"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Tentar novamente
+            </Button>
+          </div>
+        )}
+
         {/* ========================================================
             SEÇÃO 1: CARROSSEL HORIZONTAL DE DESTAQUES (Estilo iFood)
            ======================================================== */}

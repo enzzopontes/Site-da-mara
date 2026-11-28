@@ -133,23 +133,28 @@ export default function AdminPromocoesPage() {
       const loaded = await fetchCategoriesFromDb({ kind: "product_category" })
       const source = loaded.length > 0 ? loaded : DEFAULT_PRODUCT_CATEGORIES
       setCategories([...source].sort((a, b) => a.menu_order - b.menu_order))
-    } catch {
+      return true
+    } catch (error) {
+      console.error("Erro ao carregar categorias:", error)
       setCategories(DEFAULT_PRODUCT_CATEGORIES)
+      return false
     }
   }
 
   const loadProducts = async () => {
     try {
       setLoadingProducts(true)
-      const products = await productsManager.getProducts()
+      const products = await productsManager.getProducts({ strict: true })
       setAllProducts(products)
       
-      const status = await storeStatusManager.getStatus()
+      const status = await storeStatusManager.getStatus({ strict: true })
       if (status.promoProducts) {
         setPromoProducts(status.promoProducts)
       }
+      return true
     } catch (error) {
       console.error("Erro ao carregar produtos:", error)
+      return false
     } finally {
       setLoadingProducts(false)
     }
@@ -160,8 +165,10 @@ export default function AdminPromocoesPage() {
       setLoadingImages(true)
       const images = await imageUploadManager.getImagesByCategory("promo")
       setPromoImages(images)
+      return true
     } catch (error) {
       console.error("Erro ao carregar imagens:", error)
+      return false
     } finally {
       setLoadingImages(false)
     }
@@ -169,7 +176,7 @@ export default function AdminPromocoesPage() {
 
   const loadPromoStatus = async () => {
     try {
-      const status = await storeStatusManager.getStatus()
+      const status = await storeStatusManager.getStatus({ strict: true })
       if (status.superPromo) {
         setSuperPromo({
           ...status.superPromo,
@@ -182,8 +189,10 @@ export default function AdminPromocoesPage() {
           useUrl: status.itemPromo.useUrl ?? false
         })
       }
+      return true
     } catch (error) {
       console.error("Erro ao carregar status de promoção:", error)
+      return false
     }
   }
 
@@ -450,12 +459,22 @@ export default function AdminPromocoesPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  loadPromoStatus()
-                  loadCategories()
-                  loadProducts()
-                  loadImages()
-                  appToast.success("Dados sincronizados com o servidor!")
+                onClick={async () => {
+                  try {
+                    const results = await Promise.all([
+                      loadPromoStatus(),
+                      loadCategories(),
+                      loadProducts(),
+                      loadImages(),
+                    ])
+                    if (!results.every(Boolean)) {
+                      throw new Error("Falha ao sincronizar um ou mais dados")
+                    }
+                    appToast.success("Dados sincronizados com o servidor!")
+                  } catch (error) {
+                    console.error("Erro ao sincronizar dados:", error)
+                    appToast.error("Erro ao sincronizar", "Não foi possível atualizar os dados. Tente novamente.")
+                  }
                 }}
                 className="h-10 px-3.5 rounded-xl border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-bold gap-2 text-xs shadow-xs"
               >
@@ -500,9 +519,9 @@ export default function AdminPromocoesPage() {
                     {superPromo.isActive ? "Todas Batatas" : promoProducts.length}
                   </p>
                 </div>
-                <div className="bg-white/5 backdrop-blur-xs p-3 rounded-2xl border border-white/10">
+                <div className="bg-white/5 backdrop-blur-xs p-3 rounded-2xl border border-white/10" title="Sem dados suficientes">
                   <p className="text-gray-400 text-xs font-semibold">Conversão Estimada</p>
-                  <p className="text-2xl font-black text-emerald-400 mt-0.5">+35%</p>
+                  <p className="text-2xl font-black text-emerald-400 mt-0.5">—</p>
                 </div>
               </div>
             </div>

@@ -3,16 +3,13 @@
 import { HeaderWrapper } from "@/components/header-wrapper"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
-import { useAuth } from "@/lib/auth-context"
 import { MessageCircle, Phone, Clock, ArrowLeft, ChevronRight, Package, AlertCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { AjudaSkeleton } from "@/components/skeletons/ajuda-skeleton"
 import { useState } from "react"
 import { OrderSummary } from "@/components/order-summary"
 import Link from "next/link"
 
 export default function AjudaPage() {
-  const { loading } = useAuth()
   const router = useRouter()
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null)
 
@@ -92,10 +89,6 @@ export default function AjudaPage() {
       iconClass: "text-[#C1440E]",
     },
   ]
-
-  if (loading) {
-    return <AjudaSkeleton />
-  }
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F5F0]">

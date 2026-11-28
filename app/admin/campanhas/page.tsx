@@ -429,14 +429,10 @@ export default function AdminCampanhasPage() {
             Módulo em preparação
           </div>
           <h1 className="text-2xl font-black text-stone-900">
-            Campanhas Push em Massa — Infraestrutura Pendente
+            Campanhas Push em Massa em configuração
           </h1>
           <p className="text-sm text-stone-600 leading-relaxed">
-            Este módulo foi temporariamente desabilitado para evitar falhas de banco de dados até que a tabela{" "}
-            <code className="px-1.5 py-0.5 rounded bg-amber-100/80 text-stone-800 text-xs">public.campaigns</code>{" "}
-            e a Edge Function{" "}
-            <code className="px-1.5 py-0.5 rounded bg-amber-100/80 text-stone-800 text-xs">dispatch-campaign-push</code>{" "}
-            sejam implantadas no projeto Supabase.
+            As campanhas de notificações push ainda não foram configuradas para esta loja. Assim que a ativação for concluída, você poderá criar e enviar campanhas por aqui.
           </p>
         </div>
       </div>

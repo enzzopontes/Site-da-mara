@@ -90,6 +90,91 @@ const isValidCpf = (digits: string) => {
   return digit1 === parseInt(digits[9], 10) && digit2 === parseInt(digits[10], 10)
 }
 
+// Mapeia erros brutos de autenticação/OTP para mensagens seguras em PT-BR
+const mapOtpAuthError = (err: unknown, fallbackMessage: string): string => {
+  const errObj =
+    err && typeof err === "object"
+      ? (err as { code?: unknown; status?: unknown; message?: unknown; name?: unknown })
+      : null
+  const code = typeof errObj?.code === "string" ? errObj.code.toLowerCase() : ""
+  const status = typeof errObj?.status === "number" ? errObj.status : undefined
+  const rawMessage =
+    typeof errObj?.message === "string"
+      ? errObj.message
+      : typeof err === "string"
+      ? err
+      : ""
+  const msg = rawMessage.toLowerCase()
+
+  if (
+    (typeof navigator !== "undefined" && navigator.onLine === false) ||
+    msg.includes("failed to fetch") ||
+    msg.includes("networkerror") ||
+    msg.includes("network request failed") ||
+    msg.includes("load failed") ||
+    msg.includes("fetch failed") ||
+    msg.includes("internet_disconnected") ||
+    msg.includes("offline") ||
+    msg.includes("timed out") ||
+    msg.includes("timeout")
+  ) {
+    return "Sem conexão com a internet. Verifique sua rede e tente novamente."
+  }
+
+  if (
+    status === 429 ||
+    code === "over_email_send_rate_limit" ||
+    code === "over_request_rate_limit" ||
+    code === "over_sms_send_rate_limit" ||
+    msg.includes("429") ||
+    msg.includes("too many requests") ||
+    msg.includes("rate limit") ||
+    msg.includes("for security purposes") ||
+    msg.includes("only request this after") ||
+    msg.includes("muitas solicitações")
+  ) {
+    return "Muitas solicitações em pouco tempo. Por segurança, aguarde alguns minutos antes de tentar novamente."
+  }
+
+  if (
+    code === "otp_expired" ||
+    msg.includes("token has expired") ||
+    msg.includes("otp expired") ||
+    msg.includes("expired") ||
+    msg.includes("expirou")
+  ) {
+    return "O código de verificação expirou. Solicite um novo código."
+  }
+
+  if (
+    code === "otp_disabled" ||
+    code === "invalid_credentials" ||
+    msg.includes("invalid token") ||
+    msg.includes("token is invalid") ||
+    msg.includes("already been used") ||
+    msg.includes("invalid_grant") ||
+    msg.includes("verification failed") ||
+    msg.includes("código de verificação incorreto") ||
+    msg.includes("código inválido")
+  ) {
+    return "Código inválido ou já utilizado. Confira os dígitos e tente novamente."
+  }
+
+  if (
+    code === "email_address_invalid" ||
+    code === "email_provider_disabled" ||
+    msg.includes("invalid email") ||
+    msg.includes("unable to validate email") ||
+    msg.includes("email address") ||
+    msg.includes("e-mail inválido") ||
+    msg.includes("formato de e-mail inválido")
+  ) {
+    return "Informe um e-mail válido e tente novamente."
+  }
+
+  return fallbackMessage
+}
+
 export function AuthContainer({
   initialMode: _initialMode = "login",
 }: {
@@ -246,9 +331,10 @@ export function AuthContainer({
         skipped: Boolean(res.skipped),
         cooldownRemaining: res.cooldownRemaining || 0,
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      console.error("[Auth] Erro ao enviar código OTP:", err)
       appToast.error(
-        err?.message || "Não foi possível enviar o código. Tente novamente."
+        mapOtpAuthError(err, "Não foi possível enviar o código. Tente novamente.")
       )
       return { ok: false, skipped: false, cooldownRemaining: 0 }
     } finally {
@@ -370,8 +456,11 @@ export function AuthContainer({
         appToast.dismiss()
         setStep("name")
       }
-    } catch (err: any) {
-      appToast.error(err?.message || "Erro ao validar o código.")
+    } catch (err: unknown) {
+      console.error("[Auth] Erro ao validar código OTP:", err)
+      appToast.error(
+        mapOtpAuthError(err, "Erro ao validar o código. Tente novamente.")
+      )
       setCode(["", "", "", "", "", ""])
       scheduleFocus(() => codeRefs.current[0]?.focus(), 100)
     } finally {

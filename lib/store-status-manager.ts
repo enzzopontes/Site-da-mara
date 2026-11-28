@@ -139,7 +139,7 @@ class StoreStatusManager {
     }
   }
 
-  async getStatus(): Promise<StoreStatus> {
+  async getStatus(options?: { strict?: boolean }): Promise<StoreStatus> {
     try {
       const { data, error } = await this.supabase
         .from("store_settings")
@@ -148,6 +148,9 @@ class StoreStatusManager {
         .maybeSingle()
 
       if (error) {
+        if (options?.strict) {
+          throw error
+        }
         // Silenciamos erros de conexão no localhost para não travar a interface
         return this.cachedStatus || this.getDefaultStatus()
       }
@@ -191,6 +194,9 @@ class StoreStatusManager {
       this.cachedStatus = adjustedStatus
       return adjustedStatus
     } catch (err) {
+      if (options?.strict) {
+        throw err
+      }
       return this.cachedStatus || this.getDefaultStatus()
     }
   }

@@ -206,24 +206,32 @@ class OrdersManager {
     const start = new Date(dateStr + 'T00:00:00')
     const end = new Date(dateStr + 'T23:59:59')
     const sb = this.supabase
-    const { data } = await sb
+    const { data, error } = await sb
       .from("orders")
       .select(`*, order_items (*)`)
       .gte("created_at", start.toISOString())
       .lte("created_at", end.toISOString())
       .neq("status", "awaiting_payment")
       .order("created_at", { ascending: false })
+    if (error) {
+      console.error("[OrdersManager] getOrdersByDate erro:", error)
+      throw error
+    }
     return data?.map((o: any) => this.mapOrderData(o)) || []
   }
 
   async getSalesHistory(): Promise<DailySales[]> {
     const sb = this.supabase
-    const { data } = await sb
+    const { data, error } = await sb
       .from("orders")
       .select("created_at, total_amount, status")
       .eq("status", "delivered")
       .neq("status", "awaiting_payment")
       .order("created_at", { ascending: false })
+    if (error) {
+      console.error("[OrdersManager] getSalesHistory erro:", error)
+      throw error
+    }
 
     const history: Record<string, DailySales> = {}
     data?.forEach((o: any) => {

@@ -332,9 +332,9 @@ export function StepItens({
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-[#1F1B16] leading-tight">Nenhum cupom aplicado</p>
               <p className="text-xs text-[#6B6157] mt-0.5">
-                {availableCouponsCount != null
-                  ? `${availableCouponsCount} disponível${availableCouponsCount === 1 ? "" : "is"}`
-                  : "1 disponível"}
+                {availableCouponsCount != null && availableCouponsCount > 0
+                  ? `${availableCouponsCount} ${availableCouponsCount === 1 ? "disponível" : "disponíveis"}`
+                  : "Toque para conferir"}
               </p>
             </div>
           </div>

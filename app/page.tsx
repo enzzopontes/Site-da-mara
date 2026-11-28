@@ -23,6 +23,8 @@ import { normalizeLegacyCategorySlug } from "@/lib/category-icons"
 export const revalidate = 60
 
 export default async function Home() {
+  let productsLoadError = false
+
   // Busca em paralelo com tolerância a falhas
   const [
     categories,
@@ -35,18 +37,15 @@ export default async function Home() {
   ] = await Promise.all([
     getCachedActiveCategories().catch(() => DEFAULT_CATEGORIES),
     getCachedHomeGridLayout().catch(() => DEFAULT_HOME_GRID_LAYOUT),
-    productsManager.getProducts().catch(() => [] as Product[]),
+    productsManager.getProducts({ strict: true }).catch(() => {
+      productsLoadError = true
+      return [] as Product[]
+    }),
     productsManager.getGlobalRankingNames(60).catch(() => [] as string[]),
     productsManager.getMostRequestedProduct().catch(() => ({
-      product: {
-        id: "default",
-        name: "Batata Especial da Casa",
-        description: "Recheio generoso e queijo derretido",
-        price: 29.9,
-        image: "https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&w=800&q=80",
-      },
+      product: undefined as Product | undefined,
       totalOrders: 0,
-      customerPhotos: [],
+      customerPhotos: [] as string[],
     })),
     productsManager.getTotalCustomers().catch(() => 0),
     couponsManager.getCoupons().catch(() => [] as any[]),
@@ -141,7 +140,7 @@ export default async function Home() {
         {/* Hero com dados reais, status da loja e chamada de alta conversão */}
         <ScrollReveal>
         <Hero
-          mostRequestedProduct={mostRequestedData.product}
+          mostRequestedProduct={mostRequested ?? availableProducts[0]}
           totalOrders={mostRequestedData.totalOrders}
           customerPhotos={mostRequestedData.customerPhotos}
           totalCustomers={totalCustomers}
@@ -182,6 +181,7 @@ export default async function Home() {
           featuredSections={featuredSections}
           categoryRulesBySlug={categoryRulesBySlug}
           mostRequestedProductId={mostRequested?.id}
+          loadError={productsLoadError}
         />
       </main>
 

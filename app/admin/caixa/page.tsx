@@ -35,8 +35,7 @@ import {
   Percent,
   Download,
   Filter,
-  ArrowUpRight,
-  Sparkles
+  ArrowUpRight
 } from "lucide-react"
 import { ordersManager, type DailySales, type Order } from "@/lib/orders-manager"
 import { isAdmin as checkIsAdminRole } from "@/lib/supabase/admin"
@@ -78,12 +77,14 @@ export default function AdminCaixaPage() {
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [dateFilter, setDateFilter] = useState<DateFilterType>("all")
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
     expandedDateRef.current = expandedDate
   }, [expandedDate])
 
   const loadData = useCallback(async () => {
+    setLoadError(false)
     try {
       const todayStats = await ordersManager.getTodayStats()
       const history = await ordersManager.getSalesHistory()
@@ -116,6 +117,7 @@ export default function AdminCaixaPage() {
       }
     } catch (error) {
       console.error("Erro ao carregar dados:", error)
+      setLoadError(true)
     }
   }, [])
 
@@ -169,6 +171,7 @@ export default function AdminCaixaPage() {
         setDateOrders(prev => ({ ...prev, [date]: orders }))
       } catch (error) {
         console.error("Erro ao carregar pedidos da data:", error)
+        appToast.error("Erro ao carregar pedidos", "Não foi possível carregar os pedidos desta data. Tente novamente.")
       } finally {
         setLoadingOrders(null)
       }
@@ -205,7 +208,7 @@ export default function AdminCaixaPage() {
       await loadData()
     } catch (error: any) {
       console.error("Erro ao deletar pedido:", error)
-      appToast.error("Erro ao deletar pedido", error?.message || "Tente novamente.")
+      appToast.error("Erro ao deletar pedido", "Não foi possível excluir o pedido. Tente novamente.")
     } finally {
       setIsDeleting(false)
     }
@@ -322,9 +325,6 @@ export default function AdminCaixaPage() {
               </div>
               <div className="flex items-center gap-3">
                 <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Caixa & Financeiro</h1>
-                <Badge className="bg-amber-100 text-amber-800 border-amber-200 font-bold px-2.5 py-0.5 rounded-lg flex items-center gap-1">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-600" /> iFood Standard
-                </Badge>
               </div>
               <p className="text-slate-500 text-sm">Controle de faturamento, conciliação e fechamento diário</p>
             </div>
@@ -348,6 +348,28 @@ export default function AdminCaixaPage() {
               </Button>
             </div>
           </div>
+
+          {loadError && (
+            <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-red-100 rounded-xl text-red-600 shrink-0">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-red-900">Não foi possível carregar os dados financeiros</p>
+                  <p className="text-xs text-red-700">Verifique sua conexão e tente novamente. Os valores exibidos podem estar desatualizados.</p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="bg-white hover:bg-red-50 text-red-700 border-red-200 font-bold rounded-2xl px-4 h-10 shrink-0"
+              >
+                Tentar novamente
+              </Button>
+            </div>
+          )}
 
           {/* Cards Principais de Faturamento Diário (Hoje) */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

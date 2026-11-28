@@ -123,9 +123,10 @@ export function RestaurantHeaderCard({
       )
       setShowRewardModal(false)
     } catch (err: any) {
+      console.error("[RestaurantHeaderCard] Erro no resgate:", err)
       appToast.error(
         "Erro no resgate",
-        err?.message || "Não foi possível resgatar sua batata grátis. Tente novamente."
+        "Não foi possível resgatar sua batata grátis. Tente novamente."
       )
     } finally {
       setIsRedeemingReward(false)
@@ -134,10 +135,11 @@ export function RestaurantHeaderCard({
 
   // Dados reais sincronizados com o Supabase
   const [realOrdersCount, setRealOrdersCount] = useState<number>(totalOrders)
-  const [realRating, setRealRating] = useState<number>(4.9)
+  const [realRating, setRealRating] = useState<number | null>(null)
   const [realReviewsCount, setRealReviewsCount] = useState<number>(0)
   const [reviewsList, setReviewsList] = useState<CustomerReview[]>([])
   const [isLoadingReviews, setIsLoadingReviews] = useState<boolean>(false)
+  const [reviewsError, setReviewsError] = useState<boolean>(false)
 
   // Busca dados reais de pedidos e avaliações do Supabase
   useEffect(() => {
@@ -151,11 +153,14 @@ export function RestaurantHeaderCard({
           if (typeof data.totalOrders === "number") {
             setRealOrdersCount(Math.max(totalOrders, data.totalOrders))
           }
-          if (typeof data.averageRating === "number") {
-            setRealRating(data.averageRating)
-          }
+          const reviewsCount = typeof data.totalReviews === "number" ? data.totalReviews : 0
           if (typeof data.totalReviews === "number") {
-            setRealReviewsCount(data.totalReviews)
+            setRealReviewsCount(reviewsCount)
+          }
+          if (reviewsCount > 0 && typeof data.averageRating === "number") {
+            setRealRating(data.averageRating)
+          } else if (typeof data.totalReviews === "number" && reviewsCount === 0) {
+            setRealRating(null)
           }
           if (Array.isArray(data.reviews)) {
             setReviewsList(data.reviews)
@@ -172,6 +177,32 @@ export function RestaurantHeaderCard({
     }
   }, [totalOrders])
 
+  const fetchPublicReviews = async () => {
+    setIsLoadingReviews(true)
+    setReviewsError(false)
+    try {
+      const res = await fetch("/api/feedbacks/public")
+      if (!res.ok) throw new Error("reviews_fetch_failed")
+      const data = await res.json()
+      if (!data?.success || !Array.isArray(data.reviews)) {
+        throw new Error("reviews_fetch_failed")
+      }
+      setReviewsList(data.reviews)
+      const reviewsCount = typeof data.totalReviews === "number" ? data.totalReviews : 0
+      if (typeof data.totalReviews === "number") setRealReviewsCount(reviewsCount)
+      if (reviewsCount > 0 && typeof data.averageRating === "number") {
+        setRealRating(data.averageRating)
+      } else if (typeof data.totalReviews === "number" && reviewsCount === 0) {
+        setRealRating(null)
+      }
+    } catch (err) {
+      console.error("[RestaurantHeaderCard] Erro ao carregar avaliações:", err)
+      setReviewsError(true)
+    } finally {
+      setIsLoadingReviews(false)
+    }
+  }
+
   // Abre modal e garante lista atualizada
   const handleOpenReviewsModal = async () => {
     if (onOpenReviews) {
@@ -180,19 +211,21 @@ export function RestaurantHeaderCard({
     }
     setShowReviewsModal(true)
     if (reviewsList.length === 0) {
-      setIsLoadingReviews(true)
-      try {
-        const res = await fetch("/api/feedbacks/public")
-        const data = await res.json()
-        if (data?.success && Array.isArray(data.reviews)) {
-          setReviewsList(data.reviews)
-          if (data.totalReviews) setRealReviewsCount(data.totalReviews)
-          if (data.averageRating) setRealRating(data.averageRating)
-        }
-      } catch {}
-      setIsLoadingReviews(false)
+      await fetchPublicReviews()
     }
   }
+
+  const validReviews = reviewsList.filter((review) => {
+    const rating = Number(review.rating)
+    return !Number.isNaN(rating) && rating >= 1 && rating <= 5
+  })
+  const recommendedPercent =
+    realReviewsCount > 0 && realRating !== null && validReviews.length > 0
+      ? Math.round(
+          (validReviews.filter((review) => Number(review.rating) >= 4).length / validReviews.length) *
+            100
+        )
+      : null
 
   const progressPercent = Math.min(100, Math.max(0, (ordersCount / targetOrders) * 100))
 
@@ -229,13 +262,21 @@ export function RestaurantHeaderCard({
                     </h1>
 
                     {/* Estrela + Pedidos Feitos Reais (Sincronizado Supabase) */}
-                    <div className="inline-flex items-center gap-1 text-xs sm:text-sm shrink-0">
-                      <Star className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-[#FCBB00] text-[#FCBB00]" aria-hidden="true" />
-                      <span className="font-bold text-[#1F1B16]">{realRating.toFixed(1)}</span>
-                      <span className="text-[#717171] font-normal text-xs sm:text-sm">
-                        ({realOrdersCount} {realOrdersCount === 1 ? "pedido feito" : "pedidos feitos"})
-                      </span>
-                    </div>
+                    {realReviewsCount > 0 && realRating !== null ? (
+                      <div className="inline-flex items-center gap-1 text-xs sm:text-sm shrink-0">
+                        <Star className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-[#FCBB00] text-[#FCBB00]" aria-hidden="true" />
+                        <span className="font-bold text-[#1F1B16]">{realRating.toFixed(1)}</span>
+                        <span className="text-[#717171] font-normal text-xs sm:text-sm">
+                          ({realOrdersCount} {realOrdersCount === 1 ? "pedido feito" : "pedidos feitos"})
+                        </span>
+                      </div>
+                    ) : realOrdersCount > 0 ? (
+                      <div className="inline-flex items-center gap-1 text-xs sm:text-sm shrink-0">
+                        <span className="text-[#717171] font-normal text-xs sm:text-sm">
+                          ({realOrdersCount} {realOrdersCount === 1 ? "pedido feito" : "pedidos feitos"})
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
 
                   {/* Linha 2: Categorias */}
@@ -434,36 +475,42 @@ export function RestaurantHeaderCard({
             </div>
 
             {/* Estatísticas Consolidadas */}
-            <div className="bg-[#FAF8F5] p-3.5 sm:p-4 rounded-2xl border border-[#ECE7E0] flex items-center justify-around mb-4 shrink-0">
-              <div className="text-center">
-                <span className="text-2xl sm:text-3xl font-black text-[#1F1B16]">{realRating.toFixed(1)}</span>
-                <div className="flex items-center justify-center gap-0.5 my-1">
-                  {[...Array(5)].map((_, i) => (
-                    <Star
-                      key={i}
-                      className={`w-3.5 h-3.5 ${
-                        i < Math.round(realRating) ? "fill-[#FCBB00] text-[#FCBB00]" : "text-neutral-300"
-                      }`}
-                    />
-                  ))}
+            {realReviewsCount > 0 && realRating !== null && (
+              <div className="bg-[#FAF8F5] p-3.5 sm:p-4 rounded-2xl border border-[#ECE7E0] flex items-center justify-around mb-4 shrink-0">
+                <div className="text-center">
+                  <span className="text-2xl sm:text-3xl font-black text-[#1F1B16]">{realRating.toFixed(1)}</span>
+                  <div className="flex items-center justify-center gap-0.5 my-1">
+                    {[...Array(5)].map((_, i) => (
+                      <Star
+                        key={i}
+                        className={`w-3.5 h-3.5 ${
+                          i < Math.round(realRating) ? "fill-[#FCBB00] text-[#FCBB00]" : "text-neutral-300"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-[11px] text-neutral-500">Média geral</span>
                 </div>
-                <span className="text-[11px] text-neutral-500">Média geral</span>
+                <div className="h-10 w-px bg-neutral-200" />
+                <div className="text-center">
+                  <span className="text-2xl sm:text-3xl font-black text-[#1F1B16]">{realReviewsCount}</span>
+                  <p className="text-[11px] text-neutral-500 mt-1">
+                    {realReviewsCount === 1 ? "Avaliação" : "Avaliações"}
+                  </p>
+                </div>
+                {recommendedPercent !== null && (
+                  <>
+                    <div className="h-10 w-px bg-neutral-200" />
+                    <div className="text-center">
+                      <span className="text-2xl sm:text-3xl font-black text-[#27AE60]">
+                        {recommendedPercent}%
+                      </span>
+                      <p className="text-[11px] text-neutral-500 mt-1">Recomendam</p>
+                    </div>
+                  </>
+                )}
               </div>
-              <div className="h-10 w-px bg-neutral-200" />
-              <div className="text-center">
-                <span className="text-2xl sm:text-3xl font-black text-[#1F1B16]">{realReviewsCount}</span>
-                <p className="text-[11px] text-neutral-500 mt-1">
-                  {realReviewsCount === 1 ? "Avaliação" : "Avaliações"}
-                </p>
-              </div>
-              <div className="h-10 w-px bg-neutral-200" />
-              <div className="text-center">
-                <span className="text-2xl sm:text-3xl font-black text-[#27AE60]">
-                  {realRating >= 4.5 ? "99%" : realRating >= 4.0 ? "95%" : "90%"}
-                </span>
-                <p className="text-[11px] text-neutral-500 mt-1">Recomendam</p>
-              </div>
-            </div>
+            )}
 
             {/* Lista Real de Feedbacks dos Clientes */}
             <div className="space-y-2.5 overflow-y-auto pr-1 flex-1 text-xs">
@@ -471,6 +518,21 @@ export function RestaurantHeaderCard({
                 <div className="py-8 flex flex-col items-center justify-center gap-2 text-neutral-400">
                   <Loader2 className="w-6 h-6 animate-spin text-[#E3A008]" />
                   <span>Carregando avaliações...</span>
+                </div>
+              ) : reviewsError ? (
+                <div className="py-8 px-4 text-center text-neutral-500 bg-neutral-50 rounded-2xl border border-dashed border-neutral-200">
+                  <MessageSquare className="w-8 h-8 text-neutral-300 mx-auto mb-2" />
+                  <p className="font-semibold text-neutral-700">Não foi possível carregar as avaliações</p>
+                  <p className="text-[11px] text-neutral-400 mt-0.5">
+                    Verifique sua conexão e tente novamente.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={fetchPublicReviews}
+                    className="mt-3 px-4 py-2 bg-[#E3A008] hover:opacity-95 text-white font-bold text-xs rounded-xl transition-colors"
+                  >
+                    Tentar novamente
+                  </button>
                 </div>
               ) : reviewsList.length > 0 ? (
                 reviewsList.map((review) => (

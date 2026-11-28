@@ -324,6 +324,7 @@ export default function AdminCuponsPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [checkingAuth, setCheckingAuth] = useState(true)
   const [coupons, setCoupons] = useState<Coupon[]>([])
+  const [loadError, setLoadError] = useState(false)
   const [availableCategories, setAvailableCategories] = useState<string[]>([
     "Batatas",
     "Macarrão",
@@ -366,8 +367,14 @@ export default function AdminCuponsPage() {
   const [couponToDelete, setCouponToDelete] = useState<Coupon | null>(null)
 
   const loadCoupons = useCallback(async () => {
-    const list = await couponsManager.getCoupons()
-    setCoupons(list)
+    setLoadError(false)
+    try {
+      const list = await couponsManager.getCoupons({ strict: true })
+      setCoupons(list)
+    } catch (err) {
+      console.error("Erro ao carregar cupons:", err)
+      setLoadError(true)
+    }
   }, [])
 
   const loadCategories = useCallback(async () => {
@@ -1123,6 +1130,24 @@ export default function AdminCuponsPage() {
           Ativos ({activeCoupons.length})
         </button>
       </div>
+
+      {loadError && (
+        <div className="bg-[#FEF2F2] border border-[#FECACA] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 text-sm font-bold text-[#C1440E]">
+            <Ticket className="h-4 w-4 shrink-0 text-[#C1440E]" />
+            <span>Não foi possível carregar os cupons. Verifique sua conexão.</span>
+          </div>
+          <Button
+            type="button"
+            onClick={loadCoupons}
+            variant="outline"
+            size="sm"
+            className="h-8 px-3 text-xs font-bold rounded-lg border-[#FECACA] bg-white text-[#C1440E] hover:bg-[#FEE2E2] cursor-pointer shrink-0 self-start sm:self-center"
+          >
+            Tentar novamente
+          </Button>
+        </div>
+      )}
 
       {/* Lista de Cupons Filtrada por Aba */}
       <div className="space-y-4">

@@ -154,7 +154,8 @@ export default function AdminAdministradoresPage() {
       })
 
       if (error) {
-        const msg = ERROR_MESSAGES_ADD[error.message] || error.message || "Erro ao adicionar administrador."
+        console.error("Erro ao adicionar administrador:", error)
+        const msg = ERROR_MESSAGES_ADD[error.message] || "Erro ao adicionar administrador."
         setErrorMessage(msg)
       } else if (data && !data.ok) {
         const code = data.error || "unknown"
@@ -186,7 +187,8 @@ export default function AdminAdministradoresPage() {
       })
 
       if (error) {
-        const msg = ERROR_MESSAGES_REMOVE[error.message] || error.message || "Erro ao remover administrador."
+        console.error("Erro ao remover administrador:", error)
+        const msg = ERROR_MESSAGES_REMOVE[error.message] || "Erro ao remover administrador."
         setErrorMessage(msg)
       } else if (data && !data.ok) {
         const code = data.error || "unknown"

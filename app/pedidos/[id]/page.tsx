@@ -62,7 +62,8 @@ function getCancelErrorMessage(rawMessage?: string): string {
   for (const [code, friendly] of Object.entries(CANCEL_ERROR_MESSAGES)) {
     if (rawMessage.includes(code)) return friendly
   }
-  return rawMessage
+  console.error("Erro ao cancelar pedido:", rawMessage)
+  return "Não foi possível cancelar o pedido. Tente novamente."
 }
 
 // ─── Header Minimalista Padrão (Estilo iFood) ─────────────────────────────────
@@ -204,6 +205,7 @@ export default function DetalhesPedidoPage() {
 
   const [order, setOrder] = useState<Order | null>(null)
   const [initialLoading, setInitialLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [feedbackModalVisible, setFeedbackModalVisible] = useState(false)
@@ -245,6 +247,7 @@ export default function DetalhesPedidoPage() {
       if (!isSilent && !orderRef.current) {
         setInitialLoading(true)
       }
+      setLoadError(false)
       try {
         const found = await ordersManager.getOrderById(orderId)
         if (found) {
@@ -262,6 +265,7 @@ export default function DetalhesPedidoPage() {
         }
       } catch (err) {
         console.error("Erro ao carregar pedido:", err)
+        setLoadError(true)
       } finally {
         if (!isSilent) setInitialLoading(false)
       }
@@ -458,6 +462,30 @@ export default function DetalhesPedidoPage() {
 
   if (authLoading || initialLoading) {
     return <PedidoDetalheSkeleton />
+  }
+
+  if (loadError && !order) {
+    return (
+      <div className="min-h-screen flex flex-col bg-[#F7F4EF]">
+        <MinimalHeader onBack={() => router.push("/pedidos")} />
+        <main className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+          <div className="w-16 h-16 rounded-3xl bg-amber-100 flex items-center justify-center text-amber-600 mb-4">
+            <AlertCircle className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-black text-[#1F1B16] mb-2">Não foi possível carregar o pedido</h2>
+          <p className="text-sm text-[#6B6157] font-medium mb-6">
+            Verifique sua conexão e tente novamente.
+          </p>
+          <button
+            onClick={() => loadOrder(false)}
+            className="px-6 py-3 bg-[#E3A008] text-white font-extrabold text-sm rounded-xl shadow-md"
+          >
+            Tentar novamente
+          </button>
+        </main>
+        <Footer />
+      </div>
+    )
   }
 
   if (!order) {

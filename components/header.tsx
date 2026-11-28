@@ -223,6 +223,17 @@ export function Header({ variant = "default" }: HeaderProps) {
     return false
   }
 
+  const hideHeader = isHeaderHidden && (pathname === "/" || pathname === "/cardapio")
+
+  useEffect(() => {
+    if (hideHeader && headerWrapperRef.current) {
+      const active = document.activeElement
+      if (active instanceof HTMLElement && headerWrapperRef.current.contains(active)) {
+        active.blur()
+      }
+    }
+  }, [hideHeader])
+
   if (pathname === "/checkout" || pathname?.startsWith("/checkout") || pathname?.startsWith("/admin")) return null
 
   if (variant === "simple") {
@@ -244,17 +255,7 @@ export function Header({ variant = "default" }: HeaderProps) {
   }
 
   const isPerfil = pathname === "/perfil" || pathname?.startsWith("/perfil") || pathname === "/meus-dados"
-  const hideHeader = isHeaderHidden && (pathname === "/" || pathname === "/cardapio")
   const isInitialLoading = !mounted || authLoading || addressLoading
-
-  useEffect(() => {
-    if (hideHeader && headerWrapperRef.current) {
-      const active = document.activeElement
-      if (active instanceof HTMLElement && headerWrapperRef.current.contains(active)) {
-        active.blur()
-      }
-    }
-  }, [hideHeader])
 
   return (
     <>

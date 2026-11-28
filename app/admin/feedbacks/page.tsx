@@ -22,7 +22,7 @@ import {
   MessageCircle,
   Copy,
   Check,
-  Sparkles,
+  AlertTriangle,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase-fix"
 import { isAdmin as checkIsAdminRole } from "@/lib/supabase/admin"
@@ -45,6 +45,7 @@ export default function AdminFeedbacksPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([])
   const [isLoadingFeedbacks, setIsLoadingFeedbacks] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [filter, setFilter] = useState<FilterType>("all")
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [stats, setStats] = useState({
@@ -82,10 +83,11 @@ export default function AdminFeedbacksPage() {
 
   const loadFeedbacks = async () => {
     setIsLoadingFeedbacks(true)
+    setLoadError(false)
     try {
       if (!supabase) {
         console.error("Supabase não inicializado")
-        setIsLoadingFeedbacks(false)
+        setLoadError(true)
         return
       }
 
@@ -100,6 +102,7 @@ export default function AdminFeedbacksPage() {
       calculateStats(data || [])
     } catch (error: any) {
       console.error("Erro ao carregar feedbacks:", error.message || error)
+      setLoadError(true)
     } finally {
       setIsLoadingFeedbacks(false)
     }
@@ -122,7 +125,7 @@ export default function AdminFeedbacksPage() {
   }
 
   const csatPercentage = useMemo(() => {
-    if (stats.total === 0) return 100
+    if (stats.total === 0) return null
     const satisfied = (stats.distribution[4] || 0) + (stats.distribution[5] || 0)
     return Math.round((satisfied / stats.total) * 100)
   }, [stats])
@@ -206,9 +209,6 @@ export default function AdminFeedbacksPage() {
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-2xl md:text-3xl font-black text-stone-900 tracking-tight">Avaliações & Reputação</h1>
-                  <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
-                    <Sparkles className="h-3 w-3 text-amber-600" /> iFood Standard
-                  </span>
                 </div>
                 <p className="text-stone-500 text-xs md:text-sm font-medium">Monitore a reputação da loja e o índice de satisfação dos clientes</p>
               </div>
@@ -225,6 +225,30 @@ export default function AdminFeedbacksPage() {
               Atualizar dados
             </Button>
           </div>
+
+          {loadError && (
+            <div className="mb-6 bg-rose-50 border border-rose-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-rose-100 rounded-xl text-rose-600 shrink-0">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-rose-900">Não foi possível carregar as avaliações</p>
+                  <p className="text-xs text-rose-700">Verifique sua conexão e tente novamente.</p>
+                </div>
+              </div>
+              <Button
+                onClick={loadFeedbacks}
+                variant="outline"
+                size="sm"
+                disabled={isLoadingFeedbacks}
+                className="rounded-2xl border-rose-200 bg-white hover:bg-rose-50 text-rose-700 font-bold px-4 h-10 shadow-sm shrink-0"
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${isLoadingFeedbacks ? "animate-spin" : ""}`} />
+                Tentar novamente
+              </Button>
+            </div>
+          )}
 
           {/* iFood Score & CSAT Card */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-8">
@@ -282,7 +306,9 @@ export default function AdminFeedbacksPage() {
                   <ThumbsUp className="h-4 w-4 text-emerald-600" />
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-4xl font-black text-emerald-600">{csatPercentage}%</span>
+                  <span className="text-4xl font-black text-emerald-600">
+                    {csatPercentage !== null ? `${csatPercentage}%` : "—"}
+                  </span>
                   <span className="text-xs font-bold text-stone-500">satisfeitos</span>
                 </div>
                 <p className="text-xs text-stone-500 mt-1">Clientes que avaliaram com 4 ou 5 estrelas.</p>
@@ -292,13 +318,13 @@ export default function AdminFeedbacksPage() {
                 <div className="w-full bg-stone-100 h-2.5 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-emerald-500 rounded-full transition-all duration-500"
-                    style={{ width: `${csatPercentage}%` }}
+                    style={{ width: `${csatPercentage ?? 0}%` }}
                   />
                 </div>
                 <div className="flex justify-between items-center text-[10px] font-bold text-stone-400 mt-2 uppercase tracking-wide">
                   <span>Meta: &ge; 90%</span>
-                  <span className={csatPercentage >= 90 ? "text-emerald-600 font-extrabold" : "text-amber-600 font-extrabold"}>
-                    {csatPercentage >= 90 ? "Meta atingida" : "Abaixo da meta"}
+                  <span className={csatPercentage === null ? "text-stone-400 font-extrabold" : csatPercentage >= 90 ? "text-emerald-600 font-extrabold" : "text-amber-600 font-extrabold"}>
+                    {csatPercentage === null ? "Sem avaliações" : csatPercentage >= 90 ? "Meta atingida" : "Abaixo da meta"}
                   </span>
                 </div>
               </div>

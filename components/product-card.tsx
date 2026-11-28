@@ -7,7 +7,7 @@ import { useCart } from "@/lib/cart-context"
 import { useAuth } from "@/lib/auth-context"
 import { appToast } from "@/lib/app-toast"
 import { trackViewContent } from "@/lib/meta-pixel"
-import { storeStatusManager } from "@/lib/store-status-manager"
+import { storeStatusManager, type StoreStatus } from "@/lib/store-status-manager"
 import { Skeleton } from "@/components/ui/skeleton"
 
 export interface ProductCardItem {
@@ -40,6 +40,44 @@ export interface ProductCardProps {
   categoryRules?: { allowsAddons?: boolean; allowsNotes?: boolean }
 }
 
+const STORE_STATUS_CACHE_TTL_MS = 20_000
+let cachedStoreStatus: { data: StoreStatus; expiresAt: number } | null = null
+let inFlightStoreStatusPromise: Promise<StoreStatus> | null = null
+
+if (typeof window !== "undefined") {
+  window.addEventListener("store-status-changed", () => {
+    cachedStoreStatus = null
+    inFlightStoreStatusPromise = null
+  })
+}
+
+function getCachedStoreStatus(): Promise<StoreStatus> {
+  const now = Date.now()
+  if (cachedStoreStatus && cachedStoreStatus.expiresAt > now) {
+    return Promise.resolve(cachedStoreStatus.data)
+  }
+  if (!inFlightStoreStatusPromise) {
+    const requestPromise = storeStatusManager
+      .getStatus()
+      .then((status) => {
+        if (inFlightStoreStatusPromise === requestPromise) {
+          cachedStoreStatus = {
+            data: status,
+            expiresAt: Date.now() + STORE_STATUS_CACHE_TTL_MS,
+          }
+        }
+        return status
+      })
+      .finally(() => {
+        if (inFlightStoreStatusPromise === requestPromise) {
+          inFlightStoreStatusPromise = null
+        }
+      })
+    inFlightStoreStatusPromise = requestPromise
+  }
+  return inFlightStoreStatusPromise
+}
+
 export function ProductCard({
   product,
   rank = null,
@@ -57,35 +95,49 @@ export function ProductCard({
   const { user } = useAuth()
 
   useEffect(() => {
+    let active = true
     const checkPromo = async () => {
-      const status = await storeStatusManager.getStatus()
-      setIsPromoActive(status.isPromoActive ?? false)
+      try {
+        const status = await getCachedStoreStatus()
+        if (!active) return
+        setIsPromoActive(status.isPromoActive ?? false)
 
-      let finalPromoPrice: number | null = null
+        let finalPromoPrice: number | null = null
 
-      if (status.itemPromo?.isActive) {
-        const itemPromo = status.promoProducts?.find((p) => p.productId === product.id)
-        if (itemPromo) {
-          finalPromoPrice = itemPromo.promoPrice
+        if (status.itemPromo?.isActive) {
+          const itemPromo = status.promoProducts?.find((p) => p.productId === product.id)
+          if (itemPromo) {
+            finalPromoPrice = itemPromo.promoPrice
+          }
         }
-      }
 
-      if (finalPromoPrice === null && status.superPromo?.isActive && product.category === "batata") {
-        finalPromoPrice = status.superPromo.price
-      }
-
-      if (finalPromoPrice === null && status.isPromoActive) {
-        const specificPromo = status.promoProducts?.find((p) => p.productId === product.id)
-        if (specificPromo) {
-          finalPromoPrice = specificPromo.promoPrice
-        } else if (product.category === "batata") {
-          finalPromoPrice = status.promoPrice ?? 24.99
+        if (finalPromoPrice === null && status.superPromo?.isActive && product.category === "batata") {
+          finalPromoPrice = status.superPromo.price
         }
-      }
 
-      setPromoPrice(finalPromoPrice)
+        if (finalPromoPrice === null && status.isPromoActive) {
+          const specificPromo = status.promoProducts?.find((p) => p.productId === product.id)
+          if (specificPromo) {
+            finalPromoPrice = specificPromo.promoPrice
+          } else if (product.category === "batata") {
+            finalPromoPrice = status.promoPrice ?? 24.99
+          }
+        }
+
+        setPromoPrice(finalPromoPrice)
+      } catch (err) {
+        console.error("Erro ao verificar promoção do produto:", err)
+      }
     }
     checkPromo()
+    const handleStatusChange = () => {
+      checkPromo()
+    }
+    window.addEventListener("store-status-changed", handleStatusChange)
+    return () => {
+      active = false
+      window.removeEventListener("store-status-changed", handleStatusChange)
+    }
   }, [product.id, product.category])
 
   // Preço de venda final (cobrança estrita no checkout)

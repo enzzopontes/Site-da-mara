@@ -1,12 +1,42 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { HeaderWrapper } from "@/components/header-wrapper"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import { Phone, Mail, MapPin, Clock, MessageCircle, Instagram, Send, ExternalLink } from "lucide-react"
 import Image from "next/image"
+import { storeStatusManager, type StoreStatus } from "@/lib/store-status-manager"
 
 export default function ContatoPage() {
+  const [storeStatus, setStoreStatus] = useState<StoreStatus | null>(null)
+
+  useEffect(() => {
+    let active = true
+    const loadStoreStatus = async () => {
+      try {
+        const status = await storeStatusManager.getStatus()
+        if (active) setStoreStatus(status)
+      } catch {
+        // mantém fallback de horário oficial
+      }
+    }
+    loadStoreStatus()
+    const handleStatusChange = () => {
+      loadStoreStatus()
+    }
+    window.addEventListener("store-status-changed", handleStatusChange)
+    return () => {
+      active = false
+      window.removeEventListener("store-status-changed", handleStatusChange)
+    }
+  }, [])
+
+  const isStoreOpen = storeStatus?.isOpen === true
+  const isStoreClosed = storeStatus?.isOpen === false
+  const openTime = storeStatus?.openTime || "10:00"
+  const closeTime = storeStatus?.closeTime || "22:30"
+
   return (
     <div className="min-h-screen flex flex-col bg-white">
       <HeaderWrapper />
@@ -39,12 +69,34 @@ export default function ContatoPage() {
                   />
                 </div>
                 <div className="flex-1 text-center md:text-left">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-green-50 text-green-600 rounded-full text-xs font-black uppercase tracking-widest mb-4">
+                  <div
+                    className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest mb-4 ${
+                      isStoreOpen
+                        ? "bg-green-50 text-green-600"
+                        : isStoreClosed
+                          ? "bg-[#E3A008]/15 text-[#C1440E]"
+                          : "bg-gray-100 text-gray-600"
+                    }`}
+                  >
                     <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                      {isStoreOpen && (
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                      )}
+                      <span
+                        className={`relative inline-flex rounded-full h-2 w-2 ${
+                          isStoreOpen
+                            ? "bg-green-500"
+                            : isStoreClosed
+                              ? "bg-[#C1440E]"
+                              : "bg-gray-400"
+                        }`}
+                      ></span>
                     </span>
-                    Online Agora
+                    {isStoreOpen
+                      ? "Online Agora"
+                      : isStoreClosed
+                        ? `Fechado Agora · ${openTime} às ${closeTime}`
+                        : `Horário: ${openTime} às ${closeTime}`}
                   </div>
                   <h2 className="text-3xl font-black text-gray-900 mb-4">Atendimento via WhatsApp</h2>
                   <p className="text-gray-500 font-medium mb-8 leading-relaxed">
@@ -103,7 +155,7 @@ export default function ContatoPage() {
                   <p className="text-xs font-black text-yellow-500 uppercase tracking-widest mb-4">Horário de Funcionamento</p>
                   <div className="space-y-2">
                     <p className="text-xl font-black">Segunda a Segunda</p>
-                    <p className="text-3xl font-black text-yellow-500">10:00 às 22:30</p>
+                    <p className="text-3xl font-black text-yellow-500">{openTime} às {closeTime}</p>
                   </div>
                 </div>
               </div>

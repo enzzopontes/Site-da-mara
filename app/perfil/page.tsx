@@ -111,6 +111,64 @@ function isWithinIacangaDeliveryArea(
   return normalizedCity === "iacanga" && normalizedState === "SP"
 }
 
+function getProfileSaveErrorMessage(err?: { code?: string; message?: string } | null): string {
+  const code = String(err?.code || "").toLowerCase()
+  const raw = String(err?.message || "").toLowerCase()
+
+  if (
+    code === "23505" ||
+    code === "email_exists" ||
+    code === "phone_exists" ||
+    raw.includes("duplicate key") ||
+    raw.includes("already registered") ||
+    raw.includes("already exists")
+  ) {
+    if (raw.includes("cpf")) return "Este CPF já está vinculado a outra conta."
+    if (raw.includes("phone") || raw.includes("telefone") || code === "phone_exists") {
+      return "Este telefone já está vinculado a outra conta."
+    }
+    if (raw.includes("email") || code === "email_exists") {
+      return "Este e-mail já está vinculado a outra conta."
+    }
+    return "Alguns dos dados informados já estão em uso por outra conta."
+  }
+
+  if (
+    code === "22p02" ||
+    code === "23514" ||
+    code === "validation_failed" ||
+    raw.includes("invalid input") ||
+    raw.includes("invalid format") ||
+    raw.includes("violates check constraint")
+  ) {
+    return "Alguns dados informados são inválidos. Verifique os campos e tente novamente."
+  }
+
+  if (
+    code === "42501" ||
+    code === "pgrst301" ||
+    code === "session_expired" ||
+    code === "refresh_token_not_found" ||
+    raw.includes("jwt") ||
+    raw.includes("session") ||
+    raw.includes("not authenticated") ||
+    raw.includes("unauthorized") ||
+    raw.includes("auth session missing")
+  ) {
+    return "Sua sessão expirou. Faça login novamente para salvar suas alterações."
+  }
+
+  if (
+    raw.includes("failed to fetch") ||
+    raw.includes("network") ||
+    raw.includes("timeout")
+  ) {
+    return "Erro de conexão. Verifique sua internet e tente novamente."
+  }
+
+  return "Não foi possível salvar suas alterações. Tente novamente."
+}
+
 interface NotificationPrefs {
   notify_orders_push: boolean
   notify_promo_push: boolean
@@ -563,7 +621,8 @@ export default function PerfilPage() {
 
       const saveError = profileError || authError
       if (saveError) {
-        const msg = saveError.message || "Não foi possível salvar suas alterações."
+        console.error("Erro ao salvar dados do perfil:", saveError)
+        const msg = getProfileSaveErrorMessage(saveError)
         setProfileFeedback({
           type: "error",
           message: msg,

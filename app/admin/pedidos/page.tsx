@@ -209,10 +209,12 @@ export default function AdminPedidosPage() {
       if (res.ok && data.success) {
         appToast.success("Alarme disparado", "Alarme sonoro crítico de teste disparado com sucesso no iPhone!")
       } else {
-        appToast.warning("Falha ao testar alarme", data.error || "Verifique a BARK_DEVICE_KEY no arquivo .env")
+        console.error("Falha ao testar alarme Bark:", data.error)
+        appToast.warning("Falha ao testar alarme", "Não foi possível testar o alarme. Verifique a configuração do serviço.")
       }
     } catch (err: any) {
-      appToast.error("Erro ao acionar teste", err?.message || "Erro de rede")
+      console.error("Erro ao acionar teste do alarme Bark:", err)
+      appToast.error("Erro ao acionar teste", "Não foi possível concluir a ação. Tente novamente.")
     } finally {
       setIsTestingBark(false)
     }
@@ -330,7 +332,7 @@ export default function AdminPedidosPage() {
       await loadOrders(true)
     } catch (error: any) {
       console.error("Erro ao deletar pedido:", error)
-      appToast.error("Erro ao deletar pedido", error?.message || "Falha inesperada")
+      appToast.error("Erro ao deletar pedido", "Não foi possível excluir o pedido. Tente novamente.")
     }
   }
 
@@ -548,9 +550,6 @@ export default function AdminPedidosPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h1 className="text-3xl md:text-4xl font-black text-gray-900 tracking-tight">Gestor de Pedidos</h1>
-                    <span className="bg-amber-100 text-[#C1440E] text-[10px] font-black uppercase px-2 py-0.5 rounded-full">
-                      iFood Standard
-                    </span>
                   </div>
                   <p className="text-gray-500 text-sm mt-0.5">Operação em tempo real com controle de rota, comanda e WhatsApp</p>
                 </div>

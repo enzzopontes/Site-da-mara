@@ -29,6 +29,8 @@ function CuponsContent() {
     coupons,
     freeCoupons,
     loading,
+    error,
+    reload,
     validateCoupon,
     getCouponMissingAmount,
   } = useCoupons(currentTotal, !rejectCoupon ? selectedCoupon?.id : null, items)
@@ -217,6 +219,24 @@ function CuponsContent() {
         {/* Lista de Cupons */}
         {loading ? (
           <CuponsSkeleton count={3} />
+        ) : error ? (
+          <div role="alert" className="text-center py-12 px-4 space-y-3">
+            <p className="text-sm font-bold text-[#1F1B16]">
+              Não foi possível carregar os cupons.
+            </p>
+            <p className="text-xs text-[#9C9188]">
+              Verifique sua conexão e tente novamente.
+            </p>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={reload}
+                className="bg-[#E3A008] hover:opacity-90 active:scale-95 text-white text-sm font-black px-6 py-2.5 rounded-xl transition-all cursor-pointer"
+              >
+                Tentar novamente
+              </button>
+            </div>
+          </div>
         ) : coupons.length === 0 ? (
           <div className="text-center py-12 px-4 space-y-2">
             <p className="text-sm font-bold text-[#6B6157]">
@@ -225,6 +245,15 @@ function CuponsContent() {
             <p className="text-xs text-[#9C9188]">
               Fique atento às nossas promoções e notificações!
             </p>
+            <div className="pt-3">
+              <button
+                type="button"
+                onClick={() => router.push("/cardapio")}
+                className="bg-[#E3A008] hover:opacity-90 active:scale-95 text-white text-sm font-black px-6 py-2.5 rounded-xl transition-all cursor-pointer"
+              >
+                Explorar cardápio
+              </button>
+            </div>
           </div>
         ) : (
           <div className="space-y-3">

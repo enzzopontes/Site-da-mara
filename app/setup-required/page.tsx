@@ -51,11 +51,14 @@ export default function SetupRequiredPage() {
             <div className="space-y-2">
               <h3 className="font-semibold flex items-center gap-2">
                 <Key className="h-4 w-4" />
-                Passo 2: Configure as variáveis no v0
+                Passo 2: Configure as variáveis de ambiente
               </h3>
               <ol className="list-decimal list-inside space-y-1 text-sm text-muted-foreground ml-6">
-                <li>Clique na seção "Vars" na barra lateral do chat</li>
-                <li>Adicione as seguintes variáveis:</li>
+                <li>
+                  Adicione as variáveis no arquivo <code className="bg-muted px-1 py-0.5 rounded">.env.local</code>{" "}
+                  (desenvolvimento) ou em Settings → Environment Variables na Vercel (produção)
+                </li>
+                <li>Configure as seguintes variáveis:</li>
               </ol>
               <div className="bg-slate-950 text-slate-50 p-4 rounded-lg font-mono text-sm space-y-2 mt-2">
                 <div>
