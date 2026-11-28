@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Tag, Flame, Sparkles } from "lucide-react"
+import { Plus, Flame, Sparkles } from "lucide-react"
 import { AddToCartDialog } from "@/components/add-to-cart-dialog"
 import { useCart } from "@/lib/cart-context"
 import { useAuth } from "@/lib/auth-context"

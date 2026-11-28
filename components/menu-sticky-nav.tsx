@@ -4,15 +4,12 @@ import { memo, useState, useEffect, useRef, useCallback } from "react"
 import Link from "next/link"
 import { Search, X, ShoppingCart } from "lucide-react"
 import { AnimatedSearchBar } from "./animated-search-bar"
-import { CategoryIcon } from "@/components/category-icon"
 import { useCart } from "@/lib/cart-context"
 import type { Category } from "@/lib/categories-db"
 
 export interface MenuCategory {
   id: string
   label: string
-  iconSrc: string
-  iconScale?: number
   count: number
   category?: Category
 }
@@ -212,70 +209,36 @@ export const MenuStickyNav = memo(function MenuStickyNav({
               return (
                 <button
                   key={cat.id}
+                  type="button"
                   id={`tab-${cat.id}`}
                   role="tab"
-                  aria-label={isTodos ? cat.label : undefined}
-                  title={isTodos ? cat.label : undefined}
                   aria-selected={isActive}
                   aria-controls={isTodos ? undefined : cat.id}
                   onClick={() => onSelectCategory(cat.id)}
-                  className={`shrink-0 h-9.5 md:h-10 rounded-full flex items-center justify-center text-xs md:text-sm font-bold transition-all border whitespace-nowrap active:scale-95 cursor-pointer ${
-                    isTodos ? "w-9.5 md:w-10 px-0" : "px-3.5 md:px-4 gap-2"
-                  } ${
+                  className={`shrink-0 h-9.5 md:h-10 px-3.5 md:px-4 gap-2 rounded-full flex items-center justify-center text-xs md:text-sm font-bold transition-all border whitespace-nowrap active:scale-95 cursor-pointer ${
                     isActive
                       ? "bg-[#FEF8EC] border-[#E3A008] text-[#A16207] shadow-xs"
                       : "bg-[#F7F5F0] border-[#ECE7E0] text-[#1A1A1A] hover:border-[#E3A008]/50 hover:bg-[#FFF9EE]"
                   }`}
                 >
-                  {cat.category ? (
-                    <CategoryIcon
-                      iconUrl={cat.category.icon_url || (cat.category.icon_type !== "lucide" ? cat.iconSrc : null)}
-                      iconType={cat.category.icon_type}
-                      iconScale={cat.category.icon_scale}
-                      fallbackIcon={cat.category.fallback_icon}
-                      accentColor={cat.category.accent_color}
-                      sizeClassName={
-                        isTodos ? "w-6 h-6 md:w-6.5 md:h-6.5" : "w-5 h-5 md:w-5.5 md:h-5.5"
-                      }
-                      iconClassName="w-3.5 h-3.5"
-                      className="shrink-0 drop-shadow-xs"
-                    />
-                  ) : (
-                    <CategoryIcon
-                      iconUrl={cat.iconSrc}
-                      iconType="preset_3d"
-                      iconScale={cat.iconScale}
-                      fallbackIcon={isTodos ? "LayoutGrid" : "UtensilsCrossed"}
-                      accentColor="#E3A008"
-                      sizeClassName={
-                        isTodos ? "w-6 h-6 md:w-6.5 md:h-6.5" : "w-5 h-5 md:w-5.5 md:h-5.5"
-                      }
-                      iconClassName="w-3.5 h-3.5"
-                      className="shrink-0 drop-shadow-xs"
-                    />
+                  <span>{cat.label}</span>
+                  {cat.category?.badge_text && (
+                    <span
+                      className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full text-white leading-none"
+                      style={{ backgroundColor: cat.category.badge_color || "#C1440E" }}
+                    >
+                      {cat.category.badge_text}
+                    </span>
                   )}
-                  {!isTodos && (
-                    <>
-                      <span>{cat.label}</span>
-                      {cat.category?.badge_text && (
-                        <span
-                          className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full text-white leading-none"
-                          style={{ backgroundColor: cat.category.badge_color || "#C1440E" }}
-                        >
-                          {cat.category.badge_text}
-                        </span>
-                      )}
-                      <span
-                        className={`px-1.5 py-0.5 rounded-full text-[10px] md:text-xs font-bold leading-none ${
-                          isActive
-                            ? "bg-[#FDE68A] text-[#854D0E]"
-                            : "bg-[#ECE7E0] text-[#717171]"
-                        }`}
-                      >
-                        {cat.count}
-                      </span>
-                    </>
-                  )}
+                  <span
+                    className={`px-1.5 py-0.5 rounded-full text-[10px] md:text-xs font-bold leading-none ${
+                      isActive
+                        ? "bg-[#FDE68A] text-[#854D0E]"
+                        : "bg-[#ECE7E0] text-[#57534E]"
+                    }`}
+                  >
+                    {cat.count}
+                  </span>
                 </button>
               )
             })}

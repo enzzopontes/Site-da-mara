@@ -156,7 +156,7 @@ export function FeaturedProducts({
               </div>
 
               <Link href="/cardapio" className="shrink-0">
-                <span className="text-xs font-bold text-[#C1440E] hover:text-[#E3A008] flex items-center gap-0.5 transition-colors">
+                <span className="text-xs font-bold text-[#C1440E] hover:text-[#8A6100] flex items-center gap-0.5 transition-colors">
                   Ver cardápio completo
                   <ChevronRight className="w-4 h-4" />
                 </span>
@@ -256,7 +256,7 @@ export function FeaturedProducts({
               <ScrollReveal className="flex items-center justify-between gap-4 mb-4 sm:mb-6 pb-3 border-b border-[#ECE7E0]">
                 <div className="min-w-0">
                   <div className={cat.badge_text ? "flex items-center gap-2 min-w-0" : "min-w-0"}>
-                    <h2 className="text-lg sm:text-xl font-bold text-[#1F1B16] tracking-tight min-w-0">
+                    <h2 className="text-lg sm:text-xl font-black text-[#1F1B16] tracking-tight min-w-0">
                       {title}
                     </h2>
                     {cat.badge_text && (
@@ -277,7 +277,7 @@ export function FeaturedProducts({
                   href={`/cardapio?category=${encodeURIComponent(cat.slug)}`}
                   className="shrink-0"
                 >
-                  <span className="text-xs font-bold text-[#C1440E] hover:text-[#E3A008] flex items-center gap-0.5 transition-colors">
+                  <span className="text-xs font-bold text-[#C1440E] hover:text-[#8A6100] flex items-center gap-0.5 transition-colors">
                     {ctaLabel}
                     <ChevronRight className="w-4 h-4" />
                   </span>

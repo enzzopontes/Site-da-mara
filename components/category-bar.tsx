@@ -189,7 +189,7 @@ export function CategoryBar({
                     </div>
                     <span
                       className={`[font-size:var(--cat-text-m)] sm:[font-size:var(--cat-text-d)] leading-[1.333] sm:leading-[1.429] font-bold text-center truncate w-full transition-colors ${
-                        isActive ? "text-[#A16207]" : "text-[#1A1A1A] group-hover:text-[#E3A008]"
+                        isActive ? "text-[#A16207]" : "text-[#1A1A1A] group-hover:text-[#A16207]"
                       }`}
                     >
                       {cat.name}
@@ -205,6 +205,8 @@ export function CategoryBar({
       {/* 2. Barra Flutuante de Categorias Fixa no topo com transição suave */}
       <nav
         aria-label="Categorias fixas no topo"
+        aria-hidden={!isFloating}
+        inert={!isFloating}
         className={`fixed top-0 left-0 right-0 z-40 h-[60px] bg-white/95 backdrop-blur-md shadow-sm border-b border-[#ECE7E0] ${floatingNavVisibilityClass} items-center transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
           isFloating
             ? "translate-y-0 opacity-100 pointer-events-auto"
@@ -225,49 +227,26 @@ export function CategoryBar({
                   : !cat.show_on_home_bar_mobile && cat.show_on_home_bar_desktop
                     ? "hidden sm:flex"
                     : "flex"
-              if (cat.slug === "todos") {
-                return (
-                  <Link
-                    key={cat.id}
-                    href={href}
-                    aria-label={cat.name || "Ver mais"}
-                    onClick={() => setActiveId(cat.id)}
-                    className={`group ${itemFloatVisibility} items-center justify-center shrink-0 w-10 h-10 rounded-full border transition-all active:scale-[0.98] ${
-                      isActive
-                        ? "bg-[#FEF8EC] border-[#E3A008]"
-                        : "bg-[#F3F0EB] md:bg-white border-[#ECE7E0] hover:border-[#E3A008]/50"
-                    }`}
-                  >
-                    <CategoryIcon
-                      iconUrl={cat.icon_url}
-                      iconType={cat.icon_type}
-                      iconScale={cat.icon_scale}
-                      fallbackIcon={cat.fallback_icon}
-                      accentColor={cat.accent_color}
-                      alt=""
-                      sizeClassName="w-8 h-8"
-                      iconClassName="w-4 h-4"
-                      className="rounded-full drop-shadow-[0_2px_4px_rgba(0,0,0,0.12)] transition-transform duration-200 group-hover:scale-105"
-                    />
-                  </Link>
-                )
-              }
+              const isTodos = cat.slug === "todos"
+              const label = isTodos ? cat.name || "Ver mais" : cat.name
+              const showBadge = !isTodos && Boolean(cat.badge_text)
               return (
                 <Link
                   key={cat.id}
                   href={href}
+                  aria-label={isTodos ? label : undefined}
                   onClick={() => setActiveId(cat.id)}
-                  className={`group relative ${itemFloatVisibility} items-center shrink-0 py-1 active:scale-[0.98] transition-transform`}
+                  className={`group ${itemFloatVisibility} items-center shrink-0 py-1 active:scale-[0.98] transition-transform`}
                 >
                   <span
-                    className={`h-9 pl-11 pr-3.5 rounded-full flex items-center gap-1.5 text-xs font-bold leading-none transition-colors border ${
+                    className={`h-9 px-3.5 rounded-full flex items-center ${showBadge ? "gap-1.5 " : ""}text-xs font-bold leading-none transition-colors border ${
                       isActive
                         ? "bg-[#FEF8EC] border-[#E3A008] text-[#A16207]"
                         : "bg-[#F3F0EB] md:bg-white border-[#ECE7E0] text-[#1A1A1A] hover:border-[#E3A008]/50"
                     }`}
                   >
-                    <span>{cat.name}</span>
-                    {cat.badge_text && (
+                    <span>{label}</span>
+                    {showBadge && (
                       <span
                         style={{ backgroundColor: cat.badge_color || "#C1440E" }}
                         className="text-white uppercase tracking-wide text-[8px] font-extrabold px-1.5 py-0.5 rounded-full leading-none"
@@ -275,22 +254,6 @@ export function CategoryBar({
                         {cat.badge_text}
                       </span>
                     )}
-                  </span>
-                  <span
-                    aria-hidden="true"
-                    className="pointer-events-none absolute left-0.5 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center"
-                  >
-                    <CategoryIcon
-                      iconUrl={cat.icon_url}
-                      iconType={cat.icon_type}
-                      iconScale={cat.icon_scale}
-                      fallbackIcon={cat.fallback_icon}
-                      accentColor={cat.accent_color}
-                      alt=""
-                      sizeClassName="w-9 h-9"
-                      iconClassName="w-4 h-4"
-                      className="drop-shadow-[0_2px_4px_rgba(0,0,0,0.12)] transition-transform duration-200 group-hover:scale-105"
-                    />
                   </span>
                 </Link>
               )

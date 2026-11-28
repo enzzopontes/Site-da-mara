@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
 import { ProductCard } from "@/components/product-card"
 import { ScrollReveal } from "@/components/ui/scroll-reveal"
-import { CategoryIcon } from "@/components/category-icon"
 import {
   SearchX,
   WifiOff,
@@ -42,7 +41,6 @@ export function CardapioContent({
   const manualScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [promoProductIds, setPromoProductIds] = useState<string[]>([])
-  const [, setSuperPromoActive] = useState(false)
 
   useEffect(() => {
     activeTabRef.current = activeTab
@@ -182,7 +180,6 @@ export function CardapioContent({
         const status = await storeStatusManager.getStatus()
 
         if (status.superPromo?.isActive) {
-          setSuperPromoActive(true)
           const batataIds = sections
             .flatMap((sec) =>
               normalizeLegacyCategorySlug(sec.category.slug) === "batata"
@@ -194,10 +191,8 @@ export function CardapioContent({
             .map((p) => p.id)
           setPromoProductIds(Array.from(new Set(batataIds)))
         } else if (status.itemPromo?.isActive && status.promoProducts) {
-          setSuperPromoActive(false)
           setPromoProductIds(status.promoProducts.map((p) => p.productId))
         } else {
-          setSuperPromoActive(false)
           setPromoProductIds([])
         }
       } catch (error) {
@@ -278,21 +273,23 @@ export function CardapioContent({
       {
         id: "todos",
         label: "Todos",
-        iconSrc: todosCategory?.icon_url || "/assets/icones3d/iconetodos.png",
-        iconScale: todosCategory?.icon_scale,
         category: todosCategory ?? undefined,
         count: totalProductCount,
       },
       ...tabSections.map((sec) => ({
         id: sec.category.slug,
         label: sec.category.name,
-        iconSrc: sec.category.icon_url || "",
-        iconScale: sec.category.icon_scale,
         category: sec.category,
         count: sec.products.length,
       })),
     ]
   }, [hasActiveSearch, filteredSections, processedSections, totalProductCount, todosCategory])
+
+  useEffect(() => {
+    if (activeTab !== "todos" && !menuTabs.some((t) => t.id === activeTab)) {
+      setActiveTab("todos")
+    }
+  }, [activeTab, menuTabs])
 
   const mainSections = useMemo(
     () =>
@@ -440,16 +437,7 @@ export function CardapioContent({
       return (
         <div className="mb-3.5 pb-3 border-b border-[#ECE7E0]">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <CategoryIcon
-                iconUrl={category.icon_url}
-                iconType={category.icon_type}
-                iconScale={category.icon_scale}
-                fallbackIcon={category.fallback_icon}
-                accentColor={category.accent_color}
-                sizeClassName="w-7 h-7"
-                iconClassName="w-4 h-4"
-              />
+            <div className={category.badge_text ? "flex items-center gap-2 min-w-0" : "min-w-0"}>
               <h2
                 id={`heading-${category.slug}`}
                 className="text-base font-black text-[#1A1A1A] truncate"
@@ -481,16 +469,7 @@ export function CardapioContent({
     return (
       <ScrollReveal className="mb-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <CategoryIcon
-              iconUrl={category.icon_url}
-              iconType={category.icon_type}
-              iconScale={category.icon_scale}
-              fallbackIcon={category.fallback_icon}
-              accentColor={category.accent_color}
-              sizeClassName="w-8 h-8 sm:w-9 sm:h-9"
-              iconClassName="w-4 h-4 sm:w-5 sm:h-5"
-            />
+          <div className={category.badge_text ? "flex items-center gap-2 min-w-0" : "min-w-0"}>
             <h2
               id={`heading-${category.slug}`}
               className="min-w-0 text-xl sm:text-2xl font-black text-[#1A1A1A] leading-tight"
@@ -543,7 +522,10 @@ export function CardapioContent({
       <main className="flex-1 bg-gray-50 pb-24 min-h-screen">
         {offlineBanner}
         <div className="max-w-lg mx-auto px-4 py-16 sm:py-24">
-          <div className="flex flex-col items-center justify-center text-center py-12 px-6 bg-white rounded-2xl border border-[#ECE7E0] shadow-xs animate-in fade-in-50 duration-200">
+          <div
+            role="alert"
+            className="flex flex-col items-center justify-center text-center py-12 px-6 bg-white rounded-2xl border border-[#ECE7E0] shadow-xs animate-in fade-in-50 duration-200"
+          >
             <div className="w-14 h-14 rounded-full bg-[#FEF2F2] flex items-center justify-center text-[#C1440E] mb-4">
               <AlertTriangle className="h-7 w-7" />
             </div>
@@ -556,7 +538,7 @@ export function CardapioContent({
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="inline-flex items-center gap-2 h-10 px-5 rounded-full bg-[#E3A008] hover:bg-[#C1440E] text-white text-xs sm:text-sm font-bold transition-colors cursor-pointer shadow-xs"
+              className="inline-flex items-center gap-2 h-10 px-5 rounded-full bg-[#E3A008] hover:bg-[#C1440E] text-[#1F1B16] hover:text-white text-xs sm:text-sm font-bold transition-colors cursor-pointer shadow-xs"
             >
               <RefreshCw className="w-4 h-4" />
               <span>Tentar novamente</span>
@@ -603,7 +585,7 @@ export function CardapioContent({
               <button
                 type="button"
                 onClick={handleClearSearch}
-                className="h-10 px-5 rounded-full bg-[#E3A008] hover:bg-[#C1440E] text-white text-xs font-bold transition-colors cursor-pointer"
+                className="h-10 px-5 rounded-full bg-[#E3A008] hover:bg-[#C1440E] text-[#1F1B16] hover:text-white text-xs font-bold transition-colors cursor-pointer"
               >
                 Limpar busca
               </button>

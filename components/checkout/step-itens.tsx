@@ -8,7 +8,6 @@ import {
   Trash2,
   Plus,
   Minus,
-  Sparkles,
   Pencil,
 } from "lucide-react"
 import { useCart, CartItem } from "@/lib/cart-context"
@@ -97,7 +96,7 @@ export function StepItens({
             <h2 className="text-base font-black text-[#1F1B16] leading-tight">
               Batata Top
             </h2>
-            <p className="text-xs text-[#8C827A] flex items-center gap-1.5 mt-0.5">
+            <p className="text-xs text-[#6B6157] flex items-center gap-1.5 mt-0.5">
               <span>Cardápio Digital Oficial</span>
               <span>•</span>
               {isStoreOpen ? (
@@ -113,7 +112,7 @@ export function StepItens({
 
         <Link
           href="/cardapio"
-          className="text-xs font-bold text-[#E3A008] hover:underline"
+          className="text-xs font-bold text-[#A16207] hover:underline"
         >
           Ver loja
         </Link>
@@ -125,7 +124,7 @@ export function StepItens({
           <h3 className="text-sm font-black text-[#1F1B16] uppercase tracking-wider">
             Itens no seu pedido ({items.reduce((acc, i) => acc + i.quantity, 0)})
           </h3>
-          <span className="text-xs text-[#8C827A]">
+          <span className="text-xs text-[#6B6157]">
             {items.length} {items.length === 1 ? "prato" : "pratos"}
           </span>
         </div>
@@ -196,7 +195,7 @@ export function StepItens({
                             <span className="min-w-0">
                               + {adicional.quantity}x {adicional.name}
                             </span>
-                            <span className="text-[11px] font-semibold text-[#8C827A] shrink-0 whitespace-nowrap">
+                            <span className="text-[11px] font-semibold text-[#6B6157] shrink-0 whitespace-nowrap">
                               (+R$ {(adicional.price * adicional.quantity).toFixed(2).replace(".", ",")})
                             </span>
                           </li>
@@ -214,7 +213,7 @@ export function StepItens({
 
                   {/* Controle de Quantidade Inline estilo iFood */}
                   <div className="flex items-center justify-between pt-2 mt-1">
-                    <span className="text-xs text-[#8C827A]">
+                    <span className="text-xs text-[#6B6157]">
                       Unit: R$ {itemUnitTotal.toFixed(2).replace(".", ",")}
                     </span>
 
@@ -254,7 +253,7 @@ export function StepItens({
         <div className="pt-2">
           <button
             onClick={() => router.push("/cardapio")}
-            className="w-full py-3 px-4 rounded-2xl border-2 border-dashed border-[#E3A008] text-[#E3A008] hover:bg-amber-50/50 font-bold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.99] cursor-pointer"
+            className="w-full py-3 px-4 rounded-2xl border-2 border-dashed border-[#E3A008] text-[#A16207] hover:bg-amber-50/50 font-bold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.99] cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             Adicionar mais itens ao pedido
@@ -266,11 +265,10 @@ export function StepItens({
       {filteredRecommendations.length > 0 && (
         <div className="bg-white rounded-3xl p-4 sm:p-5 border border-[#ECE7E0] shadow-xs space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-black text-[#1F1B16] flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-[#E3A008]" />
+            <h3 className="text-sm font-black text-[#1F1B16]">
               Aproveite e peça também
             </h3>
-            <span className="text-[11px] font-bold text-[#8C827A]">Mais pedidos</span>
+            <span className="text-[11px] font-bold text-[#6B6157]">Mais pedidos</span>
           </div>
 
           <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none snap-x">
@@ -290,7 +288,7 @@ export function StepItens({
                     />
                     <button
                       onClick={() => onAddQuickItem(product)}
-                      className="absolute bottom-1 right-1 w-7 h-7 rounded-full bg-[#E3A008] hover:bg-[#C1440E] text-white flex items-center justify-center shadow-md active:scale-90 transition-transform cursor-pointer"
+                      className="absolute bottom-1 right-1 w-7 h-7 rounded-full bg-[#E3A008] hover:bg-[#C1440E] text-[#1F1B16] hover:text-white flex items-center justify-center shadow-md active:scale-90 transition-transform cursor-pointer"
                       aria-label={`Adicionar ${product.name || product.nome}`}
                     >
                       <Plus className="w-4 h-4" />
@@ -344,7 +342,7 @@ export function StepItens({
               e.stopPropagation()
               setIsCouponModalOpen(true)
             }}
-            className="text-sm font-bold text-[#E3A008] hover:opacity-80 active:scale-95 transition-all px-2 py-1 cursor-pointer flex-shrink-0"
+            className="text-sm font-bold text-[#A16207] hover:opacity-80 active:scale-95 transition-all px-2 py-1 cursor-pointer flex-shrink-0"
           >
             Ver cupons
           </button>
